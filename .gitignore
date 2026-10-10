@@ -1,0 +1,48 @@
+# Dependencies
+node_modules/
+*/node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Production build outputs
+dist/
+*/dist/
+dist-ssr/
+build/
+*.tsbuildinfo
+*/tsconfig.build.tsbuildinfo
+
+# Environment variables & secrets
+.env
+*.env
+!.env.example
+*.local
+
+# IDE & Editor files
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+.DS_Store
+Thumbs.db
+
+# Restore points & Temp artifacts
+restore-points/
+.tempmediaStorage/
+*.log
+
+# AI Agent & Editor configurations
+.agents/
+.cursor/
+AGENTS.md
+GEMINI.md
+CAM_NANG_BUILD_WEBAPP_VOI_AI.md
+docs/superpowers/
+

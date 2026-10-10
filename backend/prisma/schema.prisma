@@ -1,0 +1,631 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ------------------------------------------------------
+// Enums
+// ------------------------------------------------------
+
+enum Role {
+  ADMIN
+  HR
+  PM
+  EMPLOYEE
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+}
+
+enum Language {
+  VI
+  EN
+  KO
+}
+
+enum AttendanceStatus {
+  ON_TIME
+  LATE
+  VERY_LATE
+  WFH
+  BUSINESS_TRIP
+  ABSENT_APPROVED
+  ABSENT_UNAPPROVED
+}
+
+enum RequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  AUTO_APPROVED
+}
+
+enum LeaveType {
+  ANNUAL
+  SICK
+  UNPAID
+  COMPENSATORY
+}
+
+enum ProjectStatus {
+  PLANNING
+  ACTIVE
+  ON_HOLD
+  COMPLETED
+  ARCHIVED
+}
+
+enum ProjectKind {
+  TEAM
+  PERSONAL
+}
+
+enum SprintStatus {
+  PLANNING
+  ACTIVE
+  COMPLETED
+}
+
+enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  IN_REVIEW
+  BLOCKED
+  DONE
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum DependencyType {
+  FINISH_TO_START
+  START_TO_START
+  FINISH_TO_FINISH
+}
+
+enum CustomFieldType {
+  TEXT
+  NUMBER
+  DATE
+  DROPDOWN
+  CHECKBOX
+}
+
+enum MeetingStatus {
+  SCHEDULED
+  ONGOING
+  ENDED
+  CANCELLED
+}
+
+enum RsvpStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+}
+
+enum AiJobStatus {
+  PENDING
+  PROCESSING
+  DONE
+  FAILED
+}
+
+enum DocVisibility {
+  PUBLIC
+  PRIVATE
+  SHARED
+}
+
+enum SharePerm {
+  VIEW
+  EDIT
+}
+
+enum NotificationType {
+  TASK_ASSIGNED
+  TASK_STATUS_CHANGED
+  TASK_COMMENTED
+  TASK_DEADLINE_SOON
+  TASK_OVERDUE
+  TASK_BLOCKED
+  TASK_MENTION
+  SPRINT_STARTED
+  SPRINT_ENDED
+  MEETING_INVITED
+  MEETING_STARTING
+  MEETING_AI_READY
+  WFH_REQUEST_PENDING
+  WFH_APPROVED
+  WFH_REJECTED
+  DAILY_REPORT_REMINDER
+  SYSTEM
+}
+
+// ------------------------------------------------------
+// Models
+// ------------------------------------------------------
+
+model User {
+  id           String     @id @default(cuid())
+  email        String     @unique
+  passwordHash String
+  name         String
+  avatar       String?
+  role         Role       @default(EMPLOYEE)
+  status       UserStatus @default(ACTIVE)
+  position     String?
+  language     Language   @default(VI)
+  departmentId String?
+  department   Department? @relation(fields: [departmentId], references: [id])
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  deletedAt    DateTime?
+
+  // Relations
+  attendanceRecords  AttendanceRecord[]
+  wfhRequests        WfhRequest[]
+  leaveRequests      LeaveRequest[]
+  createdProjects    Project[]          @relation("ProjectCreator")
+  personalProject    Project?           @relation("PersonalProjectOwner")
+  projectMemberships ProjectMember[]
+  createdTasks       Task[]             @relation("TaskCreator")
+  assignedTasks      Task[]             @relation("TaskAssignee")
+  workLogs           WorkLog[]
+  comments           Comment[]
+  reactions          Reaction[]
+  createdMeetings    Meeting[]          @relation("MeetingCreator")
+  meetingParticipants MeetingParticipant[]
+  createdDocuments   Document[]         @relation("DocumentCreator")
+  documentShares     DocumentShare[]
+  dailyReports       DailyReport[]
+  notifications      Notification[]
+}
+
+model Department {
+  id          String    @id @default(cuid())
+  name        String
+  description String?
+  managerId   String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+
+  users       User[]
+}
+
+model SystemConfig {
+  id                 String   @id @default(cuid())
+  companyName        String
+  companyLogoUrl     String?
+  timezone           String   @default("Asia/Ho_Chi_Minh")
+  workStartTime      String   @default("08:00")
+  workEndTime        String   @default("17:30")
+  checkinStartTime   String   @default("06:00")
+  checkinEndTime     String   @default("12:00")
+  allowedIpRanges    String[] 
+  officeLatitude     Float
+  officeLongitude    Float
+  gpsRadiusMeters    Int      @default(100)
+  wfhAutoApproveTime String   @default("09:30")
+  geminiApiKey       String?
+  smtpHost           String?
+  smtpPort           Int?
+  smtpUser           String?
+  smtpPass           String?
+  updatedAt          DateTime @updatedAt
+}
+
+model AttendanceRecord {
+  id            String           @id @default(cuid())
+  userId        String
+  user          User             @relation(fields: [userId], references: [id])
+  date          DateTime         @db.Date
+  status        AttendanceStatus
+  checkInTime   DateTime?
+  checkOutTime  DateTime?
+  checkInIp     String?
+  checkInLat    Float?
+  checkInLng    Float?
+  checkInMethod String?
+  note          String?
+  editedBy      String?
+  editedAt      DateTime?
+  createdAt     DateTime         @default(now())
+
+  @@unique([userId, date])
+  @@index([userId, date])
+  @@index([date])
+}
+
+model WfhRequest {
+  id            String        @id @default(cuid())
+  userId        String
+  user          User          @relation(fields: [userId], references: [id])
+  date          DateTime      @db.Date
+  reason        String
+  expectedStart String
+  expectedEnd   String
+  status        RequestStatus @default(PENDING)
+  reviewedBy    String?
+  reviewedAt    DateTime?
+  rejectionNote String?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+}
+
+model LeaveRequest {
+  id            String        @id @default(cuid())
+  userId        String
+  user          User          @relation(fields: [userId], references: [id])
+  startDate     DateTime      @db.Date
+  endDate       DateTime      @db.Date
+  leaveType     LeaveType
+  reason        String
+  status        RequestStatus @default(PENDING)
+  dayCount      Float
+  reviewedBy    String?
+  reviewedAt    DateTime?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+}
+
+model Project {
+  id          String        @id @default(cuid())
+  name        String
+  description String?
+  kind        ProjectKind   @default(TEAM)
+  personalOwnerId String?   @unique
+  personalOwner   User?     @relation("PersonalProjectOwner", fields: [personalOwnerId], references: [id])
+  status      ProjectStatus @default(PLANNING)
+  color       String        @default("#3B82F6")
+  icon        String?
+  startDate   DateTime?
+  endDate     DateTime?
+  createdById String
+  createdBy   User          @relation("ProjectCreator", fields: [createdById], references: [id])
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  deletedAt   DateTime?
+
+  members     ProjectMember[]
+  sprints     Sprint[]
+  epics       Epic[]
+  tasks       Task[]
+  customFields CustomField[]
+  meetings    Meeting[]
+  documents   Document[]
+}
+
+model ProjectMember {
+  id          String   @id @default(cuid())
+  projectId   String
+  project     Project  @relation(fields: [projectId], references: [id])
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+  projectRole String
+  joinedAt    DateTime @default(now())
+
+  @@unique([projectId, userId])
+}
+
+model Sprint {
+  id          String       @id @default(cuid())
+  projectId   String
+  project     Project      @relation(fields: [projectId], references: [id])
+  name        String
+  goal        String?
+  status      SprintStatus @default(PLANNING)
+  startDate   DateTime?
+  endDate     DateTime?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  epics       Epic[]
+  tasks       Task[]
+}
+
+model Epic {
+  id          String    @id @default(cuid())
+  projectId   String
+  project     Project   @relation(fields: [projectId], references: [id])
+  sprintId    String?
+  sprint      Sprint?   @relation(fields: [sprintId], references: [id])
+  title       String
+  description String?
+  color       String?
+  startDate   DateTime?
+  endDate     DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+
+  tasks       Task[]
+}
+
+model Task {
+  id              String      @id @default(cuid())
+  projectId       String
+  project         Project     @relation(fields: [projectId], references: [id])
+  sprintId        String?
+  sprint          Sprint?     @relation(fields: [sprintId], references: [id])
+  epicId          String?
+  epic            Epic?       @relation(fields: [epicId], references: [id])
+  parentTaskId    String?
+  parentTask      Task?       @relation("SubTasks", fields: [parentTaskId], references: [id])
+  subTasks        Task[]      @relation("SubTasks")
+  assigneeId      String?
+  assignee        User?       @relation("TaskAssignee", fields: [assigneeId], references: [id])
+  createdById     String
+  createdBy       User        @relation("TaskCreator", fields: [createdById], references: [id])
+  title           String
+  description     String?
+  status          TaskStatus  @default(TODO)
+  priority        Priority    @default(MEDIUM)
+  storyPoints     Int?
+  timeEstimate    Int?
+  timeTracked     Int         @default(0)
+  position        Int         @default(0)
+  dueDate         DateTime?
+  labels          String[]
+  deletedAt       DateTime?
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  dependencies    TaskDependency[] @relation("TaskDependsOn")
+  dependentOnMe   TaskDependency[] @relation("TaskDependencySource")
+  workLogs        WorkLog[]
+  comments        Comment[]
+  customValues    CustomFieldValue[]
+
+  @@index([projectId, status])
+  @@index([assigneeId])
+  @@index([sprintId])
+}
+
+model TaskDependency {
+  id             String         @id @default(cuid())
+  taskId         String
+  task           Task           @relation("TaskDependsOn", fields: [taskId], references: [id])
+  dependsOnId    String
+  dependsOnTask  Task           @relation("TaskDependencySource", fields: [dependsOnId], references: [id])
+  dependencyType DependencyType
+
+  @@unique([taskId, dependsOnId])
+}
+
+model WorkLog {
+  id          String   @id @default(cuid())
+  taskId      String
+  task        Task     @relation(fields: [taskId], references: [id])
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+  duration    Int
+  description String?
+  logDate     DateTime @default(now())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Comment {
+  id          String    @id @default(cuid())
+  taskId      String?
+  task        Task?     @relation(fields: [taskId], references: [id])
+  docId       String?
+  meetingId   String?
+  authorId    String
+  author      User      @relation(fields: [authorId], references: [id])
+  content     String
+  mentions    String[]
+  isEdited    Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+
+  reactions   Reaction[]
+}
+
+model Reaction {
+  id        String   @id @default(cuid())
+  commentId String
+  comment   Comment  @relation(fields: [commentId], references: [id])
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  emoji     String
+
+  @@unique([commentId, userId, emoji])
+}
+
+model CustomField {
+  id          String          @id @default(cuid())
+  projectId   String
+  project     Project         @relation(fields: [projectId], references: [id])
+  name        String
+  fieldType   CustomFieldType
+  options     String[]
+  createdAt   DateTime        @default(now())
+
+  values      CustomFieldValue[]
+}
+
+model CustomFieldValue {
+  id            String      @id @default(cuid())
+  taskId        String
+  task          Task        @relation(fields: [taskId], references: [id])
+  customFieldId String
+  customField   CustomField @relation(fields: [customFieldId], references: [id])
+  value         String
+  updatedAt     DateTime    @updatedAt
+
+  @@unique([taskId, customFieldId])
+}
+
+model Meeting {
+  id           String        @id @default(cuid())
+  projectId    String?
+  project      Project?      @relation(fields: [projectId], references: [id])
+  createdById  String
+  createdBy    User          @relation("MeetingCreator", fields: [createdById], references: [id])
+  title        String
+  description  String?
+  status       MeetingStatus @default(SCHEDULED)
+  startTime    DateTime
+  endTime      DateTime
+  roomCode     String        @unique
+  agenda       String[]
+  recordingUrl String?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  participants MeetingParticipant[]
+  minutes      MeetingMinute?
+  summary      MeetingAiSummary?
+}
+
+model MeetingParticipant {
+  id         String     @id @default(cuid())
+  meetingId  String
+  meeting    Meeting    @relation(fields: [meetingId], references: [id])
+  userId     String
+  user       User       @relation(fields: [userId], references: [id])
+  rsvpStatus RsvpStatus @default(PENDING)
+  joinedAt   DateTime?
+  leftAt     DateTime?
+
+  @@unique([meetingId, userId])
+}
+
+model MeetingMinute {
+  id          String   @id @default(cuid())
+  meetingId   String   @unique
+  meeting     Meeting  @relation(fields: [meetingId], references: [id])
+  content     String
+  actionItems Json[]
+  decisions   String[]
+  updatedById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model MeetingAiSummary {
+  id           String      @id @default(cuid())
+  meetingId    String      @unique
+  meeting      Meeting     @relation(fields: [meetingId], references: [id])
+  status       AiJobStatus @default(PENDING)
+  summaryVi    String?
+  summaryEn    String?
+  summaryKo    String?
+  keyDecisions String[]
+  actionItems  Json[]
+  risks        String[]
+  generatedAt  DateTime?
+  createdAt    DateTime    @default(now())
+}
+
+model Document {
+  id             String        @id @default(cuid())
+  projectId      String?
+  project        Project?      @relation(fields: [projectId], references: [id])
+  parentDocId    String?
+  parentDoc      Document?     @relation("DocHierarchy", fields: [parentDocId], references: [id])
+  childDocs      Document[]    @relation("DocHierarchy")
+  createdById    String
+  createdBy      User          @relation("DocumentCreator", fields: [createdById], references: [id])
+  title          String
+  content        Json?
+  visibility     DocVisibility @default(PRIVATE)
+  currentVersion Int           @default(1)
+  wordCount      Int           @default(0)
+  icon           String?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  deletedAt      DateTime?
+
+  versions       DocumentVersion[]
+  shares         DocumentShare[]
+  aiSummary      DocumentAiSummary?
+
+  @@index([parentDocId])
+  @@index([projectId])
+}
+
+model DocumentVersion {
+  id          String   @id @default(cuid())
+  docId       String
+  document    Document @relation(fields: [docId], references: [id])
+  version     Int
+  content     Json
+  updatedById String
+  createdAt   DateTime @default(now())
+
+  @@unique([docId, version])
+}
+
+model DocumentShare {
+  id         String    @id @default(cuid())
+  docId      String
+  document   Document  @relation(fields: [docId], references: [id])
+  userId     String
+  user       User      @relation(fields: [userId], references: [id])
+  permission SharePerm @default(VIEW)
+  createdAt  DateTime  @default(now())
+
+  @@unique([docId, userId])
+}
+
+model DocumentAiSummary {
+  id         String      @id @default(cuid())
+  docId      String      @unique
+  document   Document    @relation(fields: [docId], references: [id])
+  status     AiJobStatus @default(PENDING)
+  summary    String?
+  keyPoints  String[]
+  createdAt  DateTime    @default(now())
+}
+
+model DailyReport {
+  id              String   @id @default(cuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id])
+  date            DateTime @db.Date
+  content         String
+  tasksDone       String[]
+  blockers        String?
+  plannedTomorrow String?
+  aiDrafted       Boolean  @default(false)
+  submittedAt     DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([userId, date])
+}
+
+model Notification {
+  id         String           @id @default(cuid())
+  userId     String
+  user       User             @relation(fields: [userId], references: [id])
+  type       NotificationType
+  title      String
+  message    String
+  link       String?
+  read       Boolean          @default(false)
+  readAt     DateTime?
+  metadata   Json?
+  createdAt  DateTime         @default(now())
+
+  @@index([userId, read])
+}
