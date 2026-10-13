@@ -41,6 +41,8 @@ enum AttendanceStatus {
   BUSINESS_TRIP
   ABSENT_APPROVED
   ABSENT_UNAPPROVED
+  EARLY_LEAVE_APPROVED
+  EARLY_LEAVE_UNAPPROVED
 }
 
 enum RequestStatus {
@@ -48,6 +50,11 @@ enum RequestStatus {
   APPROVED
   REJECTED
   AUTO_APPROVED
+}
+
+enum BreakType {
+  MANUAL
+  EARLY_LEAVE_OUT
 }
 
 enum LeaveType {
@@ -161,39 +168,46 @@ enum NotificationType {
 // ------------------------------------------------------
 
 model User {
-  id           String     @id @default(cuid())
-  email        String     @unique
+  id           String      @id @default(cuid())
+  email        String      @unique
   passwordHash String
   name         String
   avatar       String?
-  role         Role       @default(EMPLOYEE)
-  status       UserStatus @default(ACTIVE)
+  role         Role        @default(EMPLOYEE)
+  status       UserStatus  @default(ACTIVE)
   position     String?
-  language     Language   @default(VI)
+  language     Language    @default(VI)
   departmentId String?
   department   Department? @relation(fields: [departmentId], references: [id])
-  createdAt    DateTime   @default(now())
-  updatedAt    DateTime   @updatedAt
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
   deletedAt    DateTime?
 
   // Relations
-  attendanceRecords  AttendanceRecord[]
-  wfhRequests        WfhRequest[]
-  leaveRequests      LeaveRequest[]
-  createdProjects    Project[]          @relation("ProjectCreator")
-  personalProject    Project?           @relation("PersonalProjectOwner")
-  projectMemberships ProjectMember[]
-  createdTasks       Task[]             @relation("TaskCreator")
-  assignedTasks      Task[]             @relation("TaskAssignee")
-  workLogs           WorkLog[]
-  comments           Comment[]
-  reactions          Reaction[]
-  createdMeetings    Meeting[]          @relation("MeetingCreator")
+  attendanceRecords   AttendanceRecord[]
+  wfhRequests         WfhRequest[]
+  leaveRequests       LeaveRequest[]
+  createdProjects     Project[]            @relation("ProjectCreator")
+  personalProject     Project?             @relation("PersonalProjectOwner")
+  projectMemberships  ProjectMember[]
+  createdTasks        Task[]               @relation("TaskCreator")
+  assignedTasks       Task[]               @relation("TaskAssignee")
+  workLogs            WorkLog[]
+  comments            Comment[]
+  reactions           Reaction[]
+  createdMeetings     Meeting[]            @relation("MeetingCreator")
   meetingParticipants MeetingParticipant[]
-  createdDocuments   Document[]         @relation("DocumentCreator")
-  documentShares     DocumentShare[]
-  dailyReports       DailyReport[]
-  notifications      Notification[]
+
+  // Attendance Enhancement (GD2)
+  earlyLeaveRequests         EarlyLeaveRequest[] @relation("EarlyLeaveRequester")
+  reviewedEarlyLeaveRequests EarlyLeaveRequest[] @relation("EarlyLeaveReviewer")
+  overtimeRequests           OvertimeRequest[]   @relation("OvertimeRequester")
+  reviewedOvertimeRequests   OvertimeRequest[]   @relation("OvertimeReviewer")
+  breakLogs                  BreakLog[]
+  createdDocuments           Document[]          @relation("DocumentCreator")
+  documentShares             DocumentShare[]
+  dailyReports               DailyReport[]
+  notifications              Notification[]
 }
 
 model Department {
@@ -205,7 +219,7 @@ model Department {
   updatedAt   DateTime  @updatedAt
   deletedAt   DateTime?
 
-  users       User[]
+  users User[]
 }
 
 model SystemConfig {
@@ -217,7 +231,7 @@ model SystemConfig {
   workEndTime        String   @default("17:30")
   checkinStartTime   String   @default("06:00")
   checkinEndTime     String   @default("12:00")
-  allowedIpRanges    String[] 
+  allowedIpRanges    String[]
   officeLatitude     Float
   officeLongitude    Float
   gpsRadiusMeters    Int      @default(100)
@@ -252,6 +266,60 @@ model AttendanceRecord {
   @@index([date])
 }
 
+model EarlyLeaveRequest {
+  id                String        @id @default(cuid())
+  userId            String
+  user              User          @relation("EarlyLeaveRequester", fields: [userId], references: [id])
+  date              DateTime      @db.Date
+  expectedLeaveTime DateTime
+  reason            String
+  status            RequestStatus @default(PENDING)
+  reviewedBy        String?
+  reviewedByUser    User?         @relation("EarlyLeaveReviewer", fields: [reviewedBy], references: [id])
+  reviewedAt        DateTime?
+  createdAt         DateTime      @default(now())
+
+  @@unique([userId, date])
+  @@index([userId, date])
+  @@index([status])
+}
+
+model OvertimeRequest {
+  id              String        @id @default(cuid())
+  userId          String
+  user            User          @relation("OvertimeRequester", fields: [userId], references: [id])
+  date            DateTime      @db.Date
+  registeredStart DateTime
+  registeredEnd   DateTime
+  registeredHours Float
+  actualHours     Float?
+  reason          String
+  status          RequestStatus @default(PENDING)
+  reviewedBy      String?
+  reviewedByUser  User?         @relation("OvertimeReviewer", fields: [reviewedBy], references: [id])
+  reviewedAt      DateTime?
+  createdAt       DateTime      @default(now())
+
+  @@unique([userId, date])
+  @@index([userId, date])
+  @@index([status])
+}
+
+model BreakLog {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id])
+  date      DateTime  @db.Date
+  startTime DateTime
+  endTime   DateTime?
+  duration  Int?
+  reason    String?
+  type      BreakType @default(MANUAL)
+  createdAt DateTime  @default(now())
+
+  @@index([userId, date])
+}
+
 model WfhRequest {
   id            String        @id @default(cuid())
   userId        String
@@ -269,46 +337,46 @@ model WfhRequest {
 }
 
 model LeaveRequest {
-  id            String        @id @default(cuid())
-  userId        String
-  user          User          @relation(fields: [userId], references: [id])
-  startDate     DateTime      @db.Date
-  endDate       DateTime      @db.Date
-  leaveType     LeaveType
-  reason        String
-  status        RequestStatus @default(PENDING)
-  dayCount      Float
-  reviewedBy    String?
-  reviewedAt    DateTime?
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
+  id         String        @id @default(cuid())
+  userId     String
+  user       User          @relation(fields: [userId], references: [id])
+  startDate  DateTime      @db.Date
+  endDate    DateTime      @db.Date
+  leaveType  LeaveType
+  reason     String
+  status     RequestStatus @default(PENDING)
+  dayCount   Float
+  reviewedBy String?
+  reviewedAt DateTime?
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
 }
 
 model Project {
-  id          String        @id @default(cuid())
-  name        String
-  description String?
-  kind        ProjectKind   @default(TEAM)
-  personalOwnerId String?   @unique
-  personalOwner   User?     @relation("PersonalProjectOwner", fields: [personalOwnerId], references: [id])
-  status      ProjectStatus @default(PLANNING)
-  color       String        @default("#3B82F6")
-  icon        String?
-  startDate   DateTime?
-  endDate     DateTime?
-  createdById String
-  createdBy   User          @relation("ProjectCreator", fields: [createdById], references: [id])
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
-  deletedAt   DateTime?
+  id              String        @id @default(cuid())
+  name            String
+  description     String?
+  kind            ProjectKind   @default(TEAM)
+  personalOwnerId String?       @unique
+  personalOwner   User?         @relation("PersonalProjectOwner", fields: [personalOwnerId], references: [id])
+  status          ProjectStatus @default(PLANNING)
+  color           String        @default("#3B82F6")
+  icon            String?
+  startDate       DateTime?
+  endDate         DateTime?
+  createdById     String
+  createdBy       User          @relation("ProjectCreator", fields: [createdById], references: [id])
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  deletedAt       DateTime?
 
-  members     ProjectMember[]
-  sprints     Sprint[]
-  epics       Epic[]
-  tasks       Task[]
+  members      ProjectMember[]
+  sprints      Sprint[]
+  epics        Epic[]
+  tasks        Task[]
   customFields CustomField[]
-  meetings    Meeting[]
-  documents   Document[]
+  meetings     Meeting[]
+  documents    Document[]
 }
 
 model ProjectMember {
@@ -324,19 +392,19 @@ model ProjectMember {
 }
 
 model Sprint {
-  id          String       @id @default(cuid())
-  projectId   String
-  project     Project      @relation(fields: [projectId], references: [id])
-  name        String
-  goal        String?
-  status      SprintStatus @default(PLANNING)
-  startDate   DateTime?
-  endDate     DateTime?
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
+  id        String       @id @default(cuid())
+  projectId String
+  project   Project      @relation(fields: [projectId], references: [id])
+  name      String
+  goal      String?
+  status    SprintStatus @default(PLANNING)
+  startDate DateTime?
+  endDate   DateTime?
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
 
-  epics       Epic[]
-  tasks       Task[]
+  epics Epic[]
+  tasks Task[]
 }
 
 model Epic {
@@ -354,43 +422,43 @@ model Epic {
   updatedAt   DateTime  @updatedAt
   deletedAt   DateTime?
 
-  tasks       Task[]
+  tasks Task[]
 }
 
 model Task {
-  id              String      @id @default(cuid())
-  projectId       String
-  project         Project     @relation(fields: [projectId], references: [id])
-  sprintId        String?
-  sprint          Sprint?     @relation(fields: [sprintId], references: [id])
-  epicId          String?
-  epic            Epic?       @relation(fields: [epicId], references: [id])
-  parentTaskId    String?
-  parentTask      Task?       @relation("SubTasks", fields: [parentTaskId], references: [id])
-  subTasks        Task[]      @relation("SubTasks")
-  assigneeId      String?
-  assignee        User?       @relation("TaskAssignee", fields: [assigneeId], references: [id])
-  createdById     String
-  createdBy       User        @relation("TaskCreator", fields: [createdById], references: [id])
-  title           String
-  description     String?
-  status          TaskStatus  @default(TODO)
-  priority        Priority    @default(MEDIUM)
-  storyPoints     Int?
-  timeEstimate    Int?
-  timeTracked     Int         @default(0)
-  position        Int         @default(0)
-  dueDate         DateTime?
-  labels          String[]
-  deletedAt       DateTime?
-  createdAt       DateTime    @default(now())
-  updatedAt       DateTime    @updatedAt
+  id           String     @id @default(cuid())
+  projectId    String
+  project      Project    @relation(fields: [projectId], references: [id])
+  sprintId     String?
+  sprint       Sprint?    @relation(fields: [sprintId], references: [id])
+  epicId       String?
+  epic         Epic?      @relation(fields: [epicId], references: [id])
+  parentTaskId String?
+  parentTask   Task?      @relation("SubTasks", fields: [parentTaskId], references: [id])
+  subTasks     Task[]     @relation("SubTasks")
+  assigneeId   String?
+  assignee     User?      @relation("TaskAssignee", fields: [assigneeId], references: [id])
+  createdById  String
+  createdBy    User       @relation("TaskCreator", fields: [createdById], references: [id])
+  title        String
+  description  String?
+  status       TaskStatus @default(TODO)
+  priority     Priority   @default(MEDIUM)
+  storyPoints  Int?
+  timeEstimate Int?
+  timeTracked  Int        @default(0)
+  position     Int        @default(0)
+  dueDate      DateTime?
+  labels       String[]
+  deletedAt    DateTime?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
 
-  dependencies    TaskDependency[] @relation("TaskDependsOn")
-  dependentOnMe   TaskDependency[] @relation("TaskDependencySource")
-  workLogs        WorkLog[]
-  comments        Comment[]
-  customValues    CustomFieldValue[]
+  dependencies  TaskDependency[]   @relation("TaskDependsOn")
+  dependentOnMe TaskDependency[]   @relation("TaskDependencySource")
+  workLogs      WorkLog[]
+  comments      Comment[]
+  customValues  CustomFieldValue[]
 
   @@index([projectId, status])
   @@index([assigneeId])
@@ -422,44 +490,44 @@ model WorkLog {
 }
 
 model Comment {
-  id          String    @id @default(cuid())
-  taskId      String?
-  task        Task?     @relation(fields: [taskId], references: [id])
-  docId       String?
-  meetingId   String?
-  authorId    String
-  author      User      @relation(fields: [authorId], references: [id])
-  content     String
-  mentions    String[]
-  isEdited    Boolean   @default(false)
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  deletedAt   DateTime?
+  id        String    @id @default(cuid())
+  taskId    String?
+  task      Task?     @relation(fields: [taskId], references: [id])
+  docId     String?
+  meetingId String?
+  authorId  String
+  author    User      @relation(fields: [authorId], references: [id])
+  content   String
+  mentions  String[]
+  isEdited  Boolean   @default(false)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
 
-  reactions   Reaction[]
+  reactions Reaction[]
 }
 
 model Reaction {
-  id        String   @id @default(cuid())
+  id        String  @id @default(cuid())
   commentId String
-  comment   Comment  @relation(fields: [commentId], references: [id])
+  comment   Comment @relation(fields: [commentId], references: [id])
   userId    String
-  user      User     @relation(fields: [userId], references: [id])
+  user      User    @relation(fields: [userId], references: [id])
   emoji     String
 
   @@unique([commentId, userId, emoji])
 }
 
 model CustomField {
-  id          String          @id @default(cuid())
-  projectId   String
-  project     Project         @relation(fields: [projectId], references: [id])
-  name        String
-  fieldType   CustomFieldType
-  options     String[]
-  createdAt   DateTime        @default(now())
+  id        String          @id @default(cuid())
+  projectId String
+  project   Project         @relation(fields: [projectId], references: [id])
+  name      String
+  fieldType CustomFieldType
+  options   String[]
+  createdAt DateTime        @default(now())
 
-  values      CustomFieldValue[]
+  values CustomFieldValue[]
 }
 
 model CustomFieldValue {
@@ -555,9 +623,9 @@ model Document {
   updatedAt      DateTime      @updatedAt
   deletedAt      DateTime?
 
-  versions       DocumentVersion[]
-  shares         DocumentShare[]
-  aiSummary      DocumentAiSummary?
+  versions  DocumentVersion[]
+  shares    DocumentShare[]
+  aiSummary DocumentAiSummary?
 
   @@index([parentDocId])
   @@index([projectId])
@@ -588,44 +656,44 @@ model DocumentShare {
 }
 
 model DocumentAiSummary {
-  id         String      @id @default(cuid())
-  docId      String      @unique
-  document   Document    @relation(fields: [docId], references: [id])
-  status     AiJobStatus @default(PENDING)
-  summary    String?
-  keyPoints  String[]
-  createdAt  DateTime    @default(now())
+  id        String      @id @default(cuid())
+  docId     String      @unique
+  document  Document    @relation(fields: [docId], references: [id])
+  status    AiJobStatus @default(PENDING)
+  summary   String?
+  keyPoints String[]
+  createdAt DateTime    @default(now())
 }
 
 model DailyReport {
-  id              String   @id @default(cuid())
+  id              String    @id @default(cuid())
   userId          String
-  user            User     @relation(fields: [userId], references: [id])
-  date            DateTime @db.Date
+  user            User      @relation(fields: [userId], references: [id])
+  date            DateTime  @db.Date
   content         String
   tasksDone       String[]
   blockers        String?
   plannedTomorrow String?
-  aiDrafted       Boolean  @default(false)
+  aiDrafted       Boolean   @default(false)
   submittedAt     DateTime?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
   @@unique([userId, date])
 }
 
 model Notification {
-  id         String           @id @default(cuid())
-  userId     String
-  user       User             @relation(fields: [userId], references: [id])
-  type       NotificationType
-  title      String
-  message    String
-  link       String?
-  read       Boolean          @default(false)
-  readAt     DateTime?
-  metadata   Json?
-  createdAt  DateTime         @default(now())
+  id        String           @id @default(cuid())
+  userId    String
+  user      User             @relation(fields: [userId], references: [id])
+  type      NotificationType
+  title     String
+  message   String
+  link      String?
+  read      Boolean          @default(false)
+  readAt    DateTime?
+  metadata  Json?
+  createdAt DateTime         @default(now())
 
   @@index([userId, read])
 }

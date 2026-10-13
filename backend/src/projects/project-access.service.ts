@@ -59,6 +59,14 @@ export class ProjectAccessService {
     };
   }
 
+  async isProjectPM(projectId: string, userId: string): Promise<boolean> {
+    const member = await this.prisma.projectMember.findUnique({
+      where: { projectId_userId: { projectId, userId } },
+      select: { projectRole: true },
+    });
+    return member?.projectRole === 'PM';
+  }
+
   async requireTaskMovePermission(taskId: string, actor: CurrentActor): Promise<{ taskId: string; projectId: string }> {
     const task = await this.prisma.task.findFirst({
       where: { id: taskId, deletedAt: null },

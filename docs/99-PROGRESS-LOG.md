@@ -78,19 +78,60 @@
 
 ---
 
+## 2026-10-11 & 2026-10-12 — Executive Dashboard, Design System v2 & Smart Attendance (M2)
+
+### ✅ Hoàn thành
+- [x] **Executive Dashboard (M8)**: Thiết kế chuẩn Modern Enterprise SaaS + Bauhaus Accents (Linear/Stripe/Apple Pro), Hero illustration, 6 thẻ KPI Ribbon, Checklist tác vụ lõi, Recharts 7-day velocity, Active Sprint, Upcoming Meetings, Recent Documents, Recent Activities và Mega-footer.
+- [x] **Design System v2**: Đồng bộ token màu Bauhaus tinh tế, loại bỏ viền đen thô, chuyển sang `rounded-2xl`, bóng mờ tinh tế và priority color stripes 4px.
+- [x] **Smart Attendance Module (M2)**: 15 endpoints backend NestJS, 7 services (`AttendanceService`, `WfhService`, `LeaveService`, `IpValidationService`, `GeoValidationService`, `LeaveBalanceService`, `AutoApproveService`).
+- [x] **Frontend Attendance Hub (`/attendance`)**: Tab Hôm nay (Today Banner ticking, Leave balance, Geofence map FPT 4K), Tab Lịch sử (MyHistory), Tab Đơn của tôi (MyRequests), Tab Hàng đợi duyệt (ApprovalQueue cho HR/PM/Admin).
+- [x] **Khắc phục 15/15 lỗi Logic Nghiệp vụ (QA Audit)**:
+  - 8 lỗi P0: Zero `any` (`ts-strict-engineering`), chống gian lận `dayCount`, tính cả đơn pending vào quỹ phép, transaction chống race condition, timezone WFH auto-approve an toàn (`Asia/Ho_Chi_Minh`), upsert `ABSENT_APPROVED` cho toàn bộ ngày phép, chặn check-in ngoài khung giờ (06:00-12:00), bổ sung 8 unit tests chuyên sâu.
+  - 4 lỗi P1: Public IP fallback (`usePublicIp` qua api.ipify.org), timezone try-catch fallback, chặn WFH ngày quá khứ, kiểm tra overlap đơn phép.
+  - 3 lỗi P2: Trạng thái WFH PENDING rõ ràng, cảnh báo check-in MANUAL ngoài văn phòng, validate thứ tự giờ WFH.
+- [x] **Verification**: 15/15 test suites backend (75/75 tests pass 100%), frontend + backend build thành công 0 lỗi. Kiểm thử E2E qua browser subagent.
+
+---
+
+## 2026-10-14 — Attendance Enhancement (Giai đoạn 1 & 2), Đa chi nhánh & Nạp Dữ Liệu Thực Tế
+
+### ✅ Hoàn thành
+- [x] **Hỗ trợ Đa chi nhánh (Multi-Office Presets)**:
+  - Cập nhật FPT Complex Đà Nẵng làm văn phòng mặc định (`15.968600, 108.260800`).
+  - Hỗ trợ thêm FPT Software Tower Hà Nội và FPT Tân Thuận TP.HCM, tự động nhận diện chi nhánh gần nhất qua GPS (`findNearestOffice`).
+  - Tích hợp bản đồ tương tác OpenStreetMap Leaflet với Geofence 500m, avatar marker, animated polyline và custom building SVG icons.
+- [x] **Today Timeline (Live-ticking)**: Dải tiến trình trực quan hôm nay (giờ check-in, vị trí hiện tại đập nhịp `animate-pulse`, highlight giờ ăn trưa 12:00-13:00, 4 thẻ thống kê Working, Late, Lunch, OT).
+- [x] **Calendar Heatmap (365 ngày)**: Bảng nhiệt chuyên cần 52 tuần kiểu GitHub, mã màu 9 trạng thái và tooltip chi tiết.
+- [x] **Thống kê chuyên cần (Stats)**: 4 thẻ KPI + Biểu đồ cột Recharts số giờ 30 ngày gần nhất + Biểu đồ tròn Donut phân bổ trạng thái.
+- [x] **Xuất báo cáo (Export Excel & PDF)**: Nút xuất file `.xlsx` và `.pdf` trực tiếp từ bảng lịch sử.
+- [x] **Tính năng mới Giai đoạn 2**:
+  - Đăng ký & Duyệt Về sớm (`EarlyLeaveRequest`): Check-out sớm < 17:30 tự động gắn cờ `EARLY_LEAVE_APPROVED` hoặc `EARLY_LEAVE_UNAPPROVED`.
+  - Đăng ký & Duyệt Làm thêm giờ (`OvertimeRequest`): Chuẩn HRM `actualHours = min(registered, checkOut - 17:30)`.
+  - Theo dõi ra ngoài (`BreakLog`): Tự động trừ giờ trưa và hỗ trợ log nghỉ tạm thời.
+- [x] **Nạp Dữ liệu Thực tế (Seed Data)**:
+  - Nạp 203 bản ghi lịch sử điểm danh đầy đủ từ 01/2026 đến 10/2026 cho `Long Võ` (`vothanhlong1704@gmail.com`).
+  - Nạp 5 đơn WFH, 5 đơn nghỉ phép, 2 đơn về sớm, 3 đơn OT, 1 log nghỉ trưa và 6 đơn chờ duyệt từ đồng nghiệp.
+- [x] **Verification**: 161/161 tests backend pass 100%, frontend & backend build 0 lỗi.
+
+### 📋 Kế hoạch ngày mai
+1. Test và nghiệm thu toàn diện các chức năng Attendance trên giao diện.
+2. Bắt đầu triển khai **Module M5: Cuộc họp trực tuyến & Biên bản AI (Meetings)**.
+
+---
+
 ## Milestone Tracker
 
 | Milestone | Target | Status | Notes |
 |-----------|--------|--------|-------|
 | **M0: Docs & Setup** | Week 1 | ✅ Completed | Monorepo scaffolded |
 | **M1: Auth + User** | Week 2 | ✅ Completed | JWT, Google OAuth, Personal Project provisioning |
-| **M2: Attendance** | Week 3 | ⬜ Not started | IP/GPS logic |
+| **M2: Attendance** | Week 3 | ✅ Completed | Geofence GPS FPT Tower, IP CIDR, WFH, Quỹ phép, 75/75 tests pass |
 | **M3: Project & Task (CRUD)** | Week 4-5 | ✅ Completed | Scoped reads, project access control, board-position PATCH |
-| **M4: Kanban Board (UI)** | Week 5-6 | ✅ Completed | Bauhaus UI, @hello-pangea/dnd, badge counts, optimistic update |
-| **M5: Meetings + WebRTC** | Week 6-7 | ⬜ Not started | Phức tạp nhất |
-| **M6: Documents (ClickUp Docs)** | Week 7-8 | ⬜ Not started | Tiptap editor |
-| **M7: AI Integration (Gemini)** | Week 8-9 | ⬜ Not started | Summary features |
-| **M8: Reports & Dashboard** | Week 9-10 | ⬜ Not started | Charts |
+| **M4: Kanban Board (UI)** | Week 5-6 | ✅ Completed | Modern SaaS UI, @hello-pangea/dnd, badge counts, optimistic update |
+| **M5: Meetings + WebRTC** | Week 6-7 | 🔄 Next Up (Kế hoạch sáng mai) | WebRTC video room, screen share, AI summary |
+| **M6: Documents (ClickUp Docs)** | Week 7-8 | ⬜ Not started | Tiptap editor, cây phân cấp tài liệu |
+| **M7: AI Integration (Gemini)** | Week 8-9 | ⬜ Not started | Summary meetings & tasks |
+| **M8: Reports & Dashboard** | Week 9-10 | ✅ Completed (Dashboard) | Modern Enterprise SaaS, Real KPI, Recharts, Sprint |
 | **M9: Notification System** | Week 10 | ⬜ Not started | Socket.IO |
 | **M10: Testing & Polish** | Week 11 | ⬜ Not started | E2E, accessibility |
 | **M11: Deploy** | Week 12 | ⬜ Not started | Docker + VPS |

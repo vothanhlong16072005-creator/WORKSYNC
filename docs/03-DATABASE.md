@@ -153,20 +153,27 @@ updatedAt     DateTime      @updatedAt
 
 ### 7. projects
 ```sql
-id          String        @id @default(cuid())
-name        String
-description String?
-status      ProjectStatus -- PLANNING | ACTIVE | ON_HOLD | COMPLETED | ARCHIVED
-color       String        @default("#3B82F6")
-icon        String?
-startDate   DateTime?
-endDate     DateTime?
-createdById String
-createdBy   User          @relation
-createdAt   DateTime      @default(now())
-updatedAt   DateTime      @updatedAt
-deletedAt   DateTime?
+id              String        @id @default(cuid())
+name            String
+description     String?
+kind            ProjectKind   @default(TEAM) -- TEAM | PERSONAL (cập nhật 2026-10-10)
+personalOwnerId String?       @unique         -- FK -> User.id, chỉ dùng khi kind = PERSONAL
+personalOwner   User?         @relation("PersonalProjectOwner")
+status          ProjectStatus -- PLANNING | ACTIVE | ON_HOLD | COMPLETED | ARCHIVED
+color           String        @default("#3B82F6")
+icon            String?
+startDate       DateTime?
+endDate         DateTime?
+createdById     String
+createdBy       User          @relation
+createdAt       DateTime      @default(now())
+updatedAt       DateTime      @updatedAt
+deletedAt       DateTime?
 ```
+
+> **Quy ước cập nhật 2026-10-10 (ADR-002)**: Mỗi user có đúng **1 personal project** (`kind = PERSONAL`, `personalOwnerId = user.id`). Personal project được tự động provision khi đăng ký (cả email/password và Google OAuth lần đầu) trong cùng transaction. Nếu user cũ chưa có personal project, chạy migration backfill idempotent.
+>
+> `ProjectAccessService` kiểm tra `kind = PERSONAL` thì chỉ `personalOwnerId` mới có quyền đọc/ghi; với `TEAM` thì áp dụng `ProjectMember` membership.
 
 ### 8. project_members
 ```sql
@@ -463,6 +470,7 @@ enum AttendanceStatus  { ON_TIME LATE VERY_LATE WFH BUSINESS_TRIP ABSENT_APPROVE
 enum RequestStatus     { PENDING APPROVED REJECTED AUTO_APPROVED }
 enum LeaveType         { ANNUAL SICK UNPAID COMPENSATORY }
 enum ProjectStatus     { PLANNING ACTIVE ON_HOLD COMPLETED ARCHIVED }
+enum ProjectKind       { TEAM PERSONAL }  -- thêm 2026-10-10 (ADR-002)
 enum SprintStatus      { PLANNING ACTIVE COMPLETED }
 enum TaskStatus        { TODO IN_PROGRESS IN_REVIEW BLOCKED DONE }
 enum Priority          { LOW MEDIUM HIGH URGENT }

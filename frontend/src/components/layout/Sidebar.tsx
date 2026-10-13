@@ -3,7 +3,6 @@ import { NavLink, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard,
   CheckSquare,
-  Users,
   Video,
   FileText,
   Settings,
@@ -11,6 +10,7 @@ import {
   ChevronLeft,
   ChevronDown,
   Layers,
+  CalendarClock,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -29,7 +29,7 @@ export default function Sidebar({ open, setOpen }: SidebarProps) {
   const [tasksExpanded, setTasksExpanded] = useState(true);
 
   const otherNavItems = [
-    { icon: Users, label: t('nav.attendance'), path: '/attendance' },
+    { icon: CalendarClock, label: t('nav.attendance', 'Chấm công'), path: '/attendance' },
     { icon: Video, label: t('nav.meetings'), path: '/meetings' },
     { icon: FileText, label: t('nav.documents'), path: '/documents' },
     { icon: Settings, label: t('nav.settings'), path: '/settings' },

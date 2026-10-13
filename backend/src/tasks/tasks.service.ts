@@ -212,6 +212,62 @@ export class TasksService {
     return task;
   }
 
+  async findOneWithAccess(id: string, actor: CurrentActor) {
+    const task = await this.prisma.task.findFirst({
+      where: { id, deletedAt: null },
+      include: TASK_INCLUDE,
+    });
+    if (!task) throw new NotFoundException(`Task with ID ${id} not found`);
+
+    // IDOR protection: verify actor can read this task's project
+    await this.projectAccessService.requireReadableProject(task.projectId, actor);
+    return task;
+  }
+
+  async updateWithAccess(id: string, updateTaskDto: UpdateTaskDto, actor: CurrentActor) {
+    // 1. Find task
+    const task = await this.prisma.task.findFirst({
+      where: { id, deletedAt: null },
+    });
+    if (!task) throw new NotFoundException(`Task with ID ${id} not found`);
+
+    // 2. Permission: Admin OR (assignee OR project PM)
+    if (actor.role !== Role.ADMIN) {
+      const isAssignee = task.assigneeId === actor.id;
+      const isProjectPM = await this.projectAccessService.isProjectPM(task.projectId, actor.id);
+      if (!isAssignee && !isProjectPM) {
+        throw new ForbiddenException('Chỉ assignee hoặc PM mới có quyền sửa task');
+      }
+    }
+
+    // 3. Update
+    return this.prisma.task.update({
+      where: { id },
+      data: updateTaskDto,
+      include: TASK_INCLUDE,
+    });
+  }
+
+  async removeWithAccess(id: string, actor: CurrentActor) {
+    const task = await this.prisma.task.findFirst({
+      where: { id, deletedAt: null },
+    });
+    if (!task) throw new NotFoundException(`Task with ID ${id} not found`);
+
+    // Only PM or Admin can delete
+    if (actor.role !== Role.ADMIN) {
+      const isProjectPM = await this.projectAccessService.isProjectPM(task.projectId, actor.id);
+      if (!isProjectPM) {
+        throw new ForbiddenException('Chỉ PM của dự án hoặc Admin mới có quyền xóa task');
+      }
+    }
+
+    return this.prisma.task.update({
+      where: { id },
+      data: { deletedAt: new Date() },
+    });
+  }
+
   async update(id: string, updateTaskDto: UpdateTaskDto) {
     return this.prisma.task.update({
       where: { id },

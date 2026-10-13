@@ -309,43 +309,42 @@
 
 .kanban-column {
   display: flex;
-  min-width: 168px;
+  min-width: 175px;
   max-width: 360px;
-  flex: 1 0 168px;
+  flex: 1 0 175px;
   flex-direction: column;
   overflow: hidden;
-  border: 1px solid hsl(var(--border));
-  border-top: 3px solid hsl(var(--color-cobalt));
-  border-radius: 6px;
-  background: hsl(var(--secondary));
-  box-shadow: 0 2px 6px hsl(var(--foreground) / 0.04);
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  border-radius: 1rem;
+  background: #f8fafc;
+  box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.03);
 }
 
 .kanban-column--progress {
-  border-top-color: hsl(var(--color-sun));
+  border-top: 2px solid #f59e0b;
 }
 
 .kanban-column--review {
-  border-top-color: hsl(var(--color-vermilion));
+  border-top: 2px solid #2563eb;
 }
 
 .kanban-column--blocked {
-  border-top-color: hsl(0 84% 60%);
+  border-top: 2px solid #c95d43;
 }
 
 .kanban-column--done {
-  border-top-color: hsl(var(--color-navy));
+  border-top: 2px solid #10b981;
 }
 
 .kanban-column__header {
   display: flex;
-  min-height: 58px;
+  min-height: 52px;
   align-items: center;
   justify-content: space-between;
   gap: 0.5rem;
-  padding: 0.75rem 0.85rem;
-  border-bottom: 1px solid hsl(var(--border));
-  background: hsl(var(--card));
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid rgba(226, 232, 240, 0.8);
+  background: #ffffff;
 }
 
 .kanban-column__title-wrap {
@@ -357,51 +356,51 @@
 
 .kanban-column__title {
   overflow: hidden;
-  color: hsl(var(--color-navy));
-  font-family: var(--font-display);
-  font-size: 0.9rem;
-  font-weight: 900;
-  letter-spacing: 0.045em;
+  color: #0f172a;
+  font-size: 0.825rem;
+  font-weight: 800;
+  letter-spacing: 0.015em;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .kanban-column__count {
   display: inline-flex;
-  width: 1.35rem;
-  height: 1.35rem;
+  min-width: 1.25rem;
+  height: 1.25rem;
+  padding: 0 0.35rem;
   flex-shrink: 0;
   align-items: center;
   justify-content: center;
-  border-radius: 50%;
-  background: hsl(var(--secondary));
-  color: hsl(var(--muted-foreground));
+  border-radius: 9999px;
+  background: #f1f5f9;
+  color: #475569;
   font-size: 0.68rem;
   font-weight: 800;
 }
 
 .kanban-column__menu {
   display: grid;
-  width: 1.8rem;
-  height: 1.8rem;
+  width: 1.75rem;
+  height: 1.75rem;
   flex-shrink: 0;
   place-items: center;
   border: 0;
-  border-radius: 4px;
+  border-radius: 0.5rem;
   background: transparent;
-  color: hsl(var(--muted-foreground));
+  color: #94a3b8;
   cursor: pointer;
   transition: background 150ms ease, color 150ms ease;
 }
 
 .kanban-column__menu:hover {
-  background: hsl(var(--secondary));
-  color: hsl(var(--foreground));
+  background: #f1f5f9;
+  color: #0f172a;
 }
 
 .kanban-column__body {
   display: flex;
-  min-height: 330px;
+  min-height: 350px;
   flex: 1;
   flex-direction: column;
   gap: 0.65rem;
@@ -411,17 +410,17 @@
 }
 
 .kanban-column__body--drag-over {
-  background: hsl(var(--color-cobalt) / 0.08);
+  background: rgba(37, 99, 235, 0.04);
 }
 
 .kanban-empty {
   display: grid;
-  min-height: 88px;
+  min-height: 90px;
   place-items: center;
-  border: 1px dashed hsl(var(--border));
-  border-radius: 5px;
-  color: hsl(var(--muted-foreground));
-  font-size: 0.73rem;
+  border: 1.5px dashed rgba(203, 213, 225, 0.7);
+  border-radius: 0.75rem;
+  color: #94a3b8;
+  font-size: 0.75rem;
   font-weight: 600;
 }
 
@@ -429,51 +428,74 @@
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
-  padding: 0.85rem;
-  border: 1.5px solid hsl(var(--border));
-  border-radius: 6px;
-  background: hsl(var(--card));
-  box-shadow: 0 1px 3px hsl(var(--foreground) / 0.04);
+  padding: 0.9rem;
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  border-radius: 0.75rem;
+  background: #ffffff;
+  box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.04);
   cursor: pointer;
-  transition: all 160ms ease;
+  position: relative;
+  overflow: hidden;
+  transition: all 180ms ease;
 }
 
-/* Priority Card Frame Variants (Khung đổi màu rõ rệt theo độ ưu tiên) */
+/* Priority Left Accent Stripe (Bauhaus purposeful accents on clean canvas) */
+.kanban-task::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+}
+
+.kanban-task--urgent::before {
+  background: #c95d43;
+}
+
 .kanban-task--urgent {
-  border: 2px solid #ef4444 !important;
-  border-left: 6px solid #dc2626 !important;
-  background: #fef2f2 !important;
-  box-shadow: 0 2px 8px rgba(239, 68, 68, 0.18) !important;
+  border-color: rgba(201, 93, 67, 0.35) !important;
+  background: #ffffff !important;
+  box-shadow: 0 1px 3px rgba(201, 93, 67, 0.08) !important;
+}
+
+.kanban-task--high::before {
+  background: #f59e0b;
 }
 
 .kanban-task--high {
-  border: 2px solid #f97316 !important;
-  border-left: 5px solid #ea580c !important;
-  background: #fff7ed !important;
-  box-shadow: 0 2px 6px rgba(249, 115, 22, 0.14) !important;
+  border-color: rgba(245, 158, 11, 0.35) !important;
+  background: #ffffff !important;
+  box-shadow: 0 1px 3px rgba(245, 158, 11, 0.08) !important;
+}
+
+.kanban-task--medium::before {
+  background: #2563eb;
 }
 
 .kanban-task--medium {
-  border: 2px solid #38bdf8 !important;
-  border-left: 4px solid #0284c7 !important;
-  background: #f0f9ff !important;
+  border-color: rgba(37, 99, 235, 0.25) !important;
+  background: #ffffff !important;
+}
+
+.kanban-task--low::before {
+  background: #94a3b8;
 }
 
 .kanban-task--low {
-  border: 1.5px solid #cbd5e1 !important;
-  border-left: 3px solid #94a3b8 !important;
+  border-color: rgba(203, 213, 225, 0.8) !important;
   background: #ffffff !important;
 }
 
 .kanban-task:hover {
-  box-shadow: 0 6px 16px hsl(var(--foreground) / 0.1);
-  transform: translateY(-2px);
+  box-shadow: 0 4px 8px -1px rgb(0 0 0 / 0.08);
+  transform: translateY(-1px);
 }
 
 .kanban-task--dragging {
-  border-color: hsl(var(--color-cobalt));
-  box-shadow: 0 12px 24px hsl(var(--foreground) / 0.16);
-  transform: rotate(1deg);
+  border-color: #2563eb !important;
+  box-shadow: 0 10px 20px -3px rgba(15, 23, 42, 0.15) !important;
+  transform: rotate(0.8deg);
 }
 
 .kanban-task__meta,

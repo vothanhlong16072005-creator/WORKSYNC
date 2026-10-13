@@ -1,0 +1,79 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 80" fill="none">
+  <!-- Bauhaus-inspired geometric FPT Software Tower Da Nang -->
+  <defs>
+    <linearGradient id="dn-tower" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#1d4ed8" />
+      <stop offset="100%" stop-color="#1e3a8a" />
+    </linearGradient>
+    <linearGradient id="dn-shadow" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#1e3a8a" stop-opacity="0.6" />
+      <stop offset="100%" stop-color="#0f172a" stop-opacity="0.9" />
+    </linearGradient>
+  </defs>
+
+  <!-- Base platform -->
+  <rect x="6" y="72" width="52" height="6" rx="1" fill="#475569" />
+  <rect x="4" y="76" width="56" height="3" fill="#334155" />
+
+  <!-- Main tower (left) -->
+  <rect x="8" y="20" width="22" height="52" fill="url(#dn-tower)" />
+  <rect x="8" y="20" width="22" height="52" fill="url(#dn-shadow)" />
+
+  <!-- Windows (left tower) -->
+  <g fill="#fef3c7" opacity="0.85">
+    <rect x="11" y="24" width="3" height="3" />
+    <rect x="17" y="24" width="3" height="3" />
+    <rect x="23" y="24" width="3" height="3" />
+    <rect x="11" y="30" width="3" height="3" />
+    <rect x="17" y="30" width="3" height="3" fill="#fbbf24" />
+    <rect x="23" y="30" width="3" height="3" />
+    <rect x="11" y="36" width="3" height="3" />
+    <rect x="17" y="36" width="3" height="3" />
+    <rect x="23" y="36" width="3" height="3" fill="#fbbf24" />
+    <rect x="11" y="42" width="3" height="3" />
+    <rect x="17" y="42" width="3" height="3" fill="#fbbf24" />
+    <rect x="23" y="42" width="3" height="3" />
+    <rect x="11" y="48" width="3" height="3" fill="#fbbf24" />
+    <rect x="17" y="48" width="3" height="3" />
+    <rect x="23" y="48" width="3" height="3" />
+    <rect x="11" y="54" width="3" height="3" />
+    <rect x="17" y="54" width="3" height="3" />
+    <rect x="23" y="54" width="3" height="3" fill="#fbbf24" />
+    <rect x="11" y="60" width="3" height="3" />
+    <rect x="17" y="60" width="3" height="3" fill="#fbbf24" />
+    <rect x="23" y="60" width="3" height="3" />
+  </g>
+
+  <!-- Right tower (shorter) -->
+  <rect x="32" y="32" width="22" height="40" fill="#2563eb" />
+  <rect x="32" y="32" width="22" height="40" fill="url(#dn-shadow)" opacity="0.7" />
+
+  <!-- Windows (right tower) -->
+  <g fill="#fef3c7" opacity="0.85">
+    <rect x="35" y="36" width="3" height="3" />
+    <rect x="41" y="36" width="3" height="3" fill="#fbbf24" />
+    <rect x="47" y="36" width="3" height="3" />
+    <rect x="35" y="42" width="3" height="3" fill="#fbbf24" />
+    <rect x="41" y="42" width="3" height="3" />
+    <rect x="47" y="42" width="3" height="3" />
+    <rect x="35" y="48" width="3" height="3" />
+    <rect x="41" y="48" width="3" height="3" fill="#fbbf24" />
+    <rect x="47" y="48" width="3" height="3" />
+    <rect x="35" y="54" width="3" height="3" fill="#fbbf24" />
+    <rect x="41" y="54" width="3" height="3" />
+    <rect x="47" y="54" width="3" height="3" />
+    <rect x="35" y="60" width="3" height="3" />
+    <rect x="41" y="60" width="3" height="3" fill="#fbbf24" />
+    <rect x="47" y="60" width="3" height="3" />
+  </g>
+
+  <!-- Roof antenna -->
+  <line x1="19" y1="20" x2="19" y2="10" stroke="#1e3a8a" stroke-width="1.5" />
+  <circle cx="19" cy="9" r="1.5" fill="#ef4444" />
+  <line x1="43" y1="32" x2="43" y2="22" stroke="#1e3a8a" stroke-width="1.5" />
+  <circle cx="43" cy="21" r="1.5" fill="#ef4444" />
+
+  <!-- FPT label stripe -->
+  <rect x="8" y="14" width="22" height="6" fill="#dc2626" />
+  <text x="19" y="19" font-family="Arial, sans-serif" font-size="5" font-weight="900" fill="white" text-anchor="middle">FPT</text>
+</svg>

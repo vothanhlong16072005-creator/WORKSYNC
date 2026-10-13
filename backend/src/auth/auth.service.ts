@@ -47,12 +47,21 @@ export class AuthService {
   async validateOAuthLogin(email: string, name: string, avatar: string) {
     let user = await this.usersService.findByEmail(email);
     if (!user) {
+      // User mới - tạo account + personal project
       user = await this.usersService.createWithPersonalProject({
         email,
         name,
         avatar,
-        passwordHash: '', // Tài khoản OAuth không có mật khẩu
+        passwordHash: '', // OAuth không cần mật khẩu
       });
+    } else {
+      // User đã tồn tại - sync name/avatar từ Google (idempotent)
+      if (user.name !== name || user.avatar !== avatar) {
+        user = await this.usersService.updateProfile(user.id, {
+          name,
+          avatar,
+        });
+      }
     }
     return this.generateToken(user);
   }

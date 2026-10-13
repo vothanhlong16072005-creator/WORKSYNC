@@ -24,8 +24,8 @@ export class TasksController {
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.tasksService.findOne(id);
+  findOne(@Param('id') id: string, @CurrentUser() actor: CurrentActor) {
+    return this.tasksService.findOneWithAccess(id, actor);
   }
 
   @Patch(':id/board-position')
@@ -38,12 +38,16 @@ export class TasksController {
   }
 
   @Patch(':id')
-  update(@Param('id') id: string, @Body() updateTaskDto: UpdateTaskDto) {
-    return this.tasksService.update(id, updateTaskDto);
+  update(
+    @Param('id') id: string,
+    @CurrentUser() actor: CurrentActor,
+    @Body() updateTaskDto: UpdateTaskDto,
+  ) {
+    return this.tasksService.updateWithAccess(id, updateTaskDto, actor);
   }
 
   @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.tasksService.remove(id);
+  remove(@Param('id') id: string, @CurrentUser() actor: CurrentActor) {
+    return this.tasksService.removeWithAccess(id, actor);
   }
 }

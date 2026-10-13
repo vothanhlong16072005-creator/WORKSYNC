@@ -56,6 +56,32 @@ async function main() {
     });
   }
 
+  // Seed default SystemConfig
+  await prisma.systemConfig.upsert({
+    where: { id: 'default-system-config' },
+    update: {
+      companyName: 'FPT Complex Đà Nẵng',
+      officeLatitude: 15.968600,
+      officeLongitude: 108.260800,
+      gpsRadiusMeters: 500,
+    },
+    create: {
+      id: 'default-system-config',
+      companyName: 'FPT Complex Đà Nẵng',
+      companyLogoUrl: '/logo.png',
+      timezone: 'Asia/Ho_Chi_Minh',
+      workStartTime: '08:30',
+      workEndTime: '17:30',
+      checkinStartTime: '06:00',
+      checkinEndTime: '12:00',
+      allowedIpRanges: ['127.0.0.1', '::1', '192.168.1.0/24', '10.0.0.0/8', '172.16.0.0/12'],
+      officeLatitude: 15.968600,
+      officeLongitude: 108.260800,
+      gpsRadiusMeters: 500,
+      wfhAutoApproveTime: '09:30',
+    },
+  });
+
   console.log('Seeding completed!');
 }
 

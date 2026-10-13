@@ -4,6 +4,8 @@ import LoginPage from '@/features/auth/pages/LoginPage';
 import RegisterPage from '@/features/auth/pages/RegisterPage';
 import DashboardLayout from '@/layouts/DashboardLayout';
 import KanbanPage from '@/features/tasks/pages/KanbanPage';
+import { DashboardPage } from '@/features/dashboard/components/DashboardPage';
+import { AttendancePage } from '@/features/attendance/components/AttendancePage';
 
 function App() {
   return (
@@ -30,14 +32,10 @@ function App() {
         
         {/* Protected Routes */}
         <Route element={<DashboardLayout />}>
-          <Route path="/dashboard" element={
-            <div className="bauhaus-card p-8">
-              <h1 className="text-3xl font-black uppercase text-slate-900 border-b-4 border-primary pb-2 inline-block mb-6">Tổng quan <span className="text-primary">hệ thống</span></h1>
-              <p className="text-slate-600 font-medium">Chào mừng bạn quay lại hệ thống. Nội dung dashboard chi tiết sẽ được xây dựng ở các bước tiếp theo.</p>
-            </div>
-          } />
+          <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/tasks" element={<KanbanPage />} />
           <Route path="/projects/:projectId/tasks" element={<KanbanPage />} />
+          <Route path="/attendance" element={<AttendancePage />} />
           {/* Add more features later */}
         </Route>
 

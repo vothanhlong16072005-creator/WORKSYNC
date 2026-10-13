@@ -98,6 +98,157 @@ describe('TasksService.findAll', () => {
   });
 });
 
+describe('TasksService.findOneWithAccess', () => {
+  it('returns task when actor is project member', async () => {
+    const task = { id: 't-1', projectId: 'team-1', deletedAt: null };
+    const prisma = {
+      task: { findFirst: vi.fn().mockResolvedValue(task) },
+    } as unknown as PrismaService;
+    const accessService = {
+      requireReadableProject: vi.fn().mockResolvedValue({
+        projectId: 'team-1',
+        kind: ProjectKind.TEAM,
+      }),
+    } as unknown as ProjectAccessService;
+    const service = new TasksService(prisma, accessService);
+
+    const result = await service.findOneWithAccess('t-1', { id: 'user-1', role: Role.EMPLOYEE });
+    expect(result).toEqual(task);
+    expect(accessService.requireReadableProject).toHaveBeenCalledWith('team-1', { id: 'user-1', role: Role.EMPLOYEE });
+  });
+
+  it('throws NotFoundException when task does not exist', async () => {
+    const prisma = {
+      task: { findFirst: vi.fn().mockResolvedValue(null) },
+    } as unknown as PrismaService;
+    const accessService = {} as ProjectAccessService;
+    const service = new TasksService(prisma, accessService);
+
+    await expect(
+      service.findOneWithAccess('missing', { id: 'user-1', role: Role.EMPLOYEE }),
+    ).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it('throws ForbiddenException when actor is not project member', async () => {
+    const task = { id: 't-1', projectId: 'team-1', deletedAt: null };
+    const prisma = {
+      task: { findFirst: vi.fn().mockResolvedValue(task) },
+    } as unknown as PrismaService;
+    const accessService = {
+      requireReadableProject: vi.fn().mockRejectedValue(new ForbiddenException('no access')),
+    } as unknown as ProjectAccessService;
+    const service = new TasksService(prisma, accessService);
+
+    await expect(
+      service.findOneWithAccess('t-1', { id: 'user-2', role: Role.EMPLOYEE }),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+  });
+});
+
+describe('TasksService.updateWithAccess', () => {
+  it('allows assignee to update their own task', async () => {
+    const task = { id: 't-1', projectId: 'team-1', assigneeId: 'user-1', deletedAt: null };
+    const updated = { id: 't-1', title: 'New Title' };
+    const prisma = {
+      task: {
+        findFirst: vi.fn().mockResolvedValue(task),
+        update: vi.fn().mockResolvedValue(updated),
+      },
+    } as unknown as PrismaService;
+    const accessService = {
+      isProjectPM: vi.fn().mockResolvedValue(false),
+    } as unknown as ProjectAccessService;
+    const service = new TasksService(prisma, accessService);
+
+    const result = await service.updateWithAccess('t-1', { title: 'New Title' }, { id: 'user-1', role: Role.EMPLOYEE });
+    expect(result).toEqual(updated);
+  });
+
+  it('allows PM of project to update any task', async () => {
+    const task = { id: 't-1', projectId: 'team-1', assigneeId: 'user-2', deletedAt: null };
+    const updated = { id: 't-1', title: 'PM Edit' };
+    const prisma = {
+      task: {
+        findFirst: vi.fn().mockResolvedValue(task),
+        update: vi.fn().mockResolvedValue(updated),
+      },
+    } as unknown as PrismaService;
+    const accessService = {
+      isProjectPM: vi.fn().mockResolvedValue(true),
+    } as unknown as ProjectAccessService;
+    const service = new TasksService(prisma, accessService);
+
+    const result = await service.updateWithAccess('t-1', { title: 'PM Edit' }, { id: 'user-1', role: Role.EMPLOYEE });
+    expect(result).toEqual(updated);
+    expect(accessService.isProjectPM).toHaveBeenCalledWith('team-1', 'user-1');
+  });
+
+  it('forbids non-assignee non-PM from updating task', async () => {
+    const task = { id: 't-1', projectId: 'team-1', assigneeId: 'user-2', deletedAt: null };
+    const prisma = {
+      task: { findFirst: vi.fn().mockResolvedValue(task) },
+    } as unknown as PrismaService;
+    const accessService = {
+      isProjectPM: vi.fn().mockResolvedValue(false),
+    } as unknown as ProjectAccessService;
+    const service = new TasksService(prisma, accessService);
+
+    await expect(
+      service.updateWithAccess('t-1', { title: 'Hacked' }, { id: 'user-1', role: Role.EMPLOYEE }),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+  });
+
+  it('allows Admin to update any task', async () => {
+    const task = { id: 't-1', projectId: 'team-1', assigneeId: 'user-2', deletedAt: null };
+    const updated = { id: 't-1', title: 'Admin Edit' };
+    const prisma = {
+      task: {
+        findFirst: vi.fn().mockResolvedValue(task),
+        update: vi.fn().mockResolvedValue(updated),
+      },
+    } as unknown as PrismaService;
+    const accessService = {} as ProjectAccessService;
+    const service = new TasksService(prisma, accessService);
+
+    const result = await service.updateWithAccess('t-1', { title: 'Admin Edit' }, { id: 'admin-1', role: Role.ADMIN });
+    expect(result).toEqual(updated);
+  });
+});
+
+describe('TasksService.removeWithAccess', () => {
+  it('allows PM to soft-delete task', async () => {
+    const task = { id: 't-1', projectId: 'team-1', deletedAt: null };
+    const prisma = {
+      task: {
+        findFirst: vi.fn().mockResolvedValue(task),
+        update: vi.fn().mockResolvedValue({ id: 't-1', deletedAt: new Date() }),
+      },
+    } as unknown as PrismaService;
+    const accessService = {
+      isProjectPM: vi.fn().mockResolvedValue(true),
+    } as unknown as ProjectAccessService;
+    const service = new TasksService(prisma, accessService);
+
+    const result = await service.removeWithAccess('t-1', { id: 'user-1', role: Role.EMPLOYEE });
+    expect(result.deletedAt).toBeDefined();
+  });
+
+  it('forbids assignee (non-PM) from deleting task', async () => {
+    const task = { id: 't-1', projectId: 'team-1', assigneeId: 'user-1', deletedAt: null };
+    const prisma = {
+      task: { findFirst: vi.fn().mockResolvedValue(task) },
+    } as unknown as PrismaService;
+    const accessService = {
+      isProjectPM: vi.fn().mockResolvedValue(false),
+    } as unknown as ProjectAccessService;
+    const service = new TasksService(prisma, accessService);
+
+    await expect(
+      service.removeWithAccess('t-1', { id: 'user-1', role: Role.EMPLOYEE }),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+  });
+});
+
 describe('TasksService.moveOnBoard', () => {
   it('moves task to destinationIndex and normalizes positions in a transaction', async () => {
     const currentTask = {

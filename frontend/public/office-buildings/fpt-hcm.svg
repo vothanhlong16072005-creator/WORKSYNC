@@ -1,0 +1,97 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 80" fill="none">
+  <defs>
+    <linearGradient id="hcm-tower" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#0d9488" />
+      <stop offset="100%" stop-color="#134e4a" />
+    </linearGradient>
+    <linearGradient id="hcm-shadow" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#134e4a" stop-opacity="0.6" />
+      <stop offset="100%" stop-color="#0f172a" stop-opacity="0.9" />
+    </linearGradient>
+  </defs>
+
+  <!-- Base platform (KCN style) -->
+  <rect x="2" y="72" width="60" height="6" rx="1" fill="#475569" />
+  <rect x="0" y="76" width="64" height="3" fill="#334155" />
+
+  <!-- Wide main building (factory/EPZ style) -->
+  <rect x="6" y="20" width="52" height="52" fill="url(#hcm-tower)" />
+  <rect x="6" y="20" width="52" height="52" fill="url(#hcm-shadow)" />
+
+  <!-- Top stripe -->
+  <rect x="6" y="20" width="52" height="3" fill="#0f766e" />
+
+  <!-- Windows (grid pattern) -->
+  <g fill="#fef3c7" opacity="0.85">
+    <rect x="10" y="28" width="3" height="3" />
+    <rect x="16" y="28" width="3" height="3" fill="#fbbf24" />
+    <rect x="22" y="28" width="3" height="3" />
+    <rect x="28" y="28" width="3" height="3" fill="#fbbf24" />
+    <rect x="34" y="28" width="3" height="3" />
+    <rect x="40" y="28" width="3" height="3" fill="#fbbf24" />
+    <rect x="46" y="28" width="3" height="3" />
+    <rect x="52" y="28" width="3" height="3" fill="#fbbf24" />
+
+    <rect x="10" y="34" width="3" height="3" fill="#fbbf24" />
+    <rect x="16" y="34" width="3" height="3" />
+    <rect x="22" y="34" width="3" height="3" fill="#fbbf24" />
+    <rect x="28" y="34" width="3" height="3" />
+    <rect x="34" y="34" width="3" height="3" fill="#fbbf24" />
+    <rect x="40" y="34" width="3" height="3" />
+    <rect x="46" y="34" width="3" height="3" fill="#fbbf24" />
+    <rect x="52" y="34" width="3" height="3" />
+
+    <rect x="10" y="40" width="3" height="3" />
+    <rect x="16" y="40" width="3" height="3" fill="#fbbf24" />
+    <rect x="22" y="40" width="3" height="3" />
+    <rect x="28" y="40" width="3" height="3" fill="#fbbf24" />
+    <rect x="34" y="40" width="3" height="3" />
+    <rect x="40" y="40" width="3" height="3" fill="#fbbf24" />
+    <rect x="46" y="40" width="3" height="3" />
+    <rect x="52" y="40" width="3" height="3" fill="#fbbf24" />
+
+    <rect x="10" y="46" width="3" height="3" fill="#fbbf24" />
+    <rect x="16" y="46" width="3" height="3" />
+    <rect x="22" y="46" width="3" height="3" fill="#fbbf24" />
+    <rect x="28" y="46" width="3" height="3" />
+    <rect x="34" y="46" width="3" height="3" fill="#fbbf24" />
+    <rect x="40" y="46" width="3" height="3" />
+    <rect x="46" y="46" width="3" height="3" fill="#fbbf24" />
+    <rect x="52" y="46" width="3" height="3" />
+
+    <rect x="10" y="52" width="3" height="3" />
+    <rect x="16" y="52" width="3" height="3" fill="#fbbf24" />
+    <rect x="22" y="52" width="3" height="3" />
+    <rect x="28" y="52" width="3" height="3" fill="#fbbf24" />
+    <rect x="34" y="52" width="3" height="3" />
+    <rect x="40" y="52" width="3" height="3" fill="#fbbf24" />
+    <rect x="46" y="52" width="3" height="3" />
+    <rect x="52" y="52" width="3" height="3" fill="#fbbf24" />
+
+    <rect x="10" y="58" width="3" height="3" fill="#fbbf24" />
+    <rect x="16" y="58" width="3" height="3" />
+    <rect x="22" y="58" width="3" height="3" fill="#fbbf24" />
+    <rect x="28" y="58" width="3" height="3" />
+    <rect x="34" y="58" width="3" height="3" fill="#fbbf24" />
+    <rect x="40" y="58" width="3" height="3" />
+    <rect x="46" y="58" width="3" height="3" fill="#fbbf24" />
+    <rect x="52" y="58" width="3" height="3" />
+
+    <rect x="10" y="64" width="3" height="3" />
+    <rect x="16" y="64" width="3" height="3" fill="#fbbf24" />
+    <rect x="22" y="64" width="3" height="3" />
+    <rect x="28" y="64" width="3" height="3" fill="#fbbf24" />
+    <rect x="34" y="64" width="3" height="3" />
+    <rect x="40" y="64" width="3" height="3" fill="#fbbf24" />
+    <rect x="46" y="64" width="3" height="3" />
+    <rect x="52" y="64" width="3" height="3" fill="#fbbf24" />
+  </g>
+
+  <!-- FPT label stripe (top) -->
+  <rect x="6" y="14" width="52" height="6" fill="#dc2626" />
+  <text x="32" y="19" font-family="Arial, sans-serif" font-size="5" font-weight="900" fill="white" text-anchor="middle">FPT</text>
+
+  <!-- Chimney/antenna -->
+  <line x1="14" y1="14" x2="14" y2="6" stroke="#134e4a" stroke-width="1.5" />
+  <circle cx="14" cy="5" r="1.5" fill="#fbbf24" />
+</svg>
