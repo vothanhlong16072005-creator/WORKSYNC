@@ -34,7 +34,9 @@ import { CreateEarlyLeaveDto } from './dto/create-early-leave.dto.js';
 import { ReviewEarlyLeaveDto } from './dto/review-early-leave.dto.js';
 import { CreateOvertimeDto } from './dto/create-overtime.dto.js';
 import { ReviewOvertimeDto } from './dto/review-overtime.dto.js';
+import { UpdateAttendanceSettingsDto } from './dto/update-settings.dto.js';
 import { OFFICE_PRESETS } from './utils/office-presets.js';
+import { RequestStatus } from '@prisma/client';
 
 interface RequestActor {
   id: string;
@@ -187,8 +189,9 @@ export class AttendanceController {
   @Get('wfh-requests')
   @UseGuards(RolesGuard)
   @Roles('ADMIN', 'HR', 'PM')
-  async getPendingWfhRequests() {
-    return this.wfhService.getPendingRequests();
+  async getPendingWfhRequests(@Query('status') status?: string) {
+    const reqStatus = status && status !== 'ALL' ? (status as RequestStatus) : undefined;
+    return this.wfhService.getPendingRequests(reqStatus);
   }
 
   @Patch('wfh-requests/:id/approve')
@@ -212,6 +215,13 @@ export class AttendanceController {
     return this.wfhService.rejectRequest(id, user.id, dto.rejectionNote);
   }
 
+  @Patch('wfh-requests/:id/revert')
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN', 'HR')
+  async revertWfh(@Param('id') id: string) {
+    return this.wfhService.revertRequest(id);
+  }
+
   @Patch('wfh-requests/auto-approve-pending')
   @UseGuards(RolesGuard)
   @Roles('ADMIN', 'HR')
@@ -222,8 +232,9 @@ export class AttendanceController {
   @Get('leave-requests')
   @UseGuards(RolesGuard)
   @Roles('ADMIN', 'HR', 'PM')
-  async getPendingLeaveRequests() {
-    return this.leaveService.getPendingRequests();
+  async getPendingLeaveRequests(@Query('status') status?: string) {
+    const reqStatus = status && status !== 'ALL' ? (status as RequestStatus) : undefined;
+    return this.leaveService.getPendingRequests(reqStatus);
   }
 
   @Patch('leave-requests/:id/approve')
@@ -244,6 +255,13 @@ export class AttendanceController {
     @CurrentUser() user: RequestActor,
   ) {
     return this.leaveService.rejectRequest(id, user.id);
+  }
+
+  @Patch('leave-requests/:id/revert')
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN', 'HR')
+  async revertLeave(@Param('id') id: string) {
+    return this.leaveService.revertRequest(id);
   }
 
   // --- GD2: Early Leave ---
@@ -350,5 +368,43 @@ export class AttendanceController {
   @Get('break/today')
   async getTodayBreaks(@CurrentUser() user: RequestActor) {
     return this.breakService.getTodayBreaks(user.id);
+  }
+
+  // --- M12 Step 1: Role-Based Attendance Views ---
+
+  @Get('team')
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN', 'HR', 'PM')
+  async getTeamAttendance(
+    @CurrentUser() user: RequestActor,
+    @Query('projectId') projectId?: string,
+    @Query('date') date?: string,
+  ) {
+    return this.attendanceService.getTeamAttendance(user.id, user.role, { projectId, date });
+  }
+
+  @Get('company')
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN', 'HR')
+  async getCompanyAttendance(
+    @Query('fromDate') fromDate?: string,
+    @Query('toDate') toDate?: string,
+    @Query('departmentId') departmentId?: string,
+  ) {
+    return this.attendanceService.getCompanyAttendance({ fromDate, toDate, departmentId });
+  }
+
+  @Get('settings')
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN')
+  async getSettings() {
+    return this.attendanceService.getSettings();
+  }
+
+  @Patch('settings')
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN')
+  async updateSettings(@Body() dto: UpdateAttendanceSettingsDto) {
+    return this.attendanceService.updateSettings(dto);
   }
 }

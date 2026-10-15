@@ -19,7 +19,8 @@ describe('ProjectsService.findMine', () => {
         ]),
       },
     } as unknown as PrismaService;
-    const service = new ProjectsService(prisma);
+    const accessService = {} as ProjectAccessService;
+    const service = new ProjectsService(prisma, accessService);
 
     await expect(service.findMine({ id: 'member-1', role: 'EMPLOYEE' })).resolves.toEqual([
       {

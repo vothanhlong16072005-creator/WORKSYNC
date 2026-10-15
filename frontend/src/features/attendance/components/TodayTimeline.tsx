@@ -99,7 +99,7 @@ export function TodayTimeline({
   const dotColor = statusColor[status] ?? '#10b981';
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-5 sticky top-4 z-10">
+    <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-5 relative overflow-hidden transition-all duration-200 hover:shadow-md">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
         <div className="flex items-center gap-2.5">
           <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">

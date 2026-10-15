@@ -1,6 +1,19 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { MapPin, Navigation, Compass, AlertCircle, CheckCircle2, ShieldCheck, Building2 } from 'lucide-react';
+import {
+  MapPin,
+  Navigation,
+  Compass,
+  AlertCircle,
+  CheckCircle2,
+  ShieldCheck,
+  Building2,
+  ExternalLink,
+  Layers,
+  Bike,
+  Car,
+  Footprints,
+} from 'lucide-react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { toast } from 'sonner';
@@ -21,6 +34,8 @@ interface GeofenceMapCardProps {
   userAvatarUrl?: string;
 }
 
+type MapLayerType = 'osm' | 'satellite';
+
 export function GeofenceMapCard({
   officeId,
   onOfficeChange,
@@ -31,6 +46,7 @@ export function GeofenceMapCard({
 
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const mapInstanceRef = useRef<L.Map | null>(null);
+  const tileLayerRef = useRef<L.TileLayer | null>(null);
   const userMarkerRef = useRef<L.Marker | null>(null);
   const officeMarkerRef = useRef<L.Marker | null>(null);
   const connectLineRef = useRef<L.Polyline | null>(null);
@@ -42,6 +58,7 @@ export function GeofenceMapCard({
   const [distanceMeters, setDistanceMeters] = useState<number | null>(null);
   const [isLocating, setIsLocating] = useState(false);
   const [gpsError, setGpsError] = useState<string | null>(null);
+  const [layerType, setLayerType] = useState<MapLayerType>('osm');
 
   // Update active office when prop changes
   useEffect(() => {
@@ -51,25 +68,80 @@ export function GeofenceMapCard({
     }
   }, [officeId]);
 
+  // Helper to switch tile layer (FREE providers - no API key required)
+  const applyTileLayer = useCallback((map: L.Map, type: MapLayerType) => {
+    if (tileLayerRef.current) {
+      map.removeLayer(tileLayerRef.current);
+    }
+
+    if (type === 'satellite') {
+      // ArcGIS World Imagery - FREE, no API key needed
+      tileLayerRef.current = L.tileLayer(
+        'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+        {
+          maxZoom: 19,
+          attribution: '&copy; Esri, Maxar, Earthstar Geographics',
+        },
+      ).addTo(map);
+    } else {
+      // OpenStreetMap France (HOT) - FREE tile server, CORS-friendly, no API key
+      // More reliable than tile.openstreetmap.org which blocks some referers
+      tileLayerRef.current = L.tileLayer(
+        'https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png',
+        {
+          maxZoom: 19,
+          subdomains: 'abc',
+          attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors, Tiles HOT',
+          crossOrigin: true,
+        },
+      ).addTo(map);
+    }
+  }, []);
+
   // Initialize map
   useEffect(() => {
     if (!mapContainerRef.current || mapInstanceRef.current) return;
+
     const map = L.map(mapContainerRef.current, {
       center: [activeOffice.lat, activeOffice.lng],
       zoom: 16,
       zoomControl: false,
     });
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxZoom: 19,
-      attribution: '&copy; OpenStreetMap contributors',
-    }).addTo(map);
+
+    applyTileLayer(map, layerType);
+
     L.control.zoom({ position: 'topright' }).addTo(map);
     mapInstanceRef.current = map;
+
+    // Invalidate size immediately and after mount transitions
+    const timer1 = setTimeout(() => map.invalidateSize(), 150);
+    const timer2 = setTimeout(() => map.invalidateSize(), 600);
+
+    // Watch container resize
+    const ro = new ResizeObserver(() => {
+      map.invalidateSize();
+    });
+    if (mapContainerRef.current) {
+      ro.observe(mapContainerRef.current);
+    }
+
     return () => {
+      clearTimeout(timer1);
+      clearTimeout(timer2);
+      ro.disconnect();
       map.remove();
       mapInstanceRef.current = null;
     };
-  }, [activeOffice.lat, activeOffice.lng]);
+  }, [activeOffice.lat, activeOffice.lng, applyTileLayer, layerType]);
+
+  // Handle layer type changes
+  const toggleMapLayer = () => {
+    const nextLayer: MapLayerType = layerType === 'osm' ? 'satellite' : 'osm';
+    setLayerType(nextLayer);
+    if (mapInstanceRef.current) {
+      applyTileLayer(mapInstanceRef.current, nextLayer);
+    }
+  };
 
   // Add geofence circle & office marker
   useEffect(() => {
@@ -94,13 +166,14 @@ export function GeofenceMapCard({
     const circle = L.circle([activeOffice.lat, activeOffice.lng], {
       color: '#2563eb',
       fillColor: '#3b82f6',
-      fillOpacity: 0.15,
-      weight: 2,
+      fillOpacity: 0.16,
+      weight: 2.5,
       dashArray: '6, 6',
       radius: activeOffice.radiusMeters,
     }).addTo(map);
+
     circle.bindTooltip(
-      isVi ? `Ranh giới Geofence (${activeOffice.radiusMeters}m)` : `Geofence Perimeter (${activeOffice.radiusMeters}m)`,
+      isVi ? `Ranh giới Geofence FPT (${activeOffice.radiusMeters}m)` : `FPT Geofence Perimeter (${activeOffice.radiusMeters}m)`,
       { permanent: false, direction: 'top' },
     );
 
@@ -109,50 +182,56 @@ export function GeofenceMapCard({
       className: 'office-building-marker',
       html: `
         <div style="position: relative; display: flex; flex-direction: column; align-items: center; cursor: pointer; transform: translateY(-8px);">
-          <div style="background: white; border: 3px solid #1d4ed8; border-radius: 12px; padding: 6px 8px; box-shadow: 0 6px 16px rgba(29,78,216,0.35); display: flex; align-items: center; gap: 6px;">
-            <img src="${activeOffice.buildingSvg}" alt="${activeOffice.nameEn}" style="width: 28px; height: 36px; display: block;" onerror="this.style.display='none'" />
+          <div style="background: white; border: 3px solid #1d4ed8; border-radius: 12px; padding: 6px 10px; box-shadow: 0 8px 24px rgba(29,78,216,0.35); display: flex; align-items: center; gap: 8px;">
+            <img src="${activeOffice.buildingSvg}" alt="${activeOffice.nameEn}" style="width: 32px; height: 38px; display: block;" onerror="this.style.display='none'" />
             <div>
-              <div style="font-size: 9px; font-weight: 800; color: #1e3a8a; letter-spacing: 0.3px; line-height: 1;">${activeOffice.code}</div>
-              <div style="font-size: 7px; color: #64748b; font-weight: 600; margin-top: 1px;">${activeOffice.city}</div>
+              <div style="font-size: 11px; font-weight: 800; color: #1e3a8a; letter-spacing: 0.3px; line-height: 1.1;">${activeOffice.nameVi}</div>
+              <div style="font-size: 8px; color: #64748b; font-weight: 600; margin-top: 2px;">${activeOffice.addressVi}</div>
             </div>
           </div>
-          <div style="width: 0; height: 0; border-left: 8px solid transparent; border-right: 8px solid transparent; border-top: 10px solid #1d4ed8; margin-top: -1px;"></div>
-          <div style="position: absolute; top: -8px; left: 50%; transform: translateX(-50%); width: 12px; height: 12px; background: #1d4ed8; border-radius: 50%; border: 2px solid white; box-shadow: 0 0 0 4px rgba(29,78,216,0.25); animation: officePulse 2s ease-in-out infinite;"></div>
+          <div style="width: 0; height: 0; border-left: 9px solid transparent; border-right: 9px solid transparent; border-top: 11px solid #1d4ed8; margin-top: -1px;"></div>
+          <div style="position: absolute; top: -8px; left: 50%; transform: translateX(-50%); width: 14px; height: 14px; background: #1d4ed8; border-radius: 50%; border: 2px solid white; box-shadow: 0 0 0 5px rgba(29,78,216,0.25); animation: officePulse 2s ease-in-out infinite;"></div>
         </div>
       `,
-      iconSize: [180, 80],
-      iconAnchor: [90, 50],
+      iconSize: [220, 80],
+      iconAnchor: [110, 50],
     });
+
     const officeMarker = L.marker([activeOffice.lat, activeOffice.lng], { icon: buildingIcon, zIndexOffset: 1000 }).addTo(map);
     officeMarker.bindPopup(`
-      <div style="padding: 6px; font-family: system-ui, sans-serif; min-width: 200px;">
+      <div style="padding: 6px; font-family: system-ui, sans-serif; min-width: 220px;">
         <b style="color: #1e3a8a; font-size: 13px;">${isVi ? activeOffice.nameVi : activeOffice.nameEn}</b>
         <p style="margin: 4px 0 0; font-size: 11px; color: #475569;">${isVi ? activeOffice.addressVi : activeOffice.addressEn}</p>
         <div style="margin-top: 6px; display: inline-block; background: #eff6ff; color: #1d4ed8; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: bold;">
-          ${isVi ? `Bán kính: ${activeOffice.radiusMeters}m` : `Radius: ${activeOffice.radiusMeters}m`}
+          ${isVi ? `Bán kính Geofence: ${activeOffice.radiusMeters}m` : `Radius: ${activeOffice.radiusMeters}m`}
         </div>
       </div>
     `);
     officeMarkerRef.current = officeMarker;
 
-    // Add CSS for animations
+    // Add CSS for animations if not present
     if (!document.getElementById('geofence-animations')) {
       const style = document.createElement('style');
       style.id = 'geofence-animations';
       style.textContent = `
         @keyframes officePulse {
           0%, 100% { box-shadow: 0 0 0 4px rgba(29,78,216,0.25); }
-          50% { box-shadow: 0 0 0 10px rgba(29,78,216,0.05); }
+          50% { box-shadow: 0 0 0 12px rgba(29,78,216,0.04); }
         }
         @keyframes userPing {
-          0% { transform: scale(0.5); opacity: 1; }
-          100% { transform: scale(2.5); opacity: 0; }
+          0% { transform: scale(0.6); opacity: 1; }
+          100% { transform: scale(2.8); opacity: 0; }
         }
         @keyframes dashFlow {
-          to { stroke-dashoffset: -26; }
+          to { stroke-dashoffset: -32; }
         }
         .connect-line-animated {
           animation: dashFlow 1.2s linear infinite;
+        }
+        .leaflet-container {
+          width: 100% !important;
+          height: 100% !important;
+          background: #e2e8f0;
         }
       `;
       document.head.appendChild(style);
@@ -163,7 +242,7 @@ export function GeofenceMapCard({
       const bounds = L.latLngBounds(
         [[activeOffice.lat, activeOffice.lng], [userLocation.lat, userLocation.lng]],
       );
-      map.fitBounds(bounds, { padding: [50, 50], maxZoom: 17 });
+      map.fitBounds(bounds, { padding: [60, 60], maxZoom: 17 });
     } else {
       map.setView([activeOffice.lat, activeOffice.lng], 16);
     }
@@ -204,9 +283,9 @@ export function GeofenceMapCard({
         const map = mapInstanceRef.current;
         if (!map) return;
 
-        // User marker with avatar (or colored dot)
+        // User marker with avatar
         const isInside = dist <= activeOffice.radiusMeters;
-        const userColor = isInside ? '#10b981' : '#f59e0b';
+        const userColor = isInside ? '#10b981' : '#2563eb';
 
         const avatarHtml = userAvatarUrl
           ? `<img src="${userAvatarUrl}" style="width: 100%; height: 100%; border-radius: 9999px; object-fit: cover;" onerror="this.style.display='none'" />`
@@ -215,15 +294,15 @@ export function GeofenceMapCard({
         const userIcon = L.divIcon({
           className: 'user-marker',
           html: `
-            <div style="position: relative; width: 36px; height: 36px; display: flex; align-items: center; justify-content: center;">
-              <div style="position: absolute; width: 100%; height: 100%; border-radius: 9999px; background: ${userColor}; opacity: 0.4; animation: userPing 1.5s ease-out infinite;"></div>
-              <div style="position: relative; width: 22px; height: 22px; border-radius: 9999px; border: 3px solid white; box-shadow: 0 2px 8px rgba(0,0,0,0.4); overflow: hidden;">
+            <div style="position: relative; width: 42px; height: 42px; display: flex; align-items: center; justify-content: center;">
+              <div style="position: absolute; width: 100%; height: 100%; border-radius: 9999px; background: ${userColor}; opacity: 0.35; animation: userPing 1.6s ease-out infinite;"></div>
+              <div style="position: relative; width: 26px; height: 26px; border-radius: 9999px; border: 3px solid white; box-shadow: 0 4px 12px rgba(0,0,0,0.35); overflow: hidden; background: white;">
                 ${avatarHtml}
               </div>
             </div>
           `,
-          iconSize: [36, 36],
-          iconAnchor: [18, 18],
+          iconSize: [42, 42],
+          iconAnchor: [21, 21],
         });
 
         if (userMarkerRef.current) {
@@ -233,7 +312,7 @@ export function GeofenceMapCard({
           userMarkerRef.current = L.marker([uLat, uLng], { icon: userIcon }).addTo(map);
         }
 
-        // Polyline connecting user to office
+        // Polyline connecting user to office with glowing route effect
         if (connectLineRef.current) {
           connectLineRef.current.setLatLngs([
             [activeOffice.lat, activeOffice.lng],
@@ -243,51 +322,67 @@ export function GeofenceMapCard({
           const line = L.polyline(
             [[activeOffice.lat, activeOffice.lng], [uLat, uLng]],
             {
-              color: isInside ? '#10b981' : '#f59e0b',
-              weight: 4,
-              dashArray: '8, 12',
-              opacity: 0.85,
+              color: isInside ? '#10b981' : '#2563eb',
+              weight: 5,
+              dashArray: '10, 14',
+              opacity: 0.9,
               className: 'connect-line-animated',
             },
           ).addTo(map);
           connectLineRef.current = line;
         }
 
-        // Fit bounds
+        // Fit bounds with padding
         const bounds = L.latLngBounds([
           [activeOffice.lat, activeOffice.lng],
           [uLat, uLng],
         ]);
-        map.fitBounds(bounds, { padding: [50, 50], maxZoom: 17 });
+        map.fitBounds(bounds, { padding: [70, 70], maxZoom: 17 });
 
-        if (dist <= activeOffice.radiusMeters) {
-          toast.success(
-            isVi
-              ? `Bạn đang trong khuôn viên ${activeOffice.nameVi} (~${Math.round(dist)}m)`
-              : `You are inside ${activeOffice.nameEn} perimeter (~${Math.round(dist)}m)`,
-          );
-        } else {
-          toast.info(
-            isVi
-              ? `Vị trí cách ${activeOffice.nameVi} ~${(dist / 1000).toFixed(1)}km`
-              : `Location is ~${(dist / 1000).toFixed(1)}km from ${activeOffice.nameEn}`,
-          );
+        const hasNotified = sessionStorage.getItem('worksync_gps_notified');
+        if (!hasNotified) {
+          sessionStorage.setItem('worksync_gps_notified', 'true');
+          if (dist <= activeOffice.radiusMeters) {
+            toast.success(
+              isVi
+                ? `Bạn đang trong khuôn viên ${activeOffice.nameVi} (~${Math.round(dist)}m)`
+                : `You are inside ${activeOffice.nameEn} perimeter (~${Math.round(dist)}m)`,
+              { id: 'gps-status-toast' },
+            );
+          } else {
+            toast.info(
+              isVi
+                ? `Khoảng cách tới ${activeOffice.nameVi}: ~${(dist / 1000).toFixed(1)}km`
+                : `Distance to ${activeOffice.nameEn}: ~${(dist / 1000).toFixed(1)}km`,
+              { id: 'gps-status-toast' },
+            );
+          }
         }
       },
       (err) => {
         setIsLocating(false);
-        const errMsg =
-          err.code === 1
-            ? isVi
-              ? 'Quyền truy cập vị trí GPS bị từ chối'
-              : 'GPS location permission denied'
-            : isVi
+        let errMsg: string;
+        if (err.code === 1) {
+          errMsg = isVi
+            ? 'Quyền truy cập vị trí GPS bị từ chối. Hãy bật quyền vị trí cho trình duyệt và thử lại.'
+            : 'GPS location permission denied. Please enable location access in your browser settings and try again.';
+        } else if (err.code === 2) {
+          errMsg = isVi
+            ? 'Không thể xác định vị trí GPS. Kiểm tra kết nối mạng hoặc GPS thiết bị.'
+            : 'Cannot determine GPS location. Check your network connection or device GPS.';
+        } else if (err.code === 3) {
+          errMsg = isVi
+            ? 'Hết thời gian chờ GPS. Bấm "Vị trí của tôi" để thử lại.'
+            : 'GPS request timed out. Click "My Location" to try again.';
+        } else {
+          errMsg = isVi
             ? 'Không thể xác định vị trí GPS'
             : 'Unable to determine GPS location';
+        }
         setGpsError(errMsg);
-        toast.error(errMsg);
+        toast.error(errMsg, { duration: 5000 });
       },
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 },
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 },
     );
   }, [activeOffice, isVi, userAvatarUrl]);
 
@@ -307,7 +402,6 @@ export function GeofenceMapCard({
     if (office) {
       setActiveOffice(office);
       onOfficeChange?.(office);
-      // Clear user marker to avoid stale position
       if (userMarkerRef.current && mapInstanceRef.current) {
         mapInstanceRef.current.removeLayer(userMarkerRef.current);
         userMarkerRef.current = null;
@@ -323,17 +417,35 @@ export function GeofenceMapCard({
 
   const isWithinGeofence = distanceMeters !== null && distanceMeters <= activeOffice.radiusMeters;
 
+  // Open Google Maps directions in new tab
+  const openGoogleMapsDirection = () => {
+    if (!userLocation) {
+      window.open(
+        `https://www.google.com/maps/search/?api=1&query=${activeOffice.lat},${activeOffice.lng}`,
+        '_blank',
+      );
+      return;
+    }
+    const url = `https://www.google.com/maps/dir/?api=1&origin=${userLocation.lat},${userLocation.lng}&destination=${activeOffice.lat},${activeOffice.lng}&travelmode=driving`;
+    window.open(url, '_blank');
+  };
+
+  // Travel time estimates
+  const bikeMinutes = distanceMeters ? Math.max(1, Math.round((distanceMeters / 1000 / 32) * 60)) : null;
+  const carMinutes = distanceMeters ? Math.max(1, Math.round((distanceMeters / 1000 / 42) * 60)) : null;
+  const walkMinutes = distanceMeters ? Math.max(1, Math.round((distanceMeters / 1000 / 4.5) * 60)) : null;
+
   return (
-    <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-5 hover:shadow-md transition-all duration-200">
+    <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-5 hover:shadow-md transition-all duration-200 space-y-4">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div className="flex items-start gap-3">
-          <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0 mt-0.5">
+          <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0 mt-0.5">
             <Building2 className="w-5 h-5" />
           </div>
           <div className="flex-1">
             <div className="flex items-center gap-2 flex-wrap">
-              <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wide">
+              <h3 className="text-sm font-black text-slate-900 uppercase tracking-wide">
                 {isVi ? activeOffice.nameVi : activeOffice.nameEn}
               </h3>
               <span className="px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 text-[10px] font-bold border border-blue-200/60">
@@ -346,7 +458,7 @@ export function GeofenceMapCard({
           </div>
         </div>
 
-        <div className="flex items-center gap-2 self-start sm:self-auto">
+        <div className="flex items-center gap-2 self-start sm:self-auto flex-wrap">
           {/* Office Selector */}
           <select
             value={activeOffice.id}
@@ -369,8 +481,8 @@ export function GeofenceMapCard({
                 </span>
               </div>
             ) : (
-              <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-200 text-xs font-bold">
-                <AlertCircle className="w-3.5 h-3.5 text-amber-600" />
+              <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-200 text-xs font-bold">
+                <MapPin className="w-3.5 h-3.5 text-blue-600" />
                 <span>
                   {isVi
                     ? `Cách ${distanceMeters > 1000 ? `${(distanceMeters / 1000).toFixed(1)}km` : `${Math.round(distanceMeters)}m`}`
@@ -392,11 +504,25 @@ export function GeofenceMapCard({
         </div>
       </div>
 
-      {/* Map */}
-      <div className="relative rounded-xl overflow-hidden border border-slate-200/80 aspect-[21/10] min-h-[280px] bg-slate-100">
+      {/* Map Container */}
+      <div className="relative rounded-2xl overflow-hidden border border-slate-200/90 aspect-[21/11] min-h-[320px] bg-slate-100 shadow-inner">
         <div ref={mapContainerRef} className="w-full h-full z-0" />
 
-        {/* Control buttons */}
+        {/* Map Type Switcher (Top Right) */}
+        <div className="absolute top-3 right-14 z-[400] flex items-center">
+          <button
+            onClick={toggleMapLayer}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 bg-white/95 backdrop-blur text-slate-700 hover:text-blue-600 rounded-lg text-xs font-bold border border-slate-200 shadow-sm transition-all hover:shadow"
+            title={isVi ? 'Chuyển lớp bản đồ' : 'Toggle Map Layer'}
+          >
+            <Layers className="w-3.5 h-3.5 text-blue-600" />
+            <span className="hidden sm:inline">
+              {layerType === 'osm' ? (isVi ? 'Vệ tinh' : 'Satellite') : isVi ? 'Đường phố' : 'Streets'}
+            </span>
+          </button>
+        </div>
+
+        {/* Control buttons (Bottom Right) */}
         <div className="absolute bottom-3 right-3 z-[400] flex items-center gap-2">
           <button
             onClick={resetToOffice}
@@ -417,11 +543,11 @@ export function GeofenceMapCard({
           </button>
         </div>
 
-        {/* Live status banner */}
-        <div className="absolute top-3 left-3 z-[400] bg-white/90 backdrop-blur-md px-3 py-1.5 rounded-lg border border-slate-200/80 shadow-sm flex items-center gap-2 text-xs font-semibold text-slate-800">
+        {/* Live status banner (Top Left) */}
+        <div className="absolute top-3 left-3 z-[400] bg-white/95 backdrop-blur-md px-3 py-1.5 rounded-lg border border-slate-200/80 shadow-sm flex items-center gap-2 text-xs font-semibold text-slate-800">
           <ShieldCheck className="w-4 h-4 text-emerald-600" />
           <span>
-            {isVi ? `Geofence an toàn: ${activeOffice.radiusMeters}m` : `Secure Geofence: ${activeOffice.radiusMeters}m`}
+            {isVi ? `Bán kính chuẩn: ${activeOffice.radiusMeters}m` : `Geofence: ${activeOffice.radiusMeters}m`}
           </span>
           {userLocation && (
             <span className="text-[11px] text-slate-500 hidden md:inline">
@@ -429,21 +555,51 @@ export function GeofenceMapCard({
             </span>
           )}
         </div>
+      </div>
 
-        {/* Distance label badge (visible when both markers shown) */}
-        {userLocation && distanceMeters !== null && (
-          <div className="absolute top-3 right-16 z-[400] bg-white/95 backdrop-blur-md px-3 py-1.5 rounded-lg border border-slate-200/80 shadow-sm text-xs font-bold">
-            <div className="flex items-center gap-1.5">
+      {/* Travel Route Estimates & Navigation Bar */}
+      {userLocation && distanceMeters !== null && (
+        <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200/80 flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs">
+          <div className="flex items-center gap-4 flex-wrap">
+            <span className="font-bold text-slate-800 flex items-center gap-1">
               <MapPin className="w-3.5 h-3.5 text-blue-600" />
-              <span className="font-mono text-slate-900">
-                {distanceMeters > 1000
-                  ? `${(distanceMeters / 1000).toFixed(2)}km`
-                  : `${Math.round(distanceMeters)}m`}
-              </span>
+              {isVi ? 'Ước tính di chuyển:' : 'Travel estimates:'}
+            </span>
+
+            {/* Motorbike */}
+            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white border border-slate-200 text-slate-700 font-semibold shadow-2xs">
+              <Bike className="w-3.5 h-3.5 text-blue-600" />
+              <span>{isVi ? 'Xe máy:' : 'Bike:'}</span>
+              <strong className="text-slate-900 font-bold font-mono">~{bikeMinutes}m</strong>
+            </div>
+
+            {/* Car */}
+            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white border border-slate-200 text-slate-700 font-semibold shadow-2xs">
+              <Car className="w-3.5 h-3.5 text-emerald-600" />
+              <span>{isVi ? 'Ô tô:' : 'Car:'}</span>
+              <strong className="text-slate-900 font-bold font-mono">~{carMinutes}m</strong>
+            </div>
+
+            {/* Walking */}
+            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white border border-slate-200 text-slate-700 font-semibold shadow-2xs">
+              <Footprints className="w-3.5 h-3.5 text-amber-600" />
+              <span>{isVi ? 'Đi bộ:' : 'Walk:'}</span>
+              <strong className="text-slate-900 font-bold font-mono">
+                {walkMinutes && walkMinutes > 120 ? `${(walkMinutes / 60).toFixed(1)}h` : `~${walkMinutes}m`}
+              </strong>
             </div>
           </div>
-        )}
-      </div>
+
+          {/* Direct Google Maps Navigation Button */}
+          <button
+            onClick={openGoogleMapsDirection}
+            className="inline-flex items-center justify-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-sm hover:shadow transition-all self-start md:self-auto"
+          >
+            <ExternalLink className="w-3.5 h-3.5" />
+            <span>{isVi ? 'Mở Google Maps chỉ đường' : 'Open Google Maps Directions'}</span>
+          </button>
+        </div>
+      )}
     </div>
   );
 }

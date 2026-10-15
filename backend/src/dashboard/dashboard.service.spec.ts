@@ -74,6 +74,7 @@ describe('DashboardService', () => {
 
   describe('getPmDashboard', () => {
     it('returns employee stats plus projectProgress and teamWorkload', async () => {
+      // getEmployeeDashboard calls project.findMany first (userProjects), then getPmDashboard calls it again
       mockPrisma.project.findMany.mockResolvedValue([
         {
           id: 'proj-1',
@@ -108,6 +109,8 @@ describe('DashboardService', () => {
 
       const result = await service.getPmDashboard('pm-user');
 
+      // Critical: PM must see projects where createdById=pm-user (real schema)
+      // The previous query used wrong field 'creatorId' — now corrected to 'createdById'
       expect(result.projectProgress).toHaveLength(1);
       expect(result.projectProgress[0].progressPercent).toBe(50);
       expect(result.activeSprint?.name).toBe('Sprint 1');
@@ -115,20 +118,72 @@ describe('DashboardService', () => {
       expect(result.teamWorkload[0].userName).toBe('Nguyễn Văn A');
       expect(result.teamWorkload[0].openTaskCount).toBe(2);
       expect(result.teamWorkload[0].totalStoryPoints).toBe(5);
+      expect(result.sprintBurndown).toHaveLength(7);
+      expect(result.risks.length).toBeGreaterThan(0);
+      expect(result.pmKpi).toBeDefined();
+    });
+  });
+
+  describe('getHrDashboard', () => {
+    it('returns workforce metrics, attendance distribution and compliance alerts', async () => {
+      mockPrisma.user.count.mockResolvedValue(12);
+      // task.count called 5x in Promise.all: total, IN_PROGRESS, BLOCKED, DONE, others
+      mockPrisma.task.count.mockImplementation(
+        ({ where }: { where: { status?: string } } = { where: {} }) => {
+          if (where.status === 'IN_PROGRESS') return Promise.resolve(8);
+          if (where.status === 'BLOCKED') return Promise.resolve(2);
+          if (where.status === 'DONE') return Promise.resolve(10);
+          return Promise.resolve(20);
+        },
+      );
+
+      const result = await service.getHrDashboard('hr-user');
+
+      expect(result.workforceSummary.totalEmployees).toBe(12);
+      expect(result.attendanceKpi).toBeDefined();
+      expect(result.attendanceDistribution).toBeDefined();
+      expect(result.lateArrivalsByDepartment).toHaveLength(5);
+      expect(result.leaveUsageByDepartment).toHaveLength(5);
+      expect(result.pendingApprovals).toBeDefined();
+      expect(result.complianceAlerts.length).toBeGreaterThan(0);
     });
   });
 
   describe('getAdminDashboard', () => {
     it('returns system health and aggregate stats', async () => {
+      // Admin dashboard now queries 8 separate task counts (system-wide, not personal)
       mockPrisma.user.count.mockResolvedValue(10);
       mockPrisma.project.count.mockResolvedValue(4);
-      mockPrisma.task.count.mockResolvedValue(50);
+      // task.count is called 8x in parallel — use mockImplementation to return same value
+      mockPrisma.task.count.mockImplementation(
+        ({ where }: { where: { status?: string | { not: string } } } = { where: {} }) => {
+          if (where.status === 'DONE') return Promise.resolve(30);
+          if (where.status === 'IN_PROGRESS') return Promise.resolve(12);
+          if (where.status === 'BLOCKED') return Promise.resolve(2);
+          if (typeof where.status === 'object' && where.status !== null && 'not' in where.status && where.status.not === 'DONE') return Promise.resolve(20); // overdue
+          return Promise.resolve(50); // total
+        },
+      );
 
       const result = await service.getAdminDashboard('admin-user');
 
       expect(result.systemHealth.activeUsers).toBe(10);
       expect(result.systemHealth.totalProjects).toBe(4);
       expect(result.systemHealth.totalTasks).toBe(50);
+      // System-wide task summary (not Admin's personal tasks)
+      expect(result.taskSummary.total).toBe(50);
+      expect(result.taskSummary.done).toBe(30);
+      expect(result.taskSummary.inProgress).toBe(12);
+      expect(result.taskSummary.blocked).toBe(2);
+      expect(result.taskSummary.completionRate).toBe(60);
+      // No personal urgent tasks / projects
+      expect(result.urgentTasks).toEqual([]);
+      expect(result.projectProgress).toEqual([]);
+      expect(result.platformHealth).toBeDefined();
+      expect(result.systemGauges).toBeDefined();
+      expect(result.apiLatency).toBeDefined();
+      expect(result.errorLogs).toHaveLength(3);
+      expect(result.configStatus).toBeDefined();
     });
   });
 });

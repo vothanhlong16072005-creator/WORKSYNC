@@ -15,6 +15,7 @@ import {
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { useProjectStore } from '@/stores/project.store';
+import { useAuthStore } from '@/stores/auth.store';
 import { useTranslation } from 'react-i18next';
 
 interface SidebarProps {
@@ -26,14 +27,27 @@ export default function Sidebar({ open, setOpen }: SidebarProps) {
   const { t } = useTranslation();
   const location = useLocation();
   const { projects, loadMine } = useProjectStore();
+  const { user } = useAuthStore();
   const [tasksExpanded, setTasksExpanded] = useState(true);
+
+  const role = user?.role;
 
   const otherNavItems = [
     { icon: CalendarClock, label: t('nav.attendance', 'Chấm công'), path: '/attendance' },
     { icon: Video, label: t('nav.meetings'), path: '/meetings' },
     { icon: FileText, label: t('nav.documents'), path: '/documents' },
-    { icon: Settings, label: t('nav.settings'), path: '/settings' },
+    {
+      icon: Settings,
+      label: t('nav.settings', 'Cài đặt hệ thống'),
+      path: '/settings',
+      roles: ['ADMIN', 'HR'], // Hidden for EMPLOYEE and PM
+    },
   ];
+
+  const visibleOtherNavItems = otherNavItems.filter((item) => {
+    if (!item.roles) return true;
+    return role ? item.roles.includes(role) : false;
+  });
 
   useEffect(() => {
     loadMine();
@@ -242,8 +256,8 @@ export default function Sidebar({ open, setOpen }: SidebarProps) {
 
           <div className="pt-2 my-2 border-t-2 border-slate-100" />
 
-          {/* 3. CÁC MENU KHÁC */}
-          {otherNavItems.map((item) => (
+          {/* 3. CÁC MENU KHÁC (Phân quyền theo Role) */}
+          {visibleOtherNavItems.map((item) => (
             <NavLink
               key={item.path}
               to={item.path}

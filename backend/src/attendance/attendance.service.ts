@@ -338,4 +338,237 @@ export class AttendanceService {
       orderBy: { date: 'desc' },
     });
   }
+
+  /**
+   * Get team attendance for PM, HR, ADMIN
+   */
+  async getTeamAttendance(
+    userId: string,
+    role: string,
+    query: { projectId?: string; date?: string },
+  ) {
+    const config = await this.prisma.systemConfig.findFirst();
+    const targetDate = query.date
+      ? new Date(`${query.date}T00:00:00.000Z`)
+      : this.getLocalDateOnly(new Date(), config?.timezone ?? 'Asia/Ho_Chi_Minh');
+
+    let projectWhere: Prisma.ProjectWhereInput = {
+      deletedAt: null,
+      kind: 'TEAM',
+    };
+
+    if (role === 'PM') {
+      projectWhere = {
+        deletedAt: null,
+        kind: 'TEAM',
+        OR: [
+          { createdById: userId },
+          { members: { some: { userId } } },
+        ],
+      };
+    }
+
+    if (query.projectId) {
+      projectWhere.id = query.projectId;
+    }
+
+    const projects = await this.prisma.project.findMany({
+      where: projectWhere,
+      select: {
+        id: true,
+        name: true,
+        color: true,
+        members: {
+          select: {
+            userId: true,
+            projectRole: true,
+            user: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+                avatar: true,
+                position: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    const userMap = new Map<string, { user: any; projectRoles: string[]; projectNames: string[] }>();
+    for (const proj of projects) {
+      for (const m of proj.members) {
+        if (!userMap.has(m.userId)) {
+          userMap.set(m.userId, {
+            user: m.user,
+            projectRoles: [m.projectRole],
+            projectNames: [proj.name],
+          });
+        } else {
+          const entry = userMap.get(m.userId)!;
+          if (!entry.projectRoles.includes(m.projectRole)) entry.projectRoles.push(m.projectRole);
+          if (!entry.projectNames.includes(proj.name)) entry.projectNames.push(proj.name);
+        }
+      }
+    }
+
+    const memberIds = Array.from(userMap.keys());
+
+    const records = await this.prisma.attendanceRecord.findMany({
+      where: {
+        userId: { in: memberIds },
+        date: targetDate,
+      },
+    });
+
+    const recordMap = new Map<string, (typeof records)[0]>();
+    for (const rec of records) {
+      recordMap.set(rec.userId, rec);
+    }
+
+    const teamAttendanceList = memberIds.map((mId) => {
+      const { user, projectRoles, projectNames } = userMap.get(mId)!;
+      const rec = recordMap.get(mId);
+      return {
+        userId: mId,
+        user,
+        projectRoles,
+        projectNames,
+        record: rec ?? null,
+        status: rec?.status ?? 'NOT_CHECKED_IN',
+        checkInTime: rec?.checkInTime ?? null,
+        checkOutTime: rec?.checkOutTime ?? null,
+        checkInMethod: rec?.checkInMethod ?? null,
+      };
+    });
+
+    const presentCount = records.length;
+    const onTimeCount = records.filter((r) => r.status === 'ON_TIME').length;
+    const lateCount = records.filter((r) => r.status === 'LATE' || r.status === 'VERY_LATE').length;
+    const wfhCount = records.filter((r) => r.status === 'WFH').length;
+    const missingCount = memberIds.length - presentCount;
+
+    return {
+      date: targetDate.toISOString().split('T')[0],
+      projects: projects.map((p) => ({ id: p.id, name: p.name, color: p.color })),
+      summary: {
+        totalMembers: memberIds.length,
+        presentCount,
+        onTimeCount,
+        lateCount,
+        wfhCount,
+        missingCount,
+      },
+      members: teamAttendanceList,
+    };
+  }
+
+  /**
+   * Get company-wide attendance for HR and ADMIN
+   */
+  async getCompanyAttendance(query: { fromDate?: string; toDate?: string; departmentId?: string }) {
+    const config = await this.prisma.systemConfig.findFirst();
+    const today = this.getLocalDateOnly(new Date(), config?.timezone ?? 'Asia/Ho_Chi_Minh');
+
+    const from = query.fromDate ? new Date(`${query.fromDate}T00:00:00.000Z`) : today;
+    const to = query.toDate ? new Date(`${query.toDate}T23:59:59.999Z`) : today;
+
+    const userWhere: Prisma.UserWhereInput = {
+      status: 'ACTIVE',
+    };
+    if (query.departmentId) {
+      userWhere.departmentId = query.departmentId;
+    }
+
+    const [allUsers, departments, records] = await Promise.all([
+      this.prisma.user.findMany({
+        where: userWhere,
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          avatar: true,
+          position: true,
+          role: true,
+          departmentId: true,
+        },
+      }),
+      this.prisma.department.findMany({
+        select: { id: true, name: true },
+      }),
+      this.prisma.attendanceRecord.findMany({
+        where: {
+          date: { gte: from, lte: to },
+        },
+        include: {
+          user: {
+            select: { id: true, name: true, email: true, departmentId: true, avatar: true },
+          },
+        },
+        orderBy: { date: 'desc' },
+      }),
+    ]);
+
+    const deptMap = new Map<string, string>();
+    for (const d of departments) {
+      deptMap.set(d.id, d.name);
+    }
+
+    const counts: Record<string, number> = {};
+    for (const r of records) {
+      counts[r.status] = (counts[r.status] ?? 0) + 1;
+    }
+
+    return {
+      dateRange: {
+        from: from.toISOString().split('T')[0],
+        to: to.toISOString().split('T')[0],
+      },
+      departments,
+      summary: {
+        totalEmployees: allUsers.length,
+        totalRecords: records.length,
+        onTime: counts['ON_TIME'] ?? 0,
+        late: (counts['LATE'] ?? 0) + (counts['VERY_LATE'] ?? 0),
+        wfh: counts['WFH'] ?? 0,
+        absentApproved: counts['ABSENT_APPROVED'] ?? 0,
+        earlyLeave: counts['EARLY_LEAVE_APPROVED'] ?? 0,
+      },
+      records: records.map((r: (typeof records)[number]) => ({
+        ...r,
+        departmentName: r.user?.departmentId ? deptMap.get(r.user.departmentId) ?? 'Chung' : 'FPT Software',
+      })),
+    };
+  }
+
+  /**
+   * Get system attendance configuration for Admin
+   */
+  async getSettings() {
+    let config = await this.prisma.systemConfig.findFirst();
+    if (!config) {
+      config = await this.prisma.systemConfig.create({
+        data: {
+          companyName: 'FPT Software',
+          officeLatitude: 15.9686,
+          officeLongitude: 108.2608,
+          gpsRadiusMeters: 500,
+          allowedIpRanges: ['118.69.0.0/16', '172.16.0.0/12'],
+        },
+      });
+    }
+    return config;
+  }
+
+  /**
+   * Update system attendance configuration (ADMIN only)
+   */
+  async updateSettings(dto: any) {
+    const config = await this.getSettings();
+    return this.prisma.systemConfig.update({
+      where: { id: config.id },
+      data: dto,
+    });
+  }
 }

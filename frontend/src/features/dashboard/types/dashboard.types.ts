@@ -113,6 +113,16 @@ export interface RecentDocument {
   updatedAt: string;
 }
 
+export interface DailyShift {
+  date: string;
+  dayName: string;
+  dayNumber: string;
+  type: 'OFFICE' | 'WFH' | 'LEAVE' | 'WEEKEND';
+  badgeLabel: string;
+  timeRange: string;
+  isToday: boolean;
+}
+
 export interface EmployeeDashboardData {
   taskSummary: TaskSummary;
   urgentTasks: UrgentTask[];
@@ -127,17 +137,228 @@ export interface EmployeeDashboardData {
   activeSprint: ActiveSprintSummary | null;
   upcomingMeetings?: UpcomingMeeting[];
   recentDocuments?: RecentDocument[];
+  weeklySchedule?: DailyShift[];
 }
 
-export interface PmDashboardData extends EmployeeDashboardData {}
+// PM Specific Interfaces
+export interface SprintBurndownPoint {
+  day: string;
+  ideal: number;
+  actual: number;
+}
+
+export interface RiskAlert {
+  id: string;
+  type: 'BLOCKED_TASK' | 'OVERDUE' | 'LATE_ASSIGNEE';
+  severity: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+  title: string;
+  description: string;
+  link?: string;
+}
+
+export interface PmKpiRibbon {
+  totalProjects: number;
+  activeProjects: number;
+  openTasks: number;
+  blockedTasks: number;
+  overdueTasks: number;
+  teamMembersCount: number;
+  completionRate: number;
+}
+
+export interface AiSprintInsight {
+  sprintName: string;
+  completionRate: number;
+  blockedTaskTitle?: string;
+  blockedTaskId?: string;
+  blockedDays?: number;
+  recommendation: string;
+  suggestedAction: string;
+  releaseDate?: string;
+}
+
+export interface TeamMemberAvailability {
+  id: string;
+  name: string;
+  avatar: string | null;
+  role: string;
+  status: 'OFFICE' | 'WFH' | 'LEAVE';
+  checkInTime?: string | null;
+}
+
+export interface TeamCapacity {
+  totalMembers: number;
+  inOfficeToday: number;
+  wfhToday: number;
+  onLeaveToday: number;
+  totalAvailableHoursWeek: number;
+  maxCapacityHoursWeek: number;
+  capacityPercent: number;
+  membersSummary: TeamMemberAvailability[];
+}
+
+export interface SprintScopeCreep {
+  sprintId: string;
+  sprintName: string;
+  initialStoryPoints: number;
+  addedStoryPoints: number;
+  currentStoryPoints: number;
+  initialTasksCount: number;
+  addedTasksCount: number;
+  addedTasksList: Array<{ id: string; title: string; storyPoints: number; addedAt: string }>;
+  creepPercent: number;
+}
+
+export interface PmDashboardData extends EmployeeDashboardData {
+  pmKpi?: PmKpiRibbon;
+  sprintBurndown?: SprintBurndownPoint[];
+  risks?: RiskAlert[];
+  aiSprintInsight?: AiSprintInsight;
+  teamCapacity?: TeamCapacity;
+  scopeCreep?: SprintScopeCreep;
+}
+
+// HR Specific Interfaces
+export interface WorkforceSummary {
+  totalEmployees: number;
+  activeToday: number;
+  onLeave: number;
+  wfhToday: number;
+  absentUnapproved: number;
+}
+
+export interface AttendanceKpi {
+  attendanceRate: number;
+  onTimeRate: number;
+  lateRate: number;
+  avgWorkHours: number;
+}
+
+export interface AttendanceDistribution {
+  onTime: number;
+  late: number;
+  veryLate: number;
+  wfh: number;
+  absentApproved: number;
+  absentUnapproved: number;
+}
+
+export interface DepartmentMetric {
+  departmentName: string;
+  totalMembers: number;
+  presentCount: number;
+  lateCount: number;
+  lateRate: number;
+  onLeaveCount: number;
+}
+
+export interface PendingApprovalsSummary {
+  wfhCount: number;
+  leaveCount: number;
+  total: number;
+}
+
+export interface ComplianceAlert {
+  id: string;
+  userName: string;
+  department: string;
+  issue: string;
+  severity: 'MEDIUM' | 'HIGH';
+  date: string;
+}
+
+export interface QuickApprovalItem {
+  id: string;
+  type: 'WFH' | 'LEAVE';
+  userId: string;
+  userName: string;
+  userAvatar: string | null;
+  departmentName: string;
+  dateOrRange: string;
+  reason: string;
+  createdAt: string;
+  urgentLevel: 'NORMAL' | 'HIGH' | 'CRITICAL';
+}
+
+export interface HeadcountTrendPoint {
+  month: string;
+  headcount: number;
+  newHires: number;
+  retentionRate: number;
+}
+
+export interface CultureEvent {
+  id: string;
+  userId: string;
+  userName: string;
+  userAvatar: string | null;
+  departmentName: string;
+  type: 'BIRTHDAY' | 'WORK_ANNIVERSARY_1Y' | 'WORK_ANNIVERSARY_3Y' | 'WORK_ANNIVERSARY_5Y';
+  title: string;
+  dateDesc: string;
+  badgeText: string;
+}
 
 export interface HrDashboardData {
   taskSummary: TaskSummary;
-  attendanceSummary: null;
+  workforceSummary: WorkforceSummary;
+  attendanceKpi: AttendanceKpi;
+  attendanceDistribution: AttendanceDistribution;
+  lateArrivalsByDepartment: DepartmentMetric[];
+  leaveUsageByDepartment: DepartmentMetric[];
+  pendingApprovals: PendingApprovalsSummary;
+  complianceAlerts: ComplianceAlert[];
+  quickApprovals?: QuickApprovalItem[];
+  headcountTrend?: HeadcountTrendPoint[];
+  cultureEvents?: CultureEvent[];
+}
+
+// Admin Specific Interfaces
+export interface PlatformHealth {
+  activeUsers: number;
+  activeUsersNow: number;
+  apiRequestsToday: number;
+  errorRateToday: number;
+  dbSize: string;
+  uptime: string;
+}
+
+export interface SystemGauges {
+  cpuUsagePercent: number;
+  memoryUsagePercent: number;
+  dbConnectionsActive: number;
+  dbConnectionsMax: number;
+  storageUsedGb: number;
+  storageMaxGb: number;
+}
+
+export interface ApiLatency {
+  p50: number;
+  p95: number;
+  p99: number;
+}
+
+export interface ErrorLogEntry {
+  id: string;
+  timestamp: string;
+  level: 'WARN' | 'ERROR' | 'FATAL';
+  source: string;
+  message: string;
+  resolved: boolean;
 }
 
 export interface AdminDashboardData extends EmployeeDashboardData {
   systemHealth: SystemHealth;
+  platformHealth?: PlatformHealth;
+  systemGauges?: SystemGauges;
+  apiLatency?: ApiLatency;
+  errorLogs?: ErrorLogEntry[];
+  configStatus?: {
+    officeName: string;
+    gpsRadiusMeters: number;
+    ipRangesCount: number;
+    workHours: string;
+  };
 }
 
 export type DashboardData = EmployeeDashboardData | PmDashboardData | HrDashboardData | AdminDashboardData;

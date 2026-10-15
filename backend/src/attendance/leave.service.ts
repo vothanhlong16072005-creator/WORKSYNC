@@ -7,7 +7,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service.js';
 import { LeaveBalanceService } from './leave-balance.service.js';
 import { CreateLeaveDto } from './dto/create-leave.dto.js';
-import { AttendanceStatus, LeaveRequest, LeaveType, RequestStatus } from '@prisma/client';
+import { AttendanceStatus, LeaveRequest, LeaveType, RequestStatus, Prisma } from '@prisma/client';
 
 @Injectable()
 export class LeaveService {
@@ -114,9 +114,10 @@ export class LeaveService {
     });
   }
 
-  async getPendingRequests() {
+  async getPendingRequests(status?: RequestStatus) {
+    const where: Prisma.LeaveRequestWhereInput = status ? { status } : { status: RequestStatus.PENDING };
     return this.prisma.leaveRequest.findMany({
-      where: { status: RequestStatus.PENDING },
+      where,
       include: {
         user: {
           select: {
@@ -131,8 +132,29 @@ export class LeaveService {
           },
         },
       },
-      orderBy: { startDate: 'asc' },
+      orderBy: { startDate: 'desc' },
     });
+  }
+
+  async revertRequest(id: string): Promise<LeaveRequest> {
+    const request = await this.prisma.leaveRequest.findUnique({
+      where: { id },
+    });
+
+    if (!request) {
+      throw new NotFoundException('Không tìm thấy yêu cầu nghỉ phép / Leave request not found');
+    }
+
+    const updated = await this.prisma.leaveRequest.update({
+      where: { id },
+      data: {
+        status: RequestStatus.PENDING,
+        reviewedBy: null,
+        reviewedAt: null,
+      },
+    });
+
+    return updated;
   }
 
   async approveRequest(id: string, reviewerId: string): Promise<LeaveRequest> {

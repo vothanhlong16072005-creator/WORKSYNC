@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { CreateWfhDto } from './dto/create-wfh.dto.js';
-import { AttendanceStatus, RequestStatus, WfhRequest } from '@prisma/client';
+import { AttendanceStatus, RequestStatus, WfhRequest, Prisma } from '@prisma/client';
 
 @Injectable()
 export class WfhService {
@@ -94,9 +94,10 @@ export class WfhService {
     });
   }
 
-  async getPendingRequests() {
+  async getPendingRequests(status?: RequestStatus) {
+    const where: Prisma.WfhRequestWhereInput = status ? { status } : { status: RequestStatus.PENDING };
     return this.prisma.wfhRequest.findMany({
-      where: { status: RequestStatus.PENDING },
+      where,
       include: {
         user: {
           select: {
@@ -111,8 +112,30 @@ export class WfhService {
           },
         },
       },
-      orderBy: { date: 'asc' },
+      orderBy: { date: 'desc' },
     });
+  }
+
+  async revertRequest(id: string): Promise<WfhRequest> {
+    const request = await this.prisma.wfhRequest.findUnique({
+      where: { id },
+    });
+
+    if (!request) {
+      throw new NotFoundException('Không tìm thấy yêu cầu WFH / WFH request not found');
+    }
+
+    const updated = await this.prisma.wfhRequest.update({
+      where: { id },
+      data: {
+        status: RequestStatus.PENDING,
+        reviewedBy: null,
+        reviewedAt: null,
+        rejectionNote: null,
+      },
+    });
+
+    return updated;
   }
 
   async approveRequest(id: string, reviewerId: string): Promise<WfhRequest> {

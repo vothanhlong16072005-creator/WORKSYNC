@@ -128,7 +128,8 @@
 | **M2: Attendance** | Week 3 | ✅ Completed | Geofence GPS FPT Tower, IP CIDR, WFH, Quỹ phép, 75/75 tests pass |
 | **M3: Project & Task (CRUD)** | Week 4-5 | ✅ Completed | Scoped reads, project access control, board-position PATCH |
 | **M4: Kanban Board (UI)** | Week 5-6 | ✅ Completed | Modern SaaS UI, @hello-pangea/dnd, badge counts, optimistic update |
-| **M5: Meetings + WebRTC** | Week 6-7 | 🔄 Next Up (Kế hoạch sáng mai) | WebRTC video room, screen share, AI summary |
+| **M3.5: Project Sprint Task Extended** | Week 6-6.5 | 📋 Plan Ready (16/10) | SprintController mới, role DEPT_HEAD, 4 workflow types, Quick Task, Dept Head Dashboard. Xem [plan](./M3.5-PROJECT-SPRINT-TASK-EXTENDED-PLAN.md). **Triển khai TRƯỚC M5** vì Sprint + Dept Head dashboard là nền tảng cho non-IT workflow. |
+| **M5: Meetings + WebRTC** | Week 6.5-7 | 🔄 Pending (sau M3.5) | WebRTC video room, screen share, AI summary |
 | **M6: Documents (ClickUp Docs)** | Week 7-8 | ⬜ Not started | Tiptap editor, cây phân cấp tài liệu |
 | **M7: AI Integration (Gemini)** | Week 8-9 | ⬜ Not started | Summary meetings & tasks |
 | **M8: Reports & Dashboard** | Week 9-10 | ✅ Completed (Dashboard) | Modern Enterprise SaaS, Real KPI, Recharts, Sprint |

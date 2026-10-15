@@ -80,10 +80,18 @@ export function QuickAttendanceCard() {
         const dist = calculateDistanceKm(userLat, userLng, FPT_COMPLEX_LAT, FPT_COMPLEX_LNG);
         setDistanceKm(dist);
 
-        if (dist <= 0.8) {
-          toast.success(`Đã phát hiện vị trí thực: Khớp với khuôn viên FPT Complex Đà Nẵng (Sai số ±${userAcc}m)`);
-        } else {
-          toast.info(`Tọa độ GPS thực tế: ${userLat}° N, ${userLng}° E • Cách FPT Complex ~${dist.toFixed(1)}km`);
+        const hasNotified = sessionStorage.getItem('worksync_gps_notified');
+        if (!hasNotified) {
+          sessionStorage.setItem('worksync_gps_notified', 'true');
+          if (dist <= 0.8) {
+            toast.success(`Đã phát hiện vị trí thực: Khớp với khuôn viên FPT Complex Đà Nẵng (Sai số ±${userAcc}m)`, {
+              id: 'gps-status-toast',
+            });
+          } else {
+            toast.info(`Tọa độ GPS thực tế: ${userLat.toFixed(4)}° N, ${userLng.toFixed(4)}° E • Cách FPT Complex ~${dist.toFixed(1)}km`, {
+              id: 'gps-status-toast',
+            });
+          }
         }
       },
       () => {

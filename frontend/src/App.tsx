@@ -35,8 +35,18 @@ function App() {
           <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/tasks" element={<KanbanPage />} />
           <Route path="/projects/:projectId/tasks" element={<KanbanPage />} />
+          {/* Attendance is open to ALL authenticated roles; tab-level guards run inside the page. */}
           <Route path="/attendance" element={<AttendancePage />} />
-          {/* Add more features later */}
+          {/* Future route-level guards:
+            <Route
+              path="/admin"
+              element={
+                <PermissionGuard allowedRoles={['ADMIN']}>
+                  <AdminPage />
+                </PermissionGuard>
+              }
+            />
+          */}
         </Route>
 
         {/* Redirect root to dashboard */}
