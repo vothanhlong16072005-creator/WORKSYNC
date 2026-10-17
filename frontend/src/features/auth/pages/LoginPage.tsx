@@ -104,9 +104,7 @@ export default function LoginPage() {
           
           <CardHeader className="space-y-2 text-center pt-10 pb-6 relative z-10">
             <div className="flex justify-center mb-2">
-              <div className="flex h-14 w-14 items-center justify-center bg-destructive text-white border-2 border-white shadow-[4px_4px_0px_0px_#fff]">
-                <span className="text-3xl font-black">W</span>
-              </div>
+              <img src="/logo.svg" alt="WorkSync" className="h-16 w-16 object-contain drop-shadow-md" />
             </div>
             <CardTitle className="text-3xl font-black tracking-tight text-white uppercase">
               WORK<span className="text-accent">SYNC</span>

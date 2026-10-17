@@ -120,7 +120,7 @@ export class AttendanceController {
     @Res() res?: Response,
   ) {
     // PM/HR/Admin can export other users' data; EMPLOYEE only their own
-    const isManager = ['ADMIN', 'HR', 'PM'].includes(user.role);
+    const isManager = ['ADMIN', 'HR', 'DEPARTMENT_HEAD', 'PM'].includes(user.role);
     const targetUserId = isManager && userId ? userId : user.id;
     const includeUserInfo = isManager && !!userId;
 
@@ -145,7 +145,7 @@ export class AttendanceController {
     @Query('userId') userId?: string,
     @Res() res?: Response,
   ) {
-    const isManager = ['ADMIN', 'HR', 'PM'].includes(user.role);
+    const isManager = ['ADMIN', 'HR', 'DEPARTMENT_HEAD', 'PM'].includes(user.role);
     const targetUserId = isManager && userId ? userId : user.id;
     const includeUserInfo = isManager && !!userId;
 
@@ -184,11 +184,11 @@ export class AttendanceController {
     return this.leaveService.createRequest(user.id, dto);
   }
 
-  // --- HR / PM Approval Queue Endpoints ---
+  // --- HR / DEPARTMENT_HEAD Approval Queue Endpoints ---
 
   @Get('wfh-requests')
   @UseGuards(RolesGuard)
-  @Roles('ADMIN', 'HR', 'PM')
+  @Roles('ADMIN', 'HR', 'DEPARTMENT_HEAD')
   async getPendingWfhRequests(@Query('status') status?: string) {
     const reqStatus = status && status !== 'ALL' ? (status as RequestStatus) : undefined;
     return this.wfhService.getPendingRequests(reqStatus);
@@ -196,7 +196,7 @@ export class AttendanceController {
 
   @Patch('wfh-requests/:id/approve')
   @UseGuards(RolesGuard)
-  @Roles('ADMIN', 'HR', 'PM')
+  @Roles('ADMIN', 'HR', 'DEPARTMENT_HEAD')
   async approveWfh(
     @Param('id') id: string,
     @CurrentUser() user: RequestActor,
@@ -206,7 +206,7 @@ export class AttendanceController {
 
   @Patch('wfh-requests/:id/reject')
   @UseGuards(RolesGuard)
-  @Roles('ADMIN', 'HR', 'PM')
+  @Roles('ADMIN', 'HR', 'DEPARTMENT_HEAD')
   async rejectWfh(
     @Param('id') id: string,
     @CurrentUser() user: RequestActor,
@@ -231,7 +231,7 @@ export class AttendanceController {
 
   @Get('leave-requests')
   @UseGuards(RolesGuard)
-  @Roles('ADMIN', 'HR', 'PM')
+  @Roles('ADMIN', 'HR', 'DEPARTMENT_HEAD')
   async getPendingLeaveRequests(@Query('status') status?: string) {
     const reqStatus = status && status !== 'ALL' ? (status as RequestStatus) : undefined;
     return this.leaveService.getPendingRequests(reqStatus);
@@ -239,7 +239,7 @@ export class AttendanceController {
 
   @Patch('leave-requests/:id/approve')
   @UseGuards(RolesGuard)
-  @Roles('ADMIN', 'HR', 'PM')
+  @Roles('ADMIN', 'HR', 'DEPARTMENT_HEAD')
   async approveLeave(
     @Param('id') id: string,
     @CurrentUser() user: RequestActor,
@@ -249,7 +249,7 @@ export class AttendanceController {
 
   @Patch('leave-requests/:id/reject')
   @UseGuards(RolesGuard)
-  @Roles('ADMIN', 'HR', 'PM')
+  @Roles('ADMIN', 'HR', 'DEPARTMENT_HEAD')
   async rejectLeave(
     @Param('id') id: string,
     @CurrentUser() user: RequestActor,
@@ -281,14 +281,14 @@ export class AttendanceController {
 
   @Get('early-leave/pending')
   @UseGuards(RolesGuard)
-  @Roles('ADMIN', 'HR', 'PM')
+  @Roles('ADMIN', 'HR', 'DEPARTMENT_HEAD')
   async getPendingEarlyLeave() {
     return this.earlyLeaveService.getPendingRequests();
   }
 
   @Patch('early-leave/:id/approve')
   @UseGuards(RolesGuard)
-  @Roles('ADMIN', 'HR', 'PM')
+  @Roles('ADMIN', 'HR', 'DEPARTMENT_HEAD')
   async approveEarlyLeave(
     @Param('id') id: string,
     @CurrentUser() user: RequestActor,
@@ -298,7 +298,7 @@ export class AttendanceController {
 
   @Patch('early-leave/:id/reject')
   @UseGuards(RolesGuard)
-  @Roles('ADMIN', 'HR', 'PM')
+  @Roles('ADMIN', 'HR', 'DEPARTMENT_HEAD')
   async rejectEarlyLeave(
     @Param('id') id: string,
     @CurrentUser() user: RequestActor,
@@ -324,14 +324,14 @@ export class AttendanceController {
 
   @Get('overtime/pending')
   @UseGuards(RolesGuard)
-  @Roles('ADMIN', 'HR', 'PM')
+  @Roles('ADMIN', 'HR', 'DEPARTMENT_HEAD')
   async getPendingOvertime() {
     return this.overtimeService.getPendingRequests();
   }
 
   @Patch('overtime/:id/approve')
   @UseGuards(RolesGuard)
-  @Roles('ADMIN', 'HR', 'PM')
+  @Roles('ADMIN', 'HR', 'DEPARTMENT_HEAD')
   async approveOvertime(
     @Param('id') id: string,
     @CurrentUser() user: RequestActor,
@@ -341,7 +341,7 @@ export class AttendanceController {
 
   @Patch('overtime/:id/reject')
   @UseGuards(RolesGuard)
-  @Roles('ADMIN', 'HR', 'PM')
+  @Roles('ADMIN', 'HR', 'DEPARTMENT_HEAD')
   async rejectOvertime(
     @Param('id') id: string,
     @CurrentUser() user: RequestActor,
@@ -374,7 +374,7 @@ export class AttendanceController {
 
   @Get('team')
   @UseGuards(RolesGuard)
-  @Roles('ADMIN', 'HR', 'PM')
+  @Roles('ADMIN', 'HR', 'DEPARTMENT_HEAD', 'PM')
   async getTeamAttendance(
     @CurrentUser() user: RequestActor,
     @Query('projectId') projectId?: string,

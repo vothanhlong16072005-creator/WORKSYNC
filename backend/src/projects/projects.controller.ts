@@ -43,8 +43,8 @@ export class ProjectsController {
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.projectsService.findOne(id);
+  findOne(@Param('id') id: string, @CurrentUser() actor: CurrentActor) {
+    return this.projectsService.findOne(id, actor);
   }
 
   @Patch(':id')

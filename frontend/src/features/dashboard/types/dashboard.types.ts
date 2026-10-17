@@ -1,4 +1,4 @@
-export type Role = 'ADMIN' | 'HR' | 'PM' | 'EMPLOYEE';
+export type Role = 'ADMIN' | 'HR' | 'PM' | 'EMPLOYEE' | 'DEPARTMENT_HEAD';
 
 export interface TaskSummary {
   total: number;
@@ -361,7 +361,157 @@ export interface AdminDashboardData extends EmployeeDashboardData {
   };
 }
 
-export type DashboardData = EmployeeDashboardData | PmDashboardData | HrDashboardData | AdminDashboardData;
+export interface DepartmentHeadProject {
+  id: string;
+  name: string;
+  description: string | null;
+  color: string;
+  workflowType: 'SCRUM' | 'KANBAN' | 'DAILY' | 'SIMPLE';
+  status: string;
+  startDate: string | null;
+  endDate: string | null;
+  pm: { id: string; name: string; avatar: string | null; email: string } | null;
+  createdBy: { id: string; name: string; avatar: string | null } | null;
+  memberCount: number;
+  progressPercent: number;
+  taskCounts: {
+    total: number;
+    done: number;
+    inProgress: number;
+    todo: number;
+  };
+  activeSprint: {
+    id: string;
+    name: string;
+    goal: string | null;
+    progressPercent: number;
+    daysRemaining: number;
+    totalTasks: number;
+    doneTasks: number;
+    endDate: string;
+  } | null;
+}
+
+export interface DepartmentHeadActiveSprint {
+  id: string;
+  name: string;
+  goal: string | null;
+  projectId: string;
+  projectName: string;
+  projectColor: string;
+  pmName: string;
+  pmAvatar: string | null;
+  progressPercent: number;
+  daysRemaining: number;
+  totalTasks: number;
+  doneTasks: number;
+  endDate: string;
+}
+
+export interface DepartmentHeadMemberWorkload {
+  id: string;
+  name: string;
+  email: string;
+  avatar: string | null;
+  position: string | null;
+  role: string;
+  openTasks: number;
+  overdueTasks: number;
+  attendanceStatus: string;
+  checkInTime: string | null;
+}
+
+export interface AttendanceInOfficeMember {
+  id: string;
+  name: string;
+  avatar: string | null;
+  position: string | null;
+  email: string;
+  checkInTime: string | null;
+  checkInMethod: string;
+  checkInIp?: string | null;
+  status: string;
+  note?: string | null;
+}
+
+export interface AttendanceWfhMember {
+  id: string;
+  name: string;
+  avatar: string | null;
+  position: string | null;
+  email: string;
+  checkInTime: string | null;
+  checkInMethod: string;
+  status: string;
+  reason?: string;
+}
+
+export interface AttendanceLeaveMember {
+  id: string;
+  name: string;
+  avatar: string | null;
+  position: string | null;
+  email: string;
+  leaveType: string;
+  startDate?: string;
+  endDate?: string;
+  dayCount?: number;
+  reason?: string;
+  status: string;
+}
+
+export interface AttendanceNotCheckedInMember {
+  id: string;
+  name: string;
+  avatar: string | null;
+  position: string | null;
+  email: string;
+  pendingWfh?: string | null;
+  pendingLeave?: string | null;
+}
+
+export interface AttendanceSummaryDetails {
+  inOffice: AttendanceInOfficeMember[];
+  wfh: AttendanceWfhMember[];
+  leave: AttendanceLeaveMember[];
+  notCheckedIn: AttendanceNotCheckedInMember[];
+}
+
+export interface DepartmentHeadDashboardData {
+  department: {
+    id: string;
+    name: string;
+    description: string | null;
+  };
+  metrics: {
+    totalMembers: number;
+    activeProjects: number;
+    activeSprints: number;
+    quickTasksToday: number;
+    quickTasksOverdue: number;
+    onTrackPercent: number;
+    attendanceRate: number;
+  };
+  attendanceSummary: {
+    inOffice: number;
+    wfh: number;
+    leave: number;
+    notCheckedIn: number;
+    totalMembers: number;
+    details?: AttendanceSummaryDetails;
+  };
+  projects: DepartmentHeadProject[];
+  activeSprints: DepartmentHeadActiveSprint[];
+  quickTasks: any[];
+  teamWorkload: DepartmentHeadMemberWorkload[];
+}
+
+export type DashboardData =
+  | EmployeeDashboardData
+  | PmDashboardData
+  | HrDashboardData
+  | AdminDashboardData
+  | DepartmentHeadDashboardData;
 
 export type DashboardState =
   | { status: 'idle' }
@@ -369,4 +519,5 @@ export type DashboardState =
   | { status: 'success'; data: DashboardData; role: Role }
   | { status: 'error'; error: string };
 
-export type DashboardRole = 'employee' | 'pm' | 'hr' | 'admin' | 'me';
+export type DashboardRole = 'employee' | 'pm' | 'hr' | 'admin' | 'department-head' | 'me';
+

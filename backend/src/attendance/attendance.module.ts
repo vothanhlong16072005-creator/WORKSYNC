@@ -13,8 +13,10 @@ import { EarlyLeaveService } from './early-leave.service.js';
 import { OvertimeService } from './overtime.service.js';
 import { BreakService } from './break.service.js';
 
+import { NotificationsModule } from '../notifications/notifications.module.js';
+
 @Module({
-  imports: [PrismaModule],
+  imports: [PrismaModule, NotificationsModule],
   controllers: [AttendanceController],
   providers: [
     AttendanceService,

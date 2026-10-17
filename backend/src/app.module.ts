@@ -8,9 +8,27 @@ import { ProjectsModule } from './projects/projects.module.js';
 import { TasksModule } from './tasks/tasks.module.js';
 import { DashboardModule } from './dashboard/dashboard.module.js';
 import { AttendanceModule } from './attendance/attendance.module.js';
+import { QuickTaskModule } from './quick-tasks/quick-tasks.module.js';
+import { SprintsModule } from './sprints/sprints.module.js';
+import { MeetingsModule } from './meetings/meetings.module.js';
+import { NotificationsModule } from './notifications/notifications.module.js';
+import { DocumentsModule } from './documents/documents.module.js';
 
 @Module({
-  imports: [PrismaModule, UsersModule, AuthModule, ProjectsModule, TasksModule, DashboardModule, AttendanceModule],
+  imports: [
+    PrismaModule,
+    UsersModule,
+    AuthModule,
+    ProjectsModule,
+    TasksModule,
+    DashboardModule,
+    AttendanceModule,
+    QuickTaskModule,
+    SprintsModule,
+    MeetingsModule,
+    NotificationsModule,
+    DocumentsModule,
+  ],
   controllers: [AppController],
   providers: [AppService],
 })

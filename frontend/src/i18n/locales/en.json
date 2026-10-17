@@ -5,7 +5,10 @@
     "all_my_tasks": "All My Tasks",
     "personal_tasks": "Personal Work",
     "attendance": "ATTENDANCE",
+    "projects": "PROJECTS & SPRINTS",
+    "quick_tasks": "QUICK TASKS",
     "meetings": "MEETINGS",
+    "notifications": "NOTIFICATIONS",
     "documents": "DOCUMENTS",
     "settings": "SETTINGS"
   },
@@ -272,5 +275,45 @@
       "ip_ranges": "Internal IP Ranges",
       "work_hours": "Working Hours"
     }
+  },
+  "projects": {
+    "back_to_list": "Back to Projects",
+    "open_kanban": "Open Kanban Board (/tasks)",
+    "not_found": "Project Not Found",
+    "not_found_desc": "The project does not exist or you do not have permission to view it.",
+    "team_project": "Team Project",
+    "personal_project": "Personal Project",
+    "department": "Department: {{name}}",
+    "pm": "PM Lead",
+    "unassigned_pm": "Unassigned",
+    "active_sprint": "Active Sprint",
+    "view_sprint_burndown": "View Sprint & Burndown",
+    "tabs": {
+      "overview": "Overview",
+      "kanban": "Kanban Board",
+      "all_tasks": "All Tasks",
+      "backlog": "Backlog",
+      "sprints": "Sprints",
+      "members": "Members",
+      "settings": "Settings"
+    },
+    "stats": {
+      "total_tasks": "TOTAL TASKS",
+      "in_all_project": "In whole project",
+      "completed": "COMPLETED",
+      "progress_rate": "Reached {{rate}}% progress",
+      "in_progress": "IN PROGRESS",
+      "in_process": "In development",
+      "blocked": "BLOCKED / IMPEDED",
+      "needs_support": "Needs unblocking support"
+    },
+    "continuous_flow_title": "CONTINUOUS KANBAN FLOW (WIP LIMIT)",
+    "continuous_flow_heading": "Project Kanban Board & WIP Limit Management",
+    "continuous_flow_desc": "This project applies continuous delivery flow without fixed sprints. You can interact directly with tasks on the Kanban Board below.",
+    "switch_to_kanban_tab": "Open Kanban Tab",
+    "team_members": "Project Team ({{count}})",
+    "add_member": "Add Member",
+    "remove_member_confirm": "Are you sure you want to remove this member from the project?",
+    "delete_project_confirm": "Are you sure you want to delete this project? This action cannot be undone."
   }
 }

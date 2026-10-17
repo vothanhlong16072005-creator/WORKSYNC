@@ -17,25 +17,35 @@ const TASK_INCLUDE = {
   createdBy: {
     select: { id: true, name: true, avatar: true },
   },
+  completedBy: {
+    select: { id: true, name: true, avatar: true },
+  },
   sprint: {
     select: { id: true, name: true },
   },
   epic: {
     select: { id: true, title: true, color: true },
   },
+  linkedDocuments: {
+    where: { deletedAt: null },
+    select: { id: true, title: true, type: true },
+  },
 };
+
+import { NotificationTriggersService } from '../notifications/notification-triggers.service.js';
 
 @Injectable()
 export class TasksService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly projectAccessService: ProjectAccessService,
+    private readonly triggers: NotificationTriggersService,
   ) {}
 
   async create(createTaskDto: CreateTaskDto, userId: string) {
     const project = await this.prisma.project.findUnique({
       where: { id: createTaskDto.projectId },
-      select: { kind: true, personalOwnerId: true },
+      select: { kind: true, personalOwnerId: true, name: true },
     });
 
     const status = createTaskDto.status || TaskStatus.TODO;
@@ -58,7 +68,7 @@ export class TasksService {
 
     const { tags, ...rest } = createTaskDto;
 
-    return this.prisma.task.create({
+    const task = await this.prisma.task.create({
       data: {
         ...rest,
         status,
@@ -70,6 +80,36 @@ export class TasksService {
       },
       include: TASK_INCLUDE,
     });
+
+    try {
+      if (task.assigneeId && task.assigneeId !== userId) {
+        await this.triggers.taskAssigned({
+          id: task.id,
+          title: task.title,
+          projectId: task.projectId,
+          projectName: project?.name,
+          assigneeId: task.assigneeId,
+          actorId: userId,
+        });
+      }
+
+      if (createTaskDto.description) {
+        await this.triggers.mentionInContent(
+          createTaskDto.description,
+          { id: userId, name: task.createdBy.name },
+          {
+            type: 'TASK',
+            id: task.id,
+            title: task.title,
+            url: `/projects/${task.projectId}/tasks/${task.id}`,
+          },
+        );
+      }
+    } catch (err) {
+      // Non-blocking notification error
+    }
+
+    return task;
   }
 
   async findAll(query: TaskQueryDto, actor: CurrentActor) {
@@ -142,8 +182,10 @@ export class TasksService {
 
   async moveOnBoard(taskId: string, actor: CurrentActor, dto: MoveTaskOnBoardDto) {
     const { projectId } = await this.projectAccessService.requireTaskMovePermission(taskId, actor);
+    const targetStatus = dto.status;
+    let oldStatus: TaskStatus | null = null;
 
-    return this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
       const task = await tx.task.findFirst({
         where: { id: taskId, deletedAt: null },
       });
@@ -152,7 +194,7 @@ export class TasksService {
         throw new NotFoundException('Task not found');
       }
 
-      const targetStatus = dto.status;
+      oldStatus = task.status;
       const destIndex = Math.max(0, dto.destinationIndex);
 
       const columnTasks = await tx.task.findMany({
@@ -173,11 +215,14 @@ export class TasksService {
         const item = orderedTasks[i];
         const newPos = (i + 1) * 1024;
         if (item.id === taskId) {
+          const isDone = targetStatus === TaskStatus.DONE;
           await tx.task.update({
             where: { id: taskId },
             data: {
               status: targetStatus,
               position: newPos,
+              completedAt: isDone ? (task.completedAt || new Date()) : null,
+              completedById: isDone ? (task.completedById || actor.id) : null,
             },
           });
         } else if (item.position !== newPos) {
@@ -193,6 +238,23 @@ export class TasksService {
         include: TASK_INCLUDE,
       });
     });
+
+    if (result && oldStatus && targetStatus !== oldStatus) {
+      try {
+        await this.triggers.taskStatusChanged({
+          id: result.id,
+          title: result.title,
+          projectId: result.projectId,
+          createdById: result.createdById,
+          actorId: actor.id,
+          newStatus: targetStatus,
+        });
+      } catch (err) {
+        // Non-blocking notification
+      }
+    }
+
+    return result;
   }
 
   async findAllByProject(projectId: string) {
@@ -241,11 +303,63 @@ export class TasksService {
     }
 
     // 3. Update
-    return this.prisma.task.update({
+    const dataToUpdate: Record<string, unknown> = { ...updateTaskDto };
+    if (updateTaskDto.status !== undefined) {
+      if (updateTaskDto.status === TaskStatus.DONE) {
+        dataToUpdate.completedAt = task.completedAt || new Date();
+        dataToUpdate.completedById = task.completedById || actor.id;
+      } else {
+        dataToUpdate.completedAt = null;
+        dataToUpdate.completedById = null;
+      }
+    }
+
+    const updated = await this.prisma.task.update({
       where: { id },
-      data: updateTaskDto,
+      data: dataToUpdate,
       include: TASK_INCLUDE,
     });
+
+    try {
+      if (updateTaskDto.assigneeId && updateTaskDto.assigneeId !== task.assigneeId) {
+        await this.triggers.taskAssigned({
+          id: updated.id,
+          title: updated.title,
+          projectId: updated.projectId,
+          projectName: updated.project?.name,
+          assigneeId: updateTaskDto.assigneeId,
+          actorId: actor.id,
+        });
+      }
+
+      if (updateTaskDto.status && updateTaskDto.status !== task.status) {
+        await this.triggers.taskStatusChanged({
+          id: updated.id,
+          title: updated.title,
+          projectId: updated.projectId,
+          createdById: updated.createdById,
+          actorId: actor.id,
+          newStatus: updateTaskDto.status,
+        });
+      }
+
+      if (updateTaskDto.description && updateTaskDto.description !== task.description) {
+        await this.triggers.mentionInContent(
+          updateTaskDto.description,
+          { id: actor.id, name: updated.createdBy.name },
+          {
+            type: 'TASK',
+            id: updated.id,
+            title: updated.title,
+            url: `/projects/${updated.projectId}/tasks/${updated.id}`,
+          },
+        );
+      }
+    } catch (err) {
+      // Non-blocking notification error
+    }
+
+    return updated;
   }
 
   async removeWithAccess(id: string, actor: CurrentActor) {

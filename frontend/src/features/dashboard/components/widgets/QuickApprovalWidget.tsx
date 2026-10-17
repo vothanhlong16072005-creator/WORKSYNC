@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { CheckCheck, XCircle, Check, X, FileText } from 'lucide-react';
+import { CheckCheck, Check, X, FileText } from 'lucide-react';
 import type { QuickApprovalItem } from '../../types/dashboard.types';
 import { attendanceApi } from '@/features/attendance/api/attendance.api';
 import { toast } from 'sonner';
@@ -37,9 +37,10 @@ export function QuickApprovalWidget({ requests = [], onRefresh }: Props) {
       // Remove approved item from list
       setItems((prev) => prev.filter((i) => i.id !== item.id));
       if (onRefresh) onRefresh();
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Đã có lỗi xảy ra';
       toast.error('Không thể phê duyệt đơn', {
-        description: err?.response?.data?.message || err?.message || 'Đã có lỗi xảy ra',
+        description: message,
       });
     } finally {
       setProcessingId(null);
@@ -64,9 +65,10 @@ export function QuickApprovalWidget({ requests = [], onRefresh }: Props) {
       setRejectModalItem(null);
       setRejectionNote('');
       if (onRefresh) onRefresh();
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Đã có lỗi xảy ra';
       toast.error('Không thể từ chối đơn', {
-        description: err?.response?.data?.message || err?.message || 'Đã có lỗi xảy ra',
+        description: message,
       });
     } finally {
       setProcessingId(null);
@@ -75,31 +77,31 @@ export function QuickApprovalWidget({ requests = [], onRefresh }: Props) {
 
   return (
     <>
-      <div className="p-5 bg-white border-2 border-slate-900 shadow-[4px_4px_0px_0px_rgba(15,23,42,1)]">
+      <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-5 sm:p-6 transition-all hover:border-slate-300">
         {/* Header */}
-        <div className="flex flex-wrap items-center justify-between gap-2 pb-3 mb-4 border-b-2 border-slate-900">
-          <div className="flex items-center gap-2">
-            <span className="p-1.5 bg-emerald-600 text-white border border-slate-900 shadow-[2px_2px_0px_0px_rgba(15,23,42,1)]">
+        <div className="flex flex-wrap items-center justify-between gap-3 pb-4 mb-4 border-b border-slate-100">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center border border-emerald-100/80 shadow-xs">
               <CheckCheck className="w-4 h-4 stroke-[2.5]" />
-            </span>
+            </div>
             <div>
-              <span className="text-[10px] font-black uppercase tracking-wider text-emerald-700">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-600 block">
                 Phê duyệt tức thì
               </span>
-              <h2 className="text-sm font-black uppercase tracking-tight text-slate-900">
+              <h2 className="text-sm font-bold text-slate-900 tracking-tight">
                 Quick Approval Widget (Duyệt nhanh 1-Click)
               </h2>
             </div>
           </div>
 
-          <span className="px-2.5 py-1 bg-amber-100 text-amber-900 border border-slate-900 text-xs font-mono font-bold">
+          <span className="inline-flex items-center px-3 py-1 rounded-full bg-amber-50 text-amber-800 border border-amber-200/80 text-xs font-semibold">
             {items.length} đơn khẩn cấp
           </span>
         </div>
 
         {/* Requests List */}
         {items.length === 0 ? (
-          <div className="py-8 text-center bg-slate-50 border-2 border-dashed border-slate-300">
+          <div className="py-8 text-center bg-slate-50/60 rounded-xl border border-dashed border-slate-200">
             <CheckCheck className="w-8 h-8 text-emerald-600 mx-auto mb-2 opacity-80" />
             <p className="text-xs font-bold text-slate-700">
               Không có đơn WFH hoặc Nghỉ phép nào đang chờ duyệt.
@@ -113,16 +115,17 @@ export function QuickApprovalWidget({ requests = [], onRefresh }: Props) {
             {items.map((req) => (
               <div
                 key={req.id}
-                className="p-3.5 bg-white border-2 border-slate-900 hover:shadow-[3px_3px_0px_0px_rgba(15,23,42,1)] transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                className="p-4 rounded-xl border border-slate-200/70 bg-slate-50/50 hover:bg-white hover:border-slate-300 hover:shadow-sm transition-all flex flex-col md:flex-row md:items-center justify-between gap-4"
               >
-                <div className="flex items-start gap-3 min-w-0">
+                <div className="flex items-start gap-3.5 min-w-0">
                   <img
                     src={
                       req.userAvatar ||
                       `https://ui-avatars.com/api/?name=${encodeURIComponent(req.userName)}&background=0F172A&color=fff`
                     }
                     alt={req.userName}
-                    className="w-9 h-9 rounded-full object-cover border-2 border-slate-900 shrink-0"
+                    referrerPolicy="no-referrer"
+                    className="w-10 h-10 rounded-full object-cover border border-slate-200 shadow-xs shrink-0"
                   />
                   <div className="min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
@@ -130,10 +133,10 @@ export function QuickApprovalWidget({ requests = [], onRefresh }: Props) {
                         {req.userName}
                       </span>
                       <span
-                        className={`px-1.5 py-0.5 text-[10px] font-black uppercase border border-slate-900 ${
+                        className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold border ${
                           req.type === 'WFH'
-                            ? 'bg-sky-100 text-sky-800'
-                            : 'bg-amber-100 text-amber-800'
+                            ? 'bg-sky-50 text-sky-800 border-sky-200/70'
+                            : 'bg-amber-50 text-amber-800 border-amber-200/70'
                         }`}
                       >
                         {req.type === 'WFH' ? 'WFH (Từ xa)' : 'Nghỉ phép'}
@@ -144,21 +147,21 @@ export function QuickApprovalWidget({ requests = [], onRefresh }: Props) {
                     </div>
 
                     <div className="text-xs text-slate-500 truncate mt-0.5">
-                      Phòng ban: <strong>{req.departmentName}</strong>
+                      Phòng ban: <strong className="text-slate-700">{req.departmentName}</strong>
                     </div>
 
-                    <p className="text-xs text-slate-700 font-medium line-clamp-1 mt-1 bg-slate-50 px-2 py-0.5 border border-slate-200">
+                    <p className="text-xs text-slate-700 font-medium line-clamp-1 mt-1 bg-white/90 px-2.5 py-1 rounded-md border border-slate-200/60 shadow-2xs">
                       &quot;{req.reason}&quot;
                     </p>
                   </div>
                 </div>
 
                 {/* Direct Action Buttons */}
-                <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+                <div className="flex items-center gap-2 shrink-0 self-end md:self-center">
                   <button
                     type="button"
                     onClick={() => setSelectedDetail(req)}
-                    className="px-2.5 py-1.5 text-[11px] font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300"
+                    className="px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-700 bg-white hover:bg-slate-100 border border-slate-200 shadow-2xs transition-colors"
                   >
                     Xem lý do
                   </button>
@@ -167,7 +170,7 @@ export function QuickApprovalWidget({ requests = [], onRefresh }: Props) {
                     type="button"
                     onClick={() => setRejectModalItem(req)}
                     disabled={processingId === req.id}
-                    className="px-2.5 py-1.5 text-[11px] font-black uppercase text-rose-700 hover:bg-rose-50 border border-rose-300 hover:border-rose-600 transition-colors"
+                    className="px-3 py-1.5 rounded-lg text-xs font-semibold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 transition-colors disabled:opacity-50"
                   >
                     Từ chối
                   </button>
@@ -176,7 +179,7 @@ export function QuickApprovalWidget({ requests = [], onRefresh }: Props) {
                     type="button"
                     onClick={() => handleApprove(req)}
                     disabled={processingId === req.id}
-                    className="flex items-center gap-1 px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs uppercase tracking-wider border border-slate-900 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:-translate-y-0.5 transition-all disabled:opacity-50"
+                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-xs transition-colors disabled:opacity-50"
                   >
                     <Check className="w-3.5 h-3.5 stroke-[3]" />
                     <span>Duyệt nhanh</span>
@@ -190,111 +193,109 @@ export function QuickApprovalWidget({ requests = [], onRefresh }: Props) {
 
       {/* Modal Xem chi tiết lý do */}
       {selectedDetail && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-white border-4 border-slate-900 shadow-[8px_8px_0px_0px_rgba(15,23,42,1)] max-w-md w-full p-6 text-slate-900">
-            <div className="flex items-start justify-between pb-3 mb-4 border-b-2 border-slate-900">
-              <div className="flex items-center gap-2">
-                <FileText className="w-5 h-5 text-emerald-600" />
-                <h3 className="text-base font-black uppercase text-slate-900">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-xl max-w-md w-full p-6 text-slate-900">
+            <div className="flex items-start justify-between pb-3 mb-4 border-b border-slate-100">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center">
+                  <FileText className="w-4 h-4" />
+                </div>
+                <h3 className="text-sm font-bold text-slate-900">
                   Chi Tiết Lý Do Đơn {selectedDetail.type}
                 </h3>
               </div>
               <button
                 type="button"
                 onClick={() => setSelectedDetail(null)}
-                className="p-1 hover:bg-slate-100"
+                className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100 transition-colors"
               >
-                <X className="w-5 h-5 text-slate-600" />
+                <X className="w-4 h-4" />
               </button>
             </div>
 
-            <div className="space-y-3 mb-6 text-sm">
+            <div className="space-y-3 mb-6 text-xs">
               <div>
-                <span className="text-xs text-slate-500 font-bold uppercase">Nhân sự nộp đơn:</span>
-                <div className="font-bold text-slate-900">{selectedDetail.userName} ({selectedDetail.departmentName})</div>
+                <span className="text-[11px] text-slate-400 font-bold uppercase tracking-wider block mb-0.5">Nhân sự nộp đơn:</span>
+                <div className="font-bold text-slate-900 text-sm">{selectedDetail.userName} ({selectedDetail.departmentName})</div>
               </div>
               <div>
-                <span className="text-xs text-slate-500 font-bold uppercase">Thời gian đề xuất:</span>
-                <div className="font-mono font-bold text-slate-800">{selectedDetail.dateOrRange}</div>
+                <span className="text-[11px] text-slate-400 font-bold uppercase tracking-wider block mb-0.5">Thời gian đề xuất:</span>
+                <div className="font-mono font-semibold text-slate-800">{selectedDetail.dateOrRange}</div>
               </div>
               <div>
-                <span className="text-xs text-slate-500 font-bold uppercase">Nội dung giải trình chi tiết:</span>
-                <div className="p-3 bg-slate-50 border border-slate-300 text-slate-800 text-xs leading-relaxed mt-1">
+                <span className="text-[11px] text-slate-400 font-bold uppercase tracking-wider block mb-0.5">Lý do cụ thể:</span>
+                <div className="p-3 bg-slate-50 rounded-xl border border-slate-200/80 font-medium text-slate-800 leading-relaxed">
                   {selectedDetail.reason}
                 </div>
               </div>
             </div>
 
-            <div className="flex items-center justify-end gap-2 pt-3 border-t-2 border-slate-900">
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
               <button
                 type="button"
                 onClick={() => setSelectedDetail(null)}
-                className="px-4 py-2 text-xs font-bold uppercase text-slate-600 border border-slate-300"
+                className="px-4 py-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-xs font-semibold text-slate-700 transition-colors"
               >
                 Đóng
               </button>
               <button
                 type="button"
                 onClick={() => {
-                  const item = selectedDetail;
+                  const target = selectedDetail;
                   setSelectedDetail(null);
-                  handleApprove(item);
+                  handleApprove(target);
                 }}
-                className="px-5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs uppercase border border-slate-900 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
+                className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-xs font-bold text-white shadow-xs transition-colors"
               >
-                Phê duyệt ngay
+                Duyệt đơn này
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Modal Từ chối kèm lý do */}
+      {/* Modal Từ chối đơn */}
       {rejectModalItem && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-white border-4 border-slate-900 shadow-[8px_8px_0px_0px_rgba(15,23,42,1)] max-w-md w-full p-6 text-slate-900">
-            <div className="flex items-start justify-between pb-3 mb-4 border-b-2 border-slate-900">
-              <div className="flex items-center gap-2">
-                <XCircle className="w-5 h-5 text-rose-600" />
-                <h3 className="text-base font-black uppercase text-slate-900">
-                  Từ Chối Đơn {rejectModalItem.type}
-                </h3>
-              </div>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-xl max-w-md w-full p-6 text-slate-900">
+            <div className="flex items-start justify-between pb-3 mb-4 border-b border-slate-100">
+              <h3 className="text-sm font-bold text-slate-900">
+                Từ Chối Đơn của {rejectModalItem.userName}
+              </h3>
               <button
                 type="button"
                 onClick={() => setRejectModalItem(null)}
-                className="p-1 hover:bg-slate-100"
+                className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100 transition-colors"
               >
-                <X className="w-5 h-5 text-slate-600" />
+                <X className="w-4 h-4" />
               </button>
             </div>
 
-            <div className="mb-4">
-              <label htmlFor="rejectionNote" className="block text-xs font-black uppercase text-slate-700 mb-1.5">
-                Lý do từ chối gửi nhân viên:
-              </label>
-              <textarea
-                id="rejectionNote"
-                rows={3}
-                value={rejectionNote}
-                onChange={(e) => setRejectionNote(e.target.value)}
-                placeholder="Nhập lý do từ chối (vd: Cần tập trung on-site để deploy release)..."
-                className="w-full p-2.5 text-xs border-2 border-slate-900 focus:outline-none focus:ring-2 focus:ring-rose-500"
-              />
-            </div>
+            <p className="text-xs text-slate-500 mb-3">
+              Nhập lý do từ chối để gửi thông báo giải trình cho nhân viên:
+            </p>
 
-            <div className="flex items-center justify-end gap-2 pt-3 border-t-2 border-slate-900">
+            <textarea
+              rows={3}
+              value={rejectionNote}
+              onChange={(e) => setRejectionNote(e.target.value)}
+              placeholder="VD: Tuần này team cần tập trung onsite tại FPT Complex để kịp deadline Sprint..."
+              className="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-rose-500/20 mb-4"
+            />
+
+            <div className="flex items-center justify-end gap-2">
               <button
                 type="button"
                 onClick={() => setRejectModalItem(null)}
-                className="px-4 py-2 text-xs font-bold uppercase text-slate-600 border border-slate-300"
+                className="px-4 py-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-xs font-semibold text-slate-700 transition-colors"
               >
-                Hủy
+                Hủy bỏ
               </button>
               <button
                 type="button"
                 onClick={handleRejectConfirm}
-                className="px-5 py-2 bg-rose-600 hover:bg-rose-500 text-white font-black text-xs uppercase border border-slate-900 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
+                disabled={processingId === rejectModalItem.id}
+                className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-xs font-bold text-white shadow-xs transition-colors disabled:opacity-50"
               >
                 Xác nhận từ chối
               </button>

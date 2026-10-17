@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
-export type UserRole = 'EMPLOYEE' | 'PM' | 'HR' | 'ADMIN';
+export type UserRole = 'EMPLOYEE' | 'PM' | 'HR' | 'ADMIN' | 'DEPARTMENT_HEAD';
 
 export interface User {
   id: string;
@@ -9,6 +9,7 @@ export interface User {
   name: string;
   role: UserRole | string;
   avatar?: string;
+  departmentId?: string | null;
 }
 
 interface AuthState {

@@ -1,0 +1,5 @@
+groups:
+- name: WorkSyncAlerts
+  rules:
+  - alert: HighCpuUsage
+    expr: process_cpu_seconds_total > 0.8

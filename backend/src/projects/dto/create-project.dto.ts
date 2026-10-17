@@ -1,4 +1,5 @@
-import { IsDateString, IsHexColor, IsNotEmpty, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
+import { IsArray, IsDateString, IsEnum, IsHexColor, IsNotEmpty, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
+import { ProjectWorkflowType } from '@prisma/client';
 
 export class CreateProjectDto {
   @IsNotEmpty()
@@ -23,4 +24,21 @@ export class CreateProjectDto {
   @IsOptional()
   @IsDateString()
   endDate?: string;
+
+  @IsOptional()
+  @IsEnum(ProjectWorkflowType)
+  workflowType?: ProjectWorkflowType;
+
+  @IsOptional()
+  @IsString()
+  pmId?: string;
+
+  @IsOptional()
+  @IsString()
+  departmentId?: string;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  initialMemberIds?: string[];
 }

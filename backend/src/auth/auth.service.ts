@@ -67,7 +67,12 @@ export class AuthService {
   }
 
   private generateToken(user: import('@prisma/client').User) {
-    const payload = { sub: user.id, email: user.email, role: user.role };
+    const payload = {
+      sub: user.id,
+      email: user.email,
+      role: user.role,
+      departmentId: user.departmentId ?? null,
+    };
     const accessToken = this.jwtService.sign(payload);
     return {
       accessToken,
@@ -77,6 +82,7 @@ export class AuthService {
         email: user.email,
         name: user.name,
         role: user.role,
+        departmentId: user.departmentId ?? null,
         avatar: user.avatar,
       },
     };

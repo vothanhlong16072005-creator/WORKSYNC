@@ -1,9 +1,12 @@
-import { Menu, Bell, Search, LogOut } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Menu, Search, LogOut } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useAuthStore } from '@/stores/auth.store';
 import { useTranslation } from 'react-i18next';
 import { changeLanguage } from '@/i18n/i18n';
+import { QuickTaskButton } from '@/features/quick-tasks/components/QuickTaskButton';
+import { NotificationBell } from '@/features/notifications/components/NotificationBell';
 
 interface HeaderProps {
   sidebarOpen: boolean;
@@ -14,6 +17,11 @@ export default function Header({ sidebarOpen, setSidebarOpen }: HeaderProps) {
   const { user, logout } = useAuthStore();
   const { i18n } = useTranslation();
   const currentLang = i18n.language || 'vi';
+  const [avatarError, setAvatarError] = useState(false);
+
+  useEffect(() => {
+    setAvatarError(false);
+  }, [user?.avatar]);
 
   return (
     <header className="flex h-20 shrink-0 items-center justify-between border-b-2 border-slate-200 bg-white px-6">
@@ -66,25 +74,28 @@ export default function Header({ sidebarOpen, setSidebarOpen }: HeaderProps) {
           </button>
         </div>
 
-        <Button variant="ghost" size="icon" className="relative hover:bg-slate-100 rounded-none">
-          <Bell className="h-5 w-5 text-slate-900" />
-          <span className="absolute top-1.5 right-1.5 h-2.5 w-2.5 rounded-full border-2 border-white bg-destructive" />
-        </Button>
+        {/* M9: Notification Bell */}
+        <NotificationBell />
+
+        {/* M3.5 — Quick Task Button (PM/DEPT_HEAD/Admin only) */}
+        <QuickTaskButton />
         
         <div className="flex items-center gap-4 border-l-2 border-slate-200 pl-6">
           <div className="flex flex-col items-end hidden md:flex">
             <span className="text-sm font-bold text-slate-900">{user?.name || 'Võ Thanh Long'}</span>
             <span className="text-[10px] font-bold text-accent uppercase tracking-widest bg-slate-900 px-2 py-0.5">{user?.role || 'ADMIN'}</span>
           </div>
-          {user?.avatar ? (
+          {user?.avatar && !avatarError ? (
             <img
               src={user.avatar}
               alt={user.name || 'User'}
+              referrerPolicy="no-referrer"
+              onError={() => setAvatarError(true)}
               className="h-10 w-10 object-cover border-2 border-slate-900 shadow-[2px_2px_0px_0px_rgba(15,23,42,1)]"
             />
           ) : (
-            <div className="h-10 w-10 rounded-none bg-primary border-2 border-slate-900 shadow-[2px_2px_0px_0px_rgba(15,23,42,1)] flex items-center justify-center text-white font-black text-lg">
-              {user?.name?.charAt(0) || 'A'}
+            <div className="h-10 w-10 bg-blue-600 border-2 border-slate-900 shadow-[2px_2px_0px_0px_rgba(15,23,42,1)] flex items-center justify-center text-white font-black text-sm">
+              {user?.name?.charAt(0) || 'U'}
             </div>
           )}
           <Button variant="ghost" size="icon" onClick={logout} title="Logout" className="hover:bg-destructive hover:text-white rounded-none transition-colors ml-2">

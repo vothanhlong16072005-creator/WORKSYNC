@@ -15,9 +15,10 @@ import { toast } from 'sonner';
 
 interface Props {
   userName: string;
+  subtitle?: string;
 }
 
-export function HeroBanner({ userName }: Props) {
+export function HeroBanner({ userName, subtitle }: Props) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const [dropdownOpen, setDropdownOpen] = useState(false);
@@ -81,10 +82,11 @@ export function HeroBanner({ userName }: Props) {
           </div>
 
           <p className="text-xs sm:text-sm font-medium text-slate-500 leading-relaxed">
-            {t(
-              'dashboard.hero_subtext',
-              'Quản lý rủi ro & hiệu suất: Bạn có nhiệm vụ ưu tiên và Sprint đang tăng tốc.',
-            )}
+            {subtitle ??
+              t(
+                'dashboard.hero_subtext',
+                'Quản lý rủi ro & hiệu suất: Bạn có nhiệm vụ ưu tiên và Sprint đang tăng tốc.',
+              )}
           </p>
         </div>
 

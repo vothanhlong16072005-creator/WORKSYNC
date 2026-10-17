@@ -28,32 +28,43 @@ export function EmployeeDashboardLayout({ data, userName }: EmployeeDashboardLay
       {/* 1. Hero Banner with Bauhaus Artwork */}
       <HeroBanner userName={userName} />
 
-      {/* 2. Focus Time & Deep Work Tracker + Quick Attendance Card */}
+      {/* 2. Executive Quick Attendance Card (Đầy đủ không gian, đẹp mắt & độc lập) */}
+      <QuickAttendanceCard />
+
+      {/* 3. KPI Ribbon for personal tasks (6 thẻ tiến độ cốt lõi) */}
+      <KpiRibbon summary={data.taskSummary} />
+
+      {/* 4. Biểu đồ thống kê hiệu suất & phân bổ đưa lên trên (Analytics & Velocity Grid) */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
         <div className="lg:col-span-7">
-          <DeepWorkTrackerWidget urgentTasks={data.urgentTasks ?? []} />
+          <VelocityBarChart velocity={data.weeklyVelocity ?? []} />
         </div>
         <div className="lg:col-span-5">
-          <QuickAttendanceCard />
+          <TaskDonutChart
+            distribution={
+              data.priorityDistribution && data.priorityDistribution.length > 0
+                ? data.priorityDistribution
+                : data.statusDistribution ?? []
+            }
+          />
         </div>
       </div>
 
-      {/* 2.1 Weekly Shift Schedule (Lịch biểu làm việc tuần này) */}
+      {/* 5. Lịch biểu làm việc tuần này (Weekly Shift Schedule) đồng bộ thiết kế Enterprise */}
       <WeeklyShiftScheduleWidget schedule={data.weeklySchedule} />
 
-      {/* 3. KPI Ribbon for personal tasks */}
-      <KpiRibbon summary={data.taskSummary} />
-
-      {/* 4. Middle Dual Grid: Urgent Checklist & Velocity vs Sprint, Meeting & Portfolio */}
+      {/* 6. Khu vực thực thi công việc & Sprint (Tasks, Deep Work, Active Sprint, Meetings) */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
+        {/* Left Column: Việc cần làm & Đồng hồ làm việc sâu Deep Work */}
         <div className="lg:col-span-7 flex flex-col gap-6">
           <CoreTasksChecklist
             urgentTasks={data.urgentTasks ?? []}
             upcomingTasks={data.upcomingTasks ?? []}
           />
-          <VelocityBarChart velocity={data.weeklyVelocity ?? []} />
+          <DeepWorkTrackerWidget urgentTasks={data.urgentTasks ?? []} />
         </div>
 
+        {/* Right Column: Sprint đang diễn ra, Cuộc họp sắp tới, Danh mục dự án */}
         <div className="lg:col-span-5 flex flex-col gap-6">
           <ActiveSprintCard activeSprint={data.activeSprint} />
           <UpcomingMeetingsCard meetings={data.upcomingMeetings ?? []} />
@@ -61,20 +72,13 @@ export function EmployeeDashboardLayout({ data, userName }: EmployeeDashboardLay
         </div>
       </div>
 
-      {/* 5. Bottom Triple Grid: Priority Donut, Documents Hub, Activity Feed */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 items-stretch">
-        <TaskDonutChart
-          distribution={
-            data.priorityDistribution && data.priorityDistribution.length > 0
-              ? data.priorityDistribution
-              : data.statusDistribution ?? []
-          }
-        />
+      {/* 7. Bottom Grid: Documents Hub & Activity Feed */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-stretch">
         <RecentDocumentsHub documents={data.recentDocuments ?? []} />
         <RecentActivityFeed activities={data.recentActivities ?? []} />
       </div>
 
-      {/* 6. Footer */}
+      {/* 8. Enterprise Footer */}
       <EnterpriseFooter />
     </div>
   );

@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <!-- Shadow offset (Bauhaus style) -->
+  <rect x="10" y="10" width="48" height="48" rx="8" fill="#0F172A" />
+  <!-- Main Blue Card -->
+  <rect x="6" y="6" width="48" height="48" rx="8" fill="#3B82F6" stroke="#0F172A" stroke-width="3.5" />
+  <!-- Bold White 'W' -->
+  <path d="M15 18L21.5 40L27 24.5L32.5 40L39 18" stroke="#FFFFFF" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round" />
+  <!-- Yellow Status Dot at top right -->
+  <circle cx="50" cy="14" r="6" fill="#FBBF24" stroke="#0F172A" stroke-width="3" />
+</svg>

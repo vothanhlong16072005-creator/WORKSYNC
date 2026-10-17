@@ -19,6 +19,7 @@ enum Role {
   HR
   PM
   EMPLOYEE
+  DEPARTMENT_HEAD
 }
 
 enum UserStatus {
@@ -77,6 +78,13 @@ enum ProjectKind {
   PERSONAL
 }
 
+enum ProjectWorkflowType {
+  SCRUM
+  KANBAN
+  DAILY
+  SIMPLE
+}
+
 enum SprintStatus {
   PLANNING
   ACTIVE
@@ -114,12 +122,18 @@ enum CustomFieldType {
 
 enum MeetingStatus {
   SCHEDULED
-  ONGOING
-  ENDED
+  IN_PROGRESS
+  COMPLETED
   CANCELLED
 }
 
-enum RsvpStatus {
+enum MeetingScope {
+  PROJECT
+  DEPARTMENT
+  ONE_ON_ONE
+}
+
+enum RSVP {
   PENDING
   ACCEPTED
   DECLINED
@@ -143,23 +157,28 @@ enum SharePerm {
   EDIT
 }
 
+enum DocumentScope {
+  PERSONAL
+  PROJECT
+  DEPARTMENT
+  COMPANY
+}
+
+enum DocumentType {
+  STANDARD
+  TASK_REQUIREMENT
+  TASK_SUBMISSION
+  MEETING_MINUTES
+  COMPANY_POLICY
+  TEMPLATE
+}
+
 enum NotificationType {
-  TASK_ASSIGNED
-  TASK_STATUS_CHANGED
-  TASK_COMMENTED
-  TASK_DEADLINE_SOON
-  TASK_OVERDUE
-  TASK_BLOCKED
-  TASK_MENTION
-  SPRINT_STARTED
-  SPRINT_ENDED
-  MEETING_INVITED
-  MEETING_STARTING
-  MEETING_AI_READY
-  WFH_REQUEST_PENDING
-  WFH_APPROVED
-  WFH_REJECTED
-  DAILY_REPORT_REMINDER
+  MEETING
+  ATTENDANCE_APPROVAL
+  QUICK_TASK
+  MENTION
+  TASK
   SYSTEM
 }
 
@@ -189,14 +208,20 @@ model User {
   leaveRequests       LeaveRequest[]
   createdProjects     Project[]            @relation("ProjectCreator")
   personalProject     Project?             @relation("PersonalProjectOwner")
+  managedProjects     Project[]            @relation("ProjectManager")
   projectMemberships  ProjectMember[]
   createdTasks        Task[]               @relation("TaskCreator")
   assignedTasks       Task[]               @relation("TaskAssignee")
+  completedTasks      Task[]               @relation("TaskCompletedBy")
   workLogs            WorkLog[]
   comments            Comment[]
   reactions           Reaction[]
   createdMeetings     Meeting[]            @relation("MeetingCreator")
-  meetingParticipants MeetingParticipant[]
+  meetingAttendees    MeetingAttendee[]
+
+  // QuickTask relations (M3.5)
+  quickTasksAssigned  QuickTask[] @relation("QuickTaskAssignee")
+  quickTasksAssignedBy QuickTask[] @relation("QuickTaskAssigner")
 
   // Attendance Enhancement (GD2)
   earlyLeaveRequests         EarlyLeaveRequest[] @relation("EarlyLeaveRequester")
@@ -204,10 +229,21 @@ model User {
   overtimeRequests           OvertimeRequest[]   @relation("OvertimeRequester")
   reviewedOvertimeRequests   OvertimeRequest[]   @relation("OvertimeReviewer")
   breakLogs                  BreakLog[]
+  ownedDocuments             Document[]          @relation("DocumentOwner")
   createdDocuments           Document[]          @relation("DocumentCreator")
-  documentShares             DocumentShare[]
+  updatedDocuments           Document[]          @relation("DocumentUpdater")
+  savedVersions              DocumentVersion[]   @relation("DocumentVersionSaver")
+  uploadedAttachments        DocumentAttachment[] @relation("DocumentAttachmentUploader")
+  documentPermissions        DocumentPermission[] @relation("DocumentPermissionUser")
+  grantedPermissions         DocumentPermission[] @relation("DocumentPermissionGranter")
+  createdTemplates           DocumentTemplate[]  @relation("DocumentTemplateCreator")
   dailyReports               DailyReport[]
-  notifications              Notification[]
+  receivedNotifications      Notification[]      @relation("ReceivedNotifications")
+  sentNotifications          Notification[]      @relation("NotificationActor")
+  pushSubscriptions          PushSubscription[]
+
+  // Sprint management (M3.5)
+  createdSprints Sprint[] @relation("SprintCreator")
 }
 
 model Department {
@@ -219,7 +255,10 @@ model Department {
   updatedAt   DateTime  @updatedAt
   deletedAt   DateTime?
 
-  users User[]
+  users     User[]
+  projects  Project[]
+  meetings  Meeting[]
+  documents Document[]
 }
 
 model SystemConfig {
@@ -353,21 +392,26 @@ model LeaveRequest {
 }
 
 model Project {
-  id              String        @id @default(cuid())
+  id              String               @id @default(cuid())
   name            String
   description     String?
-  kind            ProjectKind   @default(TEAM)
-  personalOwnerId String?       @unique
-  personalOwner   User?         @relation("PersonalProjectOwner", fields: [personalOwnerId], references: [id])
-  status          ProjectStatus @default(PLANNING)
-  color           String        @default("#3B82F6")
+  kind            ProjectKind          @default(TEAM)
+  workflowType    ProjectWorkflowType  @default(KANBAN)
+  personalOwnerId String?              @unique
+  personalOwner   User?                @relation("PersonalProjectOwner", fields: [personalOwnerId], references: [id])
+  pmId            String?              // ← MỚI (M3.5): PM chính của project (DEPT_HEAD chỉ định)
+  pm              User?                @relation("ProjectManager", fields: [pmId], references: [id])
+  departmentId    String?              // ← MỚI (M3.5): Phòng ban quản lý dự án
+  department      Department?          @relation(fields: [departmentId], references: [id])
+  status          ProjectStatus        @default(PLANNING)
+  color           String               @default("#3B82F6")
   icon            String?
   startDate       DateTime?
   endDate         DateTime?
   createdById     String
-  createdBy       User          @relation("ProjectCreator", fields: [createdById], references: [id])
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
+  createdBy       User                 @relation("ProjectCreator", fields: [createdById], references: [id])
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
   deletedAt       DateTime?
 
   members      ProjectMember[]
@@ -377,6 +421,7 @@ model Project {
   customFields CustomField[]
   meetings     Meeting[]
   documents    Document[]
+  quickTasks   QuickTask[]   // ← MỚI (M3.5)
 }
 
 model ProjectMember {
@@ -392,19 +437,26 @@ model ProjectMember {
 }
 
 model Sprint {
-  id        String       @id @default(cuid())
-  projectId String
-  project   Project      @relation(fields: [projectId], references: [id])
-  name      String
-  goal      String?
-  status    SprintStatus @default(PLANNING)
-  startDate DateTime?
-  endDate   DateTime?
-  createdAt DateTime     @default(now())
-  updatedAt DateTime     @updatedAt
+  id           String       @id @default(cuid())
+  projectId    String
+  project      Project      @relation(fields: [projectId], references: [id])
+  name         String
+  goal         String?
+  status       SprintStatus @default(PLANNING)
+  startDate    DateTime?
+  endDate      DateTime?
+  durationDays Int          @default(14)   // ← MỚI (M3.5)
+  completedAt  DateTime?                 // ← MỚI (M3.5)
+  createdById  String?                   // ← MỚI (M3.5)
+  createdBy    User?        @relation("SprintCreator", fields: [createdById], references: [id])
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  deletedAt    DateTime?                 // ← MỚI (M3.5): soft delete
 
   epics Epic[]
   tasks Task[]
+
+  @@index([projectId, status])
 }
 
 model Epic {
@@ -438,9 +490,12 @@ model Task {
   subTasks     Task[]     @relation("SubTasks")
   assigneeId   String?
   assignee     User?      @relation("TaskAssignee", fields: [assigneeId], references: [id])
-  createdById  String
-  createdBy    User       @relation("TaskCreator", fields: [createdById], references: [id])
-  title        String
+  createdById   String
+  createdBy     User       @relation("TaskCreator", fields: [createdById], references: [id])
+  completedById String?
+  completedBy   User?      @relation("TaskCompletedBy", fields: [completedById], references: [id])
+  completedAt   DateTime?
+  title         String
   description  String?
   status       TaskStatus @default(TODO)
   priority     Priority   @default(MEDIUM)
@@ -450,6 +505,8 @@ model Task {
   position     Int        @default(0)
   dueDate      DateTime?
   labels       String[]
+  notified24h  Boolean    @default(false)
+  notified1h   Boolean    @default(false)
   deletedAt    DateTime?
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
@@ -459,6 +516,7 @@ model Task {
   workLogs      WorkLog[]
   comments      Comment[]
   customValues  CustomFieldValue[]
+  linkedDocuments Document[]       @relation("DocumentLinkedTask")
 
   @@index([projectId, status])
   @@index([assigneeId])
@@ -544,125 +602,199 @@ model CustomFieldValue {
 
 model Meeting {
   id           String        @id @default(cuid())
-  projectId    String?
-  project      Project?      @relation(fields: [projectId], references: [id])
-  createdById  String
-  createdBy    User          @relation("MeetingCreator", fields: [createdById], references: [id])
   title        String
   description  String?
-  status       MeetingStatus @default(SCHEDULED)
+
+  // Scope type — phân biệt 3 loại meeting
+  scopeType    MeetingScope  @default(ONE_ON_ONE)
+  projectId    String?
+  project      Project?      @relation(fields: [projectId], references: [id])
+  departmentId String?
+  department   Department?   @relation(fields: [departmentId], references: [id])
+
   startTime    DateTime
   endTime      DateTime
-  roomCode     String        @unique
-  agenda       String[]
-  recordingUrl String?
-  createdAt    DateTime      @default(now())
+  status       MeetingStatus @default(SCHEDULED)
+  roomCode     String        @unique @default(cuid())
+  createdById  String
+  createdBy    User          @relation("MeetingCreator", fields: [createdById], references: [id])
+  attendees          MeetingAttendee[]
+  minutes            MeetingMinute?
+  linkedDocuments    Document[]    @relation("DocumentLinkedMeeting")
+  rsvpReminderSentAt DateTime?
+  createdAt          DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
+  deletedAt    DateTime?
 
-  participants MeetingParticipant[]
-  minutes      MeetingMinute?
-  summary      MeetingAiSummary?
+  @@index([scopeType, projectId, departmentId])
+  @@index([startTime, status])
 }
 
-model MeetingParticipant {
-  id         String     @id @default(cuid())
-  meetingId  String
-  meeting    Meeting    @relation(fields: [meetingId], references: [id])
-  userId     String
-  user       User       @relation(fields: [userId], references: [id])
-  rsvpStatus RsvpStatus @default(PENDING)
-  joinedAt   DateTime?
-  leftAt     DateTime?
+model MeetingAttendee {
+  id                   String    @id @default(cuid())
+  meetingId            String
+  meeting              Meeting   @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  userId               String
+  user                 User      @relation(fields: [userId], references: [id])
+
+  rsvp                 RSVP      @default(PENDING)
+  rsvpAt               DateTime?
+
+  joinedAt             DateTime?
+  leftAt               DateTime?
+  totalDurationSeconds Int       @default(0)
 
   @@unique([meetingId, userId])
+  @@index([userId, rsvp])
 }
 
 model MeetingMinute {
-  id          String   @id @default(cuid())
-  meetingId   String   @unique
-  meeting     Meeting  @relation(fields: [meetingId], references: [id])
-  content     String
-  actionItems Json[]
-  decisions   String[]
-  updatedById String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-}
+  id        String   @id @default(cuid())
+  meetingId String   @unique
+  meeting   Meeting  @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  content   String   @db.Text
 
-model MeetingAiSummary {
-  id           String      @id @default(cuid())
-  meetingId    String      @unique
-  meeting      Meeting     @relation(fields: [meetingId], references: [id])
-  status       AiJobStatus @default(PENDING)
-  summaryVi    String?
-  summaryEn    String?
-  summaryKo    String?
-  keyDecisions String[]
-  actionItems  Json[]
-  risks        String[]
-  generatedAt  DateTime?
-  createdAt    DateTime    @default(now())
+  // ⭐ M5.1 — AI Summary fields (added 2026-10-18)
+  aiSummary           String?   @db.Text
+  actionItems         Json?
+  decisions           Json?
+  risksAndQuestions   Json?
+  aiGeneratedAt       DateTime?
+  aiModel             String?
+  aiTokensUsed        Int?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([meetingId])
 }
 
 model Document {
-  id             String        @id @default(cuid())
-  projectId      String?
-  project        Project?      @relation(fields: [projectId], references: [id])
-  parentDocId    String?
-  parentDoc      Document?     @relation("DocHierarchy", fields: [parentDocId], references: [id])
-  childDocs      Document[]    @relation("DocHierarchy")
-  createdById    String
-  createdBy      User          @relation("DocumentCreator", fields: [createdById], references: [id])
-  title          String
-  content        Json?
-  visibility     DocVisibility @default(PRIVATE)
-  currentVersion Int           @default(1)
-  wordCount      Int           @default(0)
-  icon           String?
-  createdAt      DateTime      @default(now())
-  updatedAt      DateTime      @updatedAt
-  deletedAt      DateTime?
+  id              String        @id @default(cuid())
+  title           String
+  content         Json          // Tiptap JSON
+  contentText     String        @db.Text // Plain text cho search / FTS
+  scope           DocumentScope
+  type            DocumentType  @default(STANDARD)
 
-  versions  DocumentVersion[]
-  shares    DocumentShare[]
-  aiSummary DocumentAiSummary?
+  // Owner
+  ownerId         String
+  owner           User          @relation("DocumentOwner", fields: [ownerId], references: [id])
 
-  @@index([parentDocId])
-  @@index([projectId])
+  // Scope relations
+  projectId       String?
+  project         Project?      @relation(fields: [projectId], references: [id])
+  departmentId    String?
+  department      Department?   @relation(fields: [departmentId], references: [id])
+
+  // Linked entities (cho U1, U2, U4)
+  linkedTaskId    String?
+  linkedTask      Task?         @relation("DocumentLinkedTask", fields: [linkedTaskId], references: [id])
+  linkedMeetingId String?
+  linkedMeeting   Meeting?      @relation("DocumentLinkedMeeting", fields: [linkedMeetingId], references: [id])
+
+  // Metadata
+  aiSummary       String?       @db.Text
+  templateKey     String?       // 'meeting_minutes', 'project_proposal', ...
+  parentId        String?       // Nested folders
+  parent          Document?     @relation("DocumentTree", fields: [parentId], references: [id])
+  children        Document[]    @relation("DocumentTree")
+  tags            String[]      // ['spec', 'design', 'urgent']
+
+  // Versioning
+  currentVersion  Int           @default(1)
+  versions        DocumentVersion[]
+
+  // Attachments
+  attachments     DocumentAttachment[]
+
+  // Access
+  permissions     DocumentPermission[]
+
+  // Stats
+  viewCount       Int           @default(0)
+  lastViewedAt    DateTime?
+
+  // Audit
+  createdById     String
+  createdBy       User          @relation("DocumentCreator", fields: [createdById], references: [id])
+  updatedById     String?
+  updatedBy       User?         @relation("DocumentUpdater", fields: [updatedById], references: [id])
+
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  deletedAt       DateTime?
+
+  @@index([scope, deletedAt])
+  @@index([projectId, deletedAt])
+  @@index([departmentId, deletedAt])
+  @@index([linkedTaskId])
+  @@index([linkedMeetingId])
+  @@index([ownerId, deletedAt])
 }
 
 model DocumentVersion {
-  id          String   @id @default(cuid())
-  docId       String
-  document    Document @relation(fields: [docId], references: [id])
-  version     Int
-  content     Json
-  updatedById String
-  createdAt   DateTime @default(now())
+  id           String   @id @default(cuid())
+  documentId   String
+  document     Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  version      Int
+  title        String
+  content      Json
+  contentText  String   @db.Text
+  changeNote   String?
+  savedById    String
+  savedBy      User     @relation("DocumentVersionSaver", fields: [savedById], references: [id])
+  createdAt    DateTime @default(now())
 
-  @@unique([docId, version])
+  @@unique([documentId, version])
+  @@index([documentId, version])
 }
 
-model DocumentShare {
-  id         String    @id @default(cuid())
-  docId      String
-  document   Document  @relation(fields: [docId], references: [id])
-  userId     String
-  user       User      @relation(fields: [userId], references: [id])
-  permission SharePerm @default(VIEW)
-  createdAt  DateTime  @default(now())
+model DocumentAttachment {
+  id            String   @id @default(cuid())
+  documentId    String
+  document      Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  fileName      String
+  fileSize      Int      // bytes
+  mimeType      String
+  minioKey      String   // path file
+  minioBucket   String   @default("worksync-documents")
+  uploadedById  String
+  uploadedBy    User     @relation("DocumentAttachmentUploader", fields: [uploadedById], references: [id])
+  createdAt     DateTime @default(now())
 
-  @@unique([docId, userId])
+  @@index([documentId])
 }
 
-model DocumentAiSummary {
-  id        String      @id @default(cuid())
-  docId     String      @unique
-  document  Document    @relation(fields: [docId], references: [id])
-  status    AiJobStatus @default(PENDING)
-  summary   String?
-  keyPoints String[]
-  createdAt DateTime    @default(now())
+model DocumentPermission {
+  id           String   @id @default(cuid())
+  documentId   String
+  document     Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  userId       String
+  user         User     @relation("DocumentPermissionUser", fields: [userId], references: [id])
+  canEdit      Boolean  @default(false)
+  canComment   Boolean  @default(true)
+  canShare     Boolean  @default(false)
+  grantedById  String
+  grantedBy    User     @relation("DocumentPermissionGranter", fields: [grantedById], references: [id])
+  createdAt    DateTime @default(now())
+
+  @@unique([documentId, userId])
+  @@index([documentId])
+}
+
+model DocumentTemplate {
+  id            String   @id @default(cuid())
+  key           String   @unique  // 'meeting_minutes', 'project_proposal', 'weekly_report'
+  name          String   // "Biên bản họp", "Đề xuất dự án"
+  description   String?
+  content       Json     // Tiptap JSON template
+  scope         DocumentScope
+  createdById   String
+  createdBy     User     @relation("DocumentTemplateCreator", fields: [createdById], references: [id])
+  isSystem      Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 }
 
 model DailyReport {
@@ -685,15 +817,70 @@ model DailyReport {
 model Notification {
   id        String           @id @default(cuid())
   userId    String
-  user      User             @relation(fields: [userId], references: [id])
-  type      NotificationType
-  title     String
-  message   String
-  link      String?
-  read      Boolean          @default(false)
-  readAt    DateTime?
-  metadata  Json?
-  createdAt DateTime         @default(now())
+  user      User             @relation("ReceivedNotifications", fields: [userId], references: [id], onDelete: Cascade)
 
-  @@index([userId, read])
+  type      NotificationType
+  category  String
+  title     String
+  body      String?
+  data      Json?
+  icon      String?
+
+  isRead    Boolean          @default(false)
+  readAt    DateTime?
+
+  actorId   String?
+  actor     User?            @relation("NotificationActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+  deletedAt DateTime?
+
+  @@index([userId, isRead, createdAt])
+  @@index([userId, type, createdAt])
+}
+
+model PushSubscription {
+  id         String    @id @default(cuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  endpoint   String    @unique
+  p256dh     String
+  auth       String
+
+  userAgent  String?
+  isActive   Boolean   @default(true)
+  lastUsedAt DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  @@index([userId, isActive])
+}
+
+
+// ------------------------------------------------------
+// M3.5: QuickTask — Giao việc nhanh (không cần sprint)
+// ------------------------------------------------------
+
+model QuickTask {
+  id           String     @id @default(cuid())
+  title        String
+  description  String?
+  projectId    String?    // null = personal (không thuộc project nào)
+  project      Project?   @relation(fields: [projectId], references: [id])
+  assigneeId   String
+  assignee     User       @relation("QuickTaskAssignee", fields: [assigneeId], references: [id])
+  assignedById String
+  assignedBy   User       @relation("QuickTaskAssigner", fields: [assignedById], references: [id])
+  dueDate      DateTime
+  priority     Priority   @default(MEDIUM)
+  status       TaskStatus @default(TODO)
+  completedAt  DateTime?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  @@index([assigneeId, status])
+  @@index([dueDate])
+  @@index([projectId])
 }

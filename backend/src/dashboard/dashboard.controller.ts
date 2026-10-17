@@ -21,6 +21,9 @@ export class DashboardController {
     if (user.role === 'ADMIN') {
       return { success: true, data: await this.dashboardService.getAdminDashboard(user.id) };
     }
+    if (user.role === 'DEPARTMENT_HEAD') {
+      return { success: true, data: await this.dashboardService.getDepartmentHeadDashboard(user.id) };
+    }
     if (user.role === 'PM') {
       return { success: true, data: await this.dashboardService.getPmDashboard(user.id) };
     }
@@ -28,6 +31,12 @@ export class DashboardController {
       return { success: true, data: await this.dashboardService.getHrDashboard(user.id) };
     }
     return { success: true, data: await this.dashboardService.getEmployeeDashboard(user.id) };
+  }
+
+  @Get('department-head')
+  @Roles('DEPARTMENT_HEAD', 'ADMIN')
+  async getDepartmentHead(@CurrentUser() user: AuthUser) {
+    return { success: true, data: await this.dashboardService.getDepartmentHeadDashboard(user.id) };
   }
 
   @Get('employee')

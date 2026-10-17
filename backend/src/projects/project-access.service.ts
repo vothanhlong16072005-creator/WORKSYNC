@@ -5,6 +5,7 @@ import { PrismaService } from '../prisma/prisma.service.js';
 export interface CurrentActor {
   id: string;
   role: Role;
+  departmentId?: string | null;
 }
 
 export interface ProjectAccess {
@@ -24,6 +25,9 @@ export class ProjectAccessService {
         id: true,
         kind: true,
         personalOwnerId: true,
+        createdById: true,
+        pmId: true,
+        departmentId: true,
         members: {
           where: { userId: actor.id },
           select: { projectRole: true },
@@ -48,18 +52,41 @@ export class ProjectAccessService {
     }
 
     const membership = project.members[0];
-    if (!membership) {
-      throw new ForbiddenException('You do not have access to this project');
+    if (membership) {
+      return {
+        projectId: project.id,
+        kind: project.kind,
+        projectRole: membership.projectRole,
+      };
     }
 
-    return {
-      projectId: project.id,
-      kind: project.kind,
-      projectRole: membership.projectRole,
-    };
+    // RBAC (M3.5): DEPT_HEAD có quyền xem các dự án do mình tạo hoặc thuộc phòng mình quản lý
+    if (actor.role === Role.DEPARTMENT_HEAD) {
+      if (project.createdById === actor.id || project.pmId === actor.id) {
+        return {
+          projectId: project.id,
+          kind: project.kind,
+          projectRole: 'DEPT_HEAD',
+        };
+      }
+      if (actor.departmentId && project.departmentId === actor.departmentId) {
+        return {
+          projectId: project.id,
+          kind: project.kind,
+          projectRole: 'DEPT_HEAD',
+        };
+      }
+    }
+
+    throw new ForbiddenException('You do not have access to this project');
   }
 
   async isProjectPM(projectId: string, userId: string): Promise<boolean> {
+    const project = await this.prisma.project.findUnique({
+      where: { id: projectId },
+      select: { pmId: true },
+    });
+    if (project?.pmId === userId) return true;
     const member = await this.prisma.projectMember.findUnique({
       where: { projectId_userId: { projectId, userId } },
       select: { projectRole: true },

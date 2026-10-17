@@ -8,9 +8,14 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { CreateWfhDto } from './dto/create-wfh.dto.js';
 import { AttendanceStatus, RequestStatus, WfhRequest, Prisma } from '@prisma/client';
 
+import { NotificationTriggersService } from '../notifications/notification-triggers.service.js';
+
 @Injectable()
 export class WfhService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly triggers: NotificationTriggersService,
+  ) {}
 
   private parseDateOnly(dateString: string): Date {
     return new Date(`${dateString}T00:00:00.000Z`);
@@ -75,7 +80,7 @@ export class WfhService {
       });
     }
 
-    return this.prisma.wfhRequest.create({
+    const request = await this.prisma.wfhRequest.create({
       data: {
         userId,
         date: targetDate,
@@ -85,6 +90,23 @@ export class WfhService {
         status: RequestStatus.PENDING,
       },
     });
+
+    try {
+      const user = await this.prisma.user.findUnique({
+        where: { id: userId },
+        select: { departmentId: true },
+      });
+      await this.triggers.attendanceRequestCreated({
+        id: request.id,
+        userId,
+        type: 'WFH',
+        departmentId: user?.departmentId,
+      });
+    } catch (err) {
+      // Non-blocking notification error
+    }
+
+    return request;
   }
 
   async getMyRequests(userId: string) {
@@ -171,6 +193,23 @@ export class WfhService {
       },
     });
 
+    try {
+      const reviewer = await this.prisma.user.findUnique({
+        where: { id: reviewerId },
+        select: { name: true },
+      });
+      await this.triggers.attendanceRequestReviewed({
+        id: updated.id,
+        userId: updated.userId,
+        type: 'WFH',
+        status: 'APPROVED',
+        reviewerId,
+        reviewerName: reviewer?.name,
+      });
+    } catch (err) {
+      // Non-blocking notification error
+    }
+
     return updated;
   }
 
@@ -187,7 +226,7 @@ export class WfhService {
       throw new BadRequestException('Yêu cầu WFH đã được xử lý / Request is already reviewed');
     }
 
-    return this.prisma.wfhRequest.update({
+    const updated = await this.prisma.wfhRequest.update({
       where: { id },
       data: {
         status: RequestStatus.REJECTED,
@@ -196,5 +235,24 @@ export class WfhService {
         rejectionNote: rejectionNote ?? null,
       },
     });
+
+    try {
+      const reviewer = await this.prisma.user.findUnique({
+        where: { id: reviewerId },
+        select: { name: true },
+      });
+      await this.triggers.attendanceRequestReviewed({
+        id: updated.id,
+        userId: updated.userId,
+        type: 'WFH',
+        status: 'REJECTED',
+        reviewerId,
+        reviewerName: reviewer?.name,
+      });
+    } catch (err) {
+      // Non-blocking notification error
+    }
+
+    return updated;
   }
 }

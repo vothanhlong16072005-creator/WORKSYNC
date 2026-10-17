@@ -1,10 +1,10 @@
 import React from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
-import { useAuthStore } from '@/stores/auth.store';
+import { useAuthStore, type UserRole } from '@/stores/auth.store';
 import { ShieldAlert } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
-export type UserRole = 'EMPLOYEE' | 'PM' | 'HR' | 'ADMIN';
+export type { UserRole };
 
 interface PermissionGuardProps {
   allowedRoles: UserRole[];

@@ -891,3 +891,129 @@
     animation-iteration-count: 1 !important;
   }
 }
+
+/* ==========================================================================
+   ENTERPRISE DOCUMENT PRINT & PDF EXPORT STYLES
+   ========================================================================== */
+@media print {
+  @page {
+    size: A4;
+    margin: 20mm 15mm 20mm 15mm;
+  }
+
+  body {
+    background: #ffffff !important;
+    color: #111827 !important;
+    font-size: 11pt;
+    line-height: 1.6;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Hide app shell */
+  aside,
+  header,
+  nav,
+  .sidebar,
+  button,
+  input,
+  .no-print,
+  [role="dialog"],
+  .sonner-toast,
+  .sonner-toaster {
+    display: none !important;
+  }
+
+  /* Expand main container */
+  main,
+  .max-w-7xl,
+  .lg\:col-span-3 {
+    max-width: 100% !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    box-shadow: none !important;
+    border: none !important;
+  }
+
+  /* Hide sidebar panels in editor */
+  .lg\:col-span-1 {
+    display: none !important;
+  }
+
+  /* Prose typography print optimizations */
+  .prose {
+    font-size: 11pt !important;
+    color: #111827 !important;
+    max-width: 100% !important;
+  }
+
+  .prose h1 {
+    font-size: 20pt !important;
+    font-weight: 800 !important;
+    color: #0f172a !important;
+    border-bottom: 2pt solid #0284c7 !important;
+    padding-bottom: 6pt !important;
+    margin-top: 14pt !important;
+    margin-bottom: 12pt !important;
+    page-break-after: avoid;
+  }
+
+  .prose h2 {
+    font-size: 15pt !important;
+    font-weight: 700 !important;
+    color: #1e293b !important;
+    margin-top: 14pt !important;
+    margin-bottom: 8pt !important;
+    page-break-after: avoid;
+  }
+
+  .prose h3 {
+    font-size: 13pt !important;
+    font-weight: 600 !important;
+    color: #334155 !important;
+    page-break-after: avoid;
+  }
+
+  .prose table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+    margin: 12pt 0 !important;
+    page-break-inside: avoid;
+  }
+
+  .prose table th,
+  .prose table td {
+    border: 1px solid #cbd5e1 !important;
+    padding: 6pt 8pt !important;
+    font-size: 10pt !important;
+  }
+
+  .prose table th {
+    background-color: #f1f5f9 !important;
+    font-weight: bold !important;
+  }
+
+  .prose blockquote {
+    border-left: 4px solid #3b82f6 !important;
+    background-color: #f8fafc !important;
+    padding: 8pt 12pt !important;
+    margin: 10pt 0 !important;
+    font-style: italic !important;
+  }
+
+  .prose code {
+    background-color: #f1f5f9 !important;
+    padding: 1pt 3pt !important;
+    border-radius: 3pt !important;
+    font-size: 9.5pt !important;
+  }
+
+  .prose pre {
+    background-color: #0f172a !important;
+    color: #f8fafc !important;
+    padding: 10pt !important;
+    border-radius: 6pt !important;
+    page-break-inside: avoid;
+  }
+}

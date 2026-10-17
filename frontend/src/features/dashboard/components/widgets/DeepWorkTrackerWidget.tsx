@@ -59,35 +59,35 @@ export function DeepWorkTrackerWidget({ urgentTasks = [] }: Props) {
   };
 
   return (
-    <div className="p-5 bg-gradient-to-br from-slate-900 to-slate-950 text-white border-2 border-slate-900 shadow-[4px_4px_0px_0px_rgba(15,23,42,1)] relative overflow-hidden">
-      {/* Decorative background aura */}
-      <div className="absolute top-0 right-0 w-48 h-48 bg-rose-500/10 rounded-full blur-3xl pointer-events-none" />
+    <div className="bg-slate-950 text-white rounded-2xl border border-slate-800 shadow-md p-5 sm:p-6 relative overflow-hidden transition-all hover:border-slate-700">
+      {/* Decorative focus ambient aura */}
+      <div className="absolute top-0 right-0 w-64 h-64 bg-rose-500/10 rounded-full blur-3xl pointer-events-none" />
 
       {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-2 pb-3 mb-4 border-b border-slate-800">
-        <div className="flex items-center gap-2">
-          <span className="p-1.5 bg-rose-600 text-white border border-slate-900 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
+      <div className="flex flex-wrap items-center justify-between gap-3 pb-4 mb-4 border-b border-slate-800/80">
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-xl bg-rose-500/20 text-rose-400 flex items-center justify-center border border-rose-500/30 shadow-xs">
             <Timer className="w-4 h-4" />
-          </span>
+          </div>
           <div>
-            <span className="text-[10px] font-black uppercase tracking-wider text-rose-400">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-rose-400 block">
               Focus Time & Deep Work Tracker
             </span>
-            <h2 className="text-sm font-black uppercase tracking-tight text-white">
+            <h2 className="text-sm font-bold text-white tracking-tight">
               Đồng hồ đếm giờ làm việc tập trung
             </h2>
           </div>
         </div>
 
-        <div className="flex items-center gap-1.5 px-2.5 py-1 bg-slate-800 border border-slate-700 text-xs font-mono font-bold text-slate-300">
+        <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-900 text-xs font-semibold text-slate-300 border border-slate-800">
           <Flame className="w-3.5 h-3.5 text-rose-400" />
           <span>{sessionsCompleted} phiên hoàn tất hôm nay</span>
         </div>
       </div>
 
       {/* Active Task Selector & Info */}
-      <div className="p-3 bg-slate-800/80 border border-slate-700 mb-4">
-        <div className="flex items-center justify-between text-xs mb-1">
+      <div className="p-3.5 bg-slate-900/90 rounded-xl border border-slate-800 mb-4">
+        <div className="flex items-center justify-between text-xs mb-1.5">
           <span className="font-bold text-slate-400 uppercase text-[10px] tracking-wider">
             Đang làm việc sâu trên tác vụ:
           </span>
@@ -95,32 +95,38 @@ export function DeepWorkTrackerWidget({ urgentTasks = [] }: Props) {
             <select
               value={selectedTaskId}
               onChange={(e) => setSelectedTaskId(e.target.value)}
-              className="bg-slate-900 text-slate-200 text-xs border border-slate-600 px-2 py-0.5 focus:outline-none"
+              className="bg-slate-950 text-slate-200 text-xs border border-slate-700 rounded-lg px-2.5 py-1 focus:outline-none focus:ring-1 focus:ring-rose-500"
             >
               {urgentTasks.map((t) => (
                 <option key={t.id} value={t.id}>
-                  {t.id}: {t.title.slice(0, 30)}...
+                  {t.id}: {t.title.slice(0, 32)}...
                 </option>
               ))}
             </select>
           )}
         </div>
 
-        <div className="font-black text-sm text-slate-100 flex items-center gap-2 truncate">
-          <span className="px-1.5 py-0.5 bg-rose-500/20 text-rose-300 border border-rose-500/40 text-[11px] font-mono shrink-0">
+        <div className="font-bold text-sm text-slate-100 flex items-center gap-2 truncate">
+          <span className="px-2 py-0.5 bg-rose-500/20 text-rose-300 border border-rose-500/40 rounded-md text-xs font-mono font-bold shrink-0">
             {selectedTask.id}
           </span>
-          <span className="truncate">{selectedTask.title}</span>
+          <span className="truncate text-slate-200 text-xs sm:text-sm">{selectedTask.title}</span>
         </div>
       </div>
 
       {/* Timer Display & Controls */}
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-4 bg-slate-950 border border-slate-800">
+      <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-4 bg-slate-900/50 rounded-xl border border-slate-800/80">
         <div className="flex items-baseline gap-3">
-          <span className="text-4xl md:text-5xl font-black font-mono tracking-tight text-rose-400">
+          <span className="text-4xl sm:text-5xl font-black font-mono tracking-tight text-rose-400">
             {formatTime(secondsLeft)}
           </span>
-          <span className="text-xs font-bold text-slate-400 uppercase">
+          <span
+            className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold uppercase ${
+              isRunning
+                ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30 animate-pulse'
+                : 'bg-slate-800 text-slate-400 border border-slate-700'
+            }`}
+          >
             {isRunning ? '🔥 Đang chạy' : '⏸️ Tạm dừng'}
           </span>
         </div>
@@ -129,10 +135,10 @@ export function DeepWorkTrackerWidget({ urgentTasks = [] }: Props) {
           <button
             type="button"
             onClick={toggleTimer}
-            className={`flex items-center gap-1.5 px-4 py-2.5 text-xs font-black uppercase tracking-wider border-2 border-slate-900 transition-all ${
+            className={`flex items-center gap-1.5 px-4 py-2.5 text-xs font-bold rounded-xl shadow-xs transition-colors ${
               isRunning
-                ? 'bg-amber-400 hover:bg-amber-300 text-slate-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]'
-                : 'bg-rose-600 hover:bg-rose-500 text-white shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]'
+                ? 'bg-amber-400 hover:bg-amber-300 text-slate-950 font-black'
+                : 'bg-rose-600 hover:bg-rose-500 text-white'
             }`}
           >
             {isRunning ? (
@@ -152,17 +158,18 @@ export function DeepWorkTrackerWidget({ urgentTasks = [] }: Props) {
             type="button"
             onClick={resetTimer}
             title="Đặt lại đồng hồ"
-            className="p-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700"
+            className="p-2.5 rounded-xl border border-slate-700 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors shadow-xs"
           >
             <RotateCcw className="w-4 h-4" />
           </button>
         </div>
       </div>
 
-      <div className="flex items-center justify-between mt-3 text-[11px] font-medium text-slate-400">
-        <span className="flex items-center gap-1">
+      {/* Bottom Hint & Fast Complete */}
+      <div className="flex flex-wrap items-center justify-between gap-2 mt-3 text-xs text-slate-400">
+        <span className="flex items-center gap-1.5">
           <Sparkles className="w-3.5 h-3.5 text-rose-400" />
-          <span>Kỹ thuật Pomodoro chuẩn: 25 phút tập trung + 5 phút nghỉ</span>
+          <span>Kỹ thuật Pomodoro: 25 phút tập trung + 5 phút nghỉ ngắn</span>
         </span>
         <button
           type="button"
@@ -170,9 +177,9 @@ export function DeepWorkTrackerWidget({ urgentTasks = [] }: Props) {
             setSessionsCompleted((prev) => prev + 1);
             toast.success(`Đã đánh dấu hoàn thành 1 chu kỳ Deep Work trên ${selectedTask.id}!`);
           }}
-          className="text-xs font-bold text-emerald-400 hover:underline flex items-center gap-1"
+          className="font-bold text-emerald-400 hover:text-emerald-300 hover:underline flex items-center gap-1 transition-colors"
         >
-          <CheckCircle2 className="w-3.5 h-3.5" />
+          <CheckCircle2 className="w-4 h-4" />
           Đánh dấu xong phiên
         </button>
       </div>

@@ -5,7 +5,10 @@
     "all_my_tasks": "Tất cả việc của tôi",
     "personal_tasks": "Việc cá nhân",
     "attendance": "CHẤM CÔNG",
+    "projects": "DỰ ÁN & SPRINTS",
+    "quick_tasks": "GIAO VIỆC NHANH",
     "meetings": "CUỘC HỌP",
+    "notifications": "THÔNG BÁO",
     "documents": "TÀI LIỆU",
     "settings": "CÀI ĐẶT"
   },
@@ -272,5 +275,45 @@
       "ip_ranges": "Dải IP nội bộ",
       "work_hours": "Giờ làm việc"
     }
+  },
+  "projects": {
+    "back_to_list": "Quay lại danh sách dự án",
+    "open_kanban": "Mở Bảng Việc Kanban (/tasks)",
+    "not_found": "Không tìm thấy dự án",
+    "not_found_desc": "Dự án không tồn tại hoặc bạn không có quyền xem.",
+    "team_project": "Dự án nhóm",
+    "personal_project": "Dự án cá nhân",
+    "department": "Phòng: {{name}}",
+    "pm": "Chủ nhiệm PM",
+    "unassigned_pm": "Chưa chỉ định",
+    "active_sprint": "Sprint Đang Chạy (Active Sprint)",
+    "view_sprint_burndown": "Xem Sprint & Burndown",
+    "tabs": {
+      "overview": "Tổng Quan",
+      "kanban": "Bảng Kanban",
+      "all_tasks": "Tất Cả Công Việc",
+      "backlog": "Backlog",
+      "sprints": "Sprints",
+      "members": "Thành Viên",
+      "settings": "Cài Đặt"
+    },
+    "stats": {
+      "total_tasks": "TỔNG NHIỆM VỤ",
+      "in_all_project": "Trong toàn bộ dự án",
+      "completed": "ĐÃ HOÀN THÀNH",
+      "progress_rate": "Đạt {{rate}}% tiến độ",
+      "in_progress": "ĐANG THỰC HIỆN",
+      "in_process": "Đang trong tiến trình",
+      "blocked": "ĐIỂM NGHẼN / BLOCKED",
+      "needs_support": "Cần hỗ trợ gỡ vướng"
+    },
+    "continuous_flow_title": "QUY TRÌNH KANBAN LIÊN TỤC (CONTINUOUS FLOW)",
+    "continuous_flow_heading": "Bảng Kanban Dự Án & Quản Trị WIP Limit",
+    "continuous_flow_desc": "Dự án áp dụng cơ chế luồng công việc liên tục, không chia Sprint cố định. Bạn có thể tương tác trực tiếp với các task trên Bảng Kanban dưới đây.",
+    "switch_to_kanban_tab": "Mở Tab Bảng Kanban",
+    "team_members": "Đội Ngũ Thực Hiện ({{count}})",
+    "add_member": "Thêm Thành Viên",
+    "remove_member_confirm": "Bạn có chắc muốn xóa thành viên này khỏi dự án?",
+    "delete_project_confirm": "Bạn có chắc chắn muốn xóa dự án này? Thao tác này không thể hoàn tác."
   }
 }

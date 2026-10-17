@@ -58,15 +58,17 @@ export function AttendancePage() {
 
   const { user } = useAuthStore();
   const userRole = (user?.role || 'EMPLOYEE') as UserRole;
-  const isManagerOrAdmin = userRole === 'ADMIN' || userRole === 'HR' || userRole === 'PM';
+  const isDepartmentHead = userRole === 'DEPARTMENT_HEAD';
+  const isApprover = userRole === 'ADMIN' || userRole === 'HR' || userRole === 'DEPARTMENT_HEAD';
   const isHr = userRole === 'HR';
   const isAdmin = userRole === 'ADMIN';
   const isPm = userRole === 'PM';
+  const isManagerOrAdmin = isApprover || isPm;
 
   // Default initial active tab
   const getInitialTab = (): TabKey => {
     if (userRole === 'ADMIN') return 'settings';
-    if (userRole === 'HR') return 'approvals';
+    if (userRole === 'HR' || userRole === 'DEPARTMENT_HEAD') return 'approvals';
     if (userRole === 'PM') return 'team';
     return 'today';
   };
@@ -77,7 +79,7 @@ export function AttendancePage() {
   useEffect(() => {
     if (userRole === 'ADMIN') {
       setActiveTab('settings');
-    } else if (userRole === 'HR') {
+    } else if (userRole === 'HR' || userRole === 'DEPARTMENT_HEAD') {
       setActiveTab('approvals');
     } else if (userRole === 'PM') {
       setActiveTab('team');
@@ -144,10 +146,10 @@ export function AttendancePage() {
     fetchLeaveBalance();
     fetchHistory();
     fetchMyRequests();
-    if (isManagerOrAdmin) {
+    if (isApprover) {
       fetchPendingApprovals();
     }
-  }, [fetchToday, fetchLeaveBalance, fetchHistory, fetchMyRequests, fetchPendingApprovals, isManagerOrAdmin]);
+  }, [fetchToday, fetchLeaveBalance, fetchHistory, fetchMyRequests, fetchPendingApprovals, isApprover]);
 
   // Check today's break status on mount
   useEffect(() => {
@@ -336,22 +338,47 @@ export function AttendancePage() {
               </>
             )}
 
-            {/* PM SPECIFIC NAVIGATION */}
+            {/* DEPARTMENT_HEAD SPECIFIC NAVIGATION */}
+            {isDepartmentHead && (
+              <>
+                <TabButton
+                  active={activeTab === 'approvals'}
+                  onClick={() => setActiveTab('approvals')}
+                  icon={<FileCheck2 className="w-3.5 h-3.5" />}
+                  label={isVi ? 'Phê duyệt phòng ban' : 'Department Approvals'}
+                  badge={totalPending}
+                  badgeColor="rose"
+                />
+                <TabButton
+                  active={activeTab === 'team'}
+                  onClick={() => setActiveTab('team')}
+                  icon={<Users2 className="w-3.5 h-3.5" />}
+                  label={isVi ? 'Quân số phòng ban' : 'Department Roster'}
+                />
+                {/* Bauhaus Separator + Prominently Visible My Attendance Tab */}
+                <div className="h-4 w-px bg-slate-300 mx-1.5 self-center" />
+                <button
+                  onClick={() => setActiveTab('today')}
+                  className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap shadow-2xs ${
+                    activeTab === 'today' || activeTab === 'history' || activeTab === 'my-requests' || activeTab === 'heatmap' || activeTab === 'stats'
+                      ? 'bg-blue-600 text-white shadow-sm ring-2 ring-blue-600/30'
+                      : 'text-blue-700 bg-blue-50/90 hover:bg-blue-100/80 border border-blue-200'
+                  }`}
+                >
+                  <UserCheck className="w-3.5 h-3.5" />
+                  <span>{isVi ? 'Chấm công của tôi' : 'My Attendance'}</span>
+                </button>
+              </>
+            )}
+
+            {/* PM SPECIFIC NAVIGATION (Read-only Team Attendance + My Attendance) */}
             {isPm && (
               <>
                 <TabButton
                   active={activeTab === 'team'}
                   onClick={() => setActiveTab('team')}
                   icon={<Users2 className="w-3.5 h-3.5" />}
-                  label={isVi ? 'Chấm công Nhóm' : 'Team Attendance'}
-                />
-                <TabButton
-                  active={activeTab === 'approvals'}
-                  onClick={() => setActiveTab('approvals')}
-                  icon={<FileCheck2 className="w-3.5 h-3.5" />}
-                  label={isVi ? 'Duyệt đơn dự án' : 'Approvals'}
-                  badge={totalPending}
-                  badgeColor="rose"
+                  label={isVi ? 'Hiện diện Nhóm dự án' : 'Team Attendance'}
                 />
                 {/* Bauhaus Separator + Prominently Visible My Attendance Tab */}
                 <div className="h-4 w-px bg-slate-300 mx-1.5 self-center" />
@@ -729,8 +756,8 @@ export function AttendancePage() {
         />
       )}
 
-      {/* Tab: Approvals */}
-      {activeTab === 'approvals' && isManagerOrAdmin && (
+      {/* Tab: Approvals (ADMIN, HR, DEPARTMENT_HEAD only — PM does not approve) */}
+      {activeTab === 'approvals' && isApprover && (
         <ApprovalQueueView
           pendingWfh={pendingWfh}
           pendingLeaves={pendingLeaves}
@@ -739,9 +766,9 @@ export function AttendancePage() {
         />
       )}
 
-      {/* Tab: Team Attendance (PM / HR / ADMIN) */}
+      {/* Tab: Team Attendance (PM, HR, ADMIN, DEPARTMENT_HEAD) */}
       {activeTab === 'team' && (
-        <PermissionGuard allowedRoles={['PM', 'HR', 'ADMIN']} redirectOnDeny={false}>
+        <PermissionGuard allowedRoles={['PM', 'HR', 'ADMIN', 'DEPARTMENT_HEAD']} redirectOnDeny={false}>
           <div className="space-y-4">
             <AttendanceTeamView />
           </div>

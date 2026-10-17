@@ -7,6 +7,7 @@ import { EmployeeDashboardLayout } from './layouts/EmployeeDashboardLayout';
 import { PmDashboardLayout } from './layouts/PmDashboardLayout';
 import { HrDashboardLayout } from './layouts/HrDashboardLayout';
 import { AdminDashboardLayout } from './layouts/AdminDashboardLayout';
+import { DepartmentHeadDashboardLayout } from './layouts/DepartmentHeadDashboardLayout';
 import type {
   EmployeeDashboardData,
   PmDashboardData,
@@ -23,6 +24,19 @@ export function DashboardPage() {
     fetchDashboard('me');
     return () => reset();
   }, [fetchDashboard, reset]);
+
+  // Department Head has dedicated layout
+  if (user?.role === 'DEPARTMENT_HEAD') {
+    const initialData = state.status === 'success' ? (state.data as any) : null;
+    return (
+      <div className="min-h-screen bg-slate-50/60 p-4 sm:p-6 lg:p-8 space-y-6 max-w-[1520px] mx-auto">
+        <DepartmentHeadDashboardLayout
+          userName={user.name ?? 'Trưởng phòng'}
+          initialData={initialData}
+        />
+      </div>
+    );
+  }
 
   if (state.status === 'loading') {
     return (

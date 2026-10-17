@@ -10,12 +10,16 @@ import {
   ChevronLeft,
   ChevronDown,
   Layers,
+  FolderKanban,
   CalendarClock,
+  Zap,
+  Bell,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { useProjectStore } from '@/stores/project.store';
 import { useAuthStore } from '@/stores/auth.store';
+import { useNotificationsStore } from '@/features/notifications/stores/notifications.store';
 import { useTranslation } from 'react-i18next';
 
 interface SidebarProps {
@@ -28,19 +32,34 @@ export default function Sidebar({ open, setOpen }: SidebarProps) {
   const location = useLocation();
   const { projects, loadMine } = useProjectStore();
   const { user } = useAuthStore();
+  const { unreadCount } = useNotificationsStore();
   const [tasksExpanded, setTasksExpanded] = useState(true);
 
   const role = user?.role;
 
   const otherNavItems = [
+    { icon: FolderKanban, label: t('nav.projects', 'Dự án & Sprints'), path: '/projects' },
     { icon: CalendarClock, label: t('nav.attendance', 'Chấm công'), path: '/attendance' },
+    {
+      icon: Zap,
+      label: t('nav.quick_tasks', 'Giao việc nhanh'),
+      path: '/quick-tasks',
+      // Chỉ PM/DEPT_HEAD/Admin mới thấy menu này (EMPLOYEE vẫn xem được task mình nhận nhưng mặc định ẩn)
+      roles: ['PM', 'DEPARTMENT_HEAD', 'ADMIN', 'EMPLOYEE'],
+    },
     { icon: Video, label: t('nav.meetings'), path: '/meetings' },
+    {
+      icon: Bell,
+      label: t('nav.notifications', 'Thông báo'),
+      path: '/notifications',
+      badge: unreadCount > 0 ? unreadCount : undefined,
+    },
     { icon: FileText, label: t('nav.documents'), path: '/documents' },
     {
       icon: Settings,
       label: t('nav.settings', 'Cài đặt hệ thống'),
       path: '/settings',
-      roles: ['ADMIN', 'HR'], // Hidden for EMPLOYEE and PM
+      roles: ['ADMIN', 'HR'], // Hidden for EMPLOYEE, PM, and DEPARTMENT_HEAD
     },
   ];
 
@@ -81,10 +100,7 @@ export default function Sidebar({ open, setOpen }: SidebarProps) {
         {/* Brand Header */}
         <div className="flex h-20 items-center justify-between px-6 border-b-2 border-slate-200 relative">
           <div className="flex items-center gap-3 font-black text-2xl text-slate-900 uppercase">
-            <div className="h-10 w-10 flex items-center justify-center bg-primary text-white border-2 border-slate-900 shadow-[2px_2px_0px_0px_rgba(15,23,42,1)] relative">
-              W
-              <div className="absolute -top-1 -right-1 h-3 w-3 rounded-full bg-accent border-2 border-slate-900"></div>
-            </div>
+            <img src="/logo.svg" alt="WorkSync" className="h-10 w-10 object-contain drop-shadow-xs" />
             {open && (
               <span className="tracking-tight">
                 Work<span className="text-primary">Sync</span>
@@ -283,7 +299,12 @@ export default function Sidebar({ open, setOpen }: SidebarProps) {
                       isActive ? "scale-110" : "group-hover:scale-110"
                     )}
                   />
-                  {open && <span className="tracking-widest">{item.label}</span>}
+                  {open && <span className="tracking-widest flex-1">{item.label}</span>}
+                  {open && item.badge !== undefined && (
+                    <span className="ml-auto inline-flex items-center justify-center min-w-4 h-4 px-1 text-[10px] font-black text-white bg-rose-600 border border-slate-900 shadow-[1px_1px_0px_0px_rgba(15,23,42,1)]">
+                      {item.badge}
+                    </span>
+                  )}
                 </>
               )}
             </NavLink>

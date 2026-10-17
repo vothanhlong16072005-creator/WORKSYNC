@@ -300,7 +300,7 @@ describe('TasksService.moveOnBoard', () => {
     expect(accessService.requireTaskMovePermission).toHaveBeenCalledWith('task-target', { id: 'user-1', role: Role.EMPLOYEE });
     // destinationIndex = 0 puts task-target first: new pos 1024, task-a: 2048, task-b: 3072
     expect(updateCalls).toEqual([
-      { id: 'task-target', data: { status: TaskStatus.IN_PROGRESS, position: 1024 } },
+      { id: 'task-target', data: { status: TaskStatus.IN_PROGRESS, position: 1024, completedAt: null, completedById: null } },
       { id: 'task-a', data: { position: 2048 } },
       { id: 'task-b', data: { position: 3072 } },
     ]);
