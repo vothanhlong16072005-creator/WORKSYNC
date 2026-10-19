@@ -30,4 +30,9 @@ export class UsersController {
       departmentId: req.user.departmentId ?? null,
     });
   }
+
+  @Get()
+  async findAll(): Promise<DepartmentUserSummary[]> {
+    return this.usersService.findAllActive();
+  }
 }

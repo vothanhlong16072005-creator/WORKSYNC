@@ -663,6 +663,12 @@ export class MeetingsService {
         project: { select: { id: true, name: true } },
         department: { select: { id: true, name: true } },
         createdBy: { select: { id: true, name: true } },
+        minutes: true,
+        linkedDocuments: {
+          include: {
+            attachments: true,
+          },
+        },
       },
     });
 
@@ -737,9 +743,12 @@ export class MeetingsService {
         startTime: meeting.startTime,
         endTime: meeting.endTime,
         roomCode: meeting.roomCode,
+        description: meeting.description,
         project: meeting.project,
         department: meeting.department,
         createdBy: meeting.createdBy,
+        minutes: meeting.minutes,
+        documents: meeting.linkedDocuments,
       },
       metrics: {
         totalInvited,

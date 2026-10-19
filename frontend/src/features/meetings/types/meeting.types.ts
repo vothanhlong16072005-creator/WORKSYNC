@@ -34,8 +34,50 @@ export interface MeetingMinute {
   id: string;
   meetingId: string;
   content: string;
+  rawTranscript?: string | null;
+  isTranscribing?: boolean;
+  aiSummary?: string | null;
+  actionItems?: ActionItem[] | null;
+  decisions?: string[] | null;
+  risksAndQuestions?: { risks: string[]; openQuestions: string[] } | null;
+  aiGeneratedAt?: string | null;
+  aiModel?: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface ActionItem {
+  task: string;
+  assignee?: string | null;
+  assigneeId?: string | null;
+  deadline?: string | null;
+  priority?: 'HIGH' | 'MEDIUM' | 'LOW';
+  confidence?: number;
+}
+
+export interface MeetingSummaryResult {
+  hasSummary: boolean;
+  summary: string;
+  actionItems: ActionItem[];
+  decisions: string[];
+  risksAndQuestions: {
+    risks: string[];
+    openQuestions: string[];
+  };
+  model?: string;
+  tokensUsed?: number;
+  generatedAt?: string;
+  rawTranscript?: string | null;
+}
+
+export interface MeetingTranscriptChunk {
+  id: string;
+  meetingId: string;
+  speakerId: string;
+  speakerName: string;
+  speakerRole?: string | null;
+  text: string;
+  timestamp: string;
 }
 
 export interface Meeting {
@@ -137,6 +179,9 @@ export interface AttendanceReportData {
     project?: { id: string; name: string; code?: string | null } | null;
     department?: { id: string; name: string } | null;
     createdBy: { id: string; name: string };
+    description?: string | null;
+    minutes?: any;
+    documents?: any[];
   };
   metrics: AttendanceReportMetric;
   details: AttendanceReportDetail[];
@@ -150,6 +195,12 @@ export interface ChatMessage {
     id: string;
     name: string;
     avatar?: string;
+  };
+  attachment?: {
+    name: string;
+    url: string;
+    size?: number;
+    type?: string;
   };
   createdAt: string;
 }

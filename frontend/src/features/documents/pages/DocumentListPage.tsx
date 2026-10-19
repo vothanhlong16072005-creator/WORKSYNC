@@ -10,6 +10,7 @@ import {
   User,
   ShieldCheck,
   Loader2,
+  Video,
 } from 'lucide-react';
 import { useDocumentStore } from '../stores/document.store';
 import { DocumentCard } from '../components/DocumentCard';
@@ -17,10 +18,15 @@ import { DocumentTemplatePickerModal } from '../components/DocumentTemplatePicke
 import type { DocumentScope } from '../types/document.types';
 import { toast } from 'sonner';
 
+type ExtendedScope = DocumentScope | 'ALL' | 'MEETINGS';
+
 export const DocumentListPage: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const initialScope = (searchParams.get('scope') as DocumentScope) || 'ALL';
+  const initialTab = searchParams.get('tab') === 'meetings' ? 'MEETINGS' : initialScope;
+
+  const [currentTab, setCurrentTab] = useState<ExtendedScope>(initialTab);
 
   const {
     documents,
@@ -53,12 +59,19 @@ export const DocumentListPage: React.FC = () => {
     fetchDocuments();
   }, [filterScope]);
 
-  const handleTabChange = (scope: DocumentScope | 'ALL') => {
-    setFilterScope(scope);
-    if (scope === 'ALL') {
-      searchParams.delete('scope');
+  const handleTabChange = (scope: ExtendedScope) => {
+    setCurrentTab(scope);
+    if (scope === 'MEETINGS') {
+      setFilterScope('ALL');
+      searchParams.set('tab', 'meetings');
     } else {
-      searchParams.set('scope', scope);
+      setFilterScope(scope);
+      searchParams.delete('tab');
+      if (scope === 'ALL') {
+        searchParams.delete('scope');
+      } else {
+        searchParams.set('scope', scope);
+      }
     }
     setSearchParams(searchParams);
   };
@@ -103,13 +116,21 @@ export const DocumentListPage: React.FC = () => {
     }
   };
 
-  const tabs: { label: string; value: DocumentScope | 'ALL'; icon: React.ReactNode }[] = [
+  const tabs: { label: string; value: ExtendedScope; icon: React.ReactNode }[] = [
     { label: 'Tất cả', value: 'ALL', icon: <FileText className="w-4 h-4" /> },
+    { label: 'Biên bản cuộc họp', value: 'MEETINGS', icon: <Video className="w-4 h-4 text-purple-600" /> },
     { label: 'Cá nhân', value: 'PERSONAL', icon: <User className="w-4 h-4" /> },
     { label: 'Dự án', value: 'PROJECT', icon: <FolderKanban className="w-4 h-4" /> },
     { label: 'Phòng ban', value: 'DEPARTMENT', icon: <ShieldCheck className="w-4 h-4" /> },
     { label: 'Công ty', value: 'COMPANY', icon: <Building className="w-4 h-4" /> },
   ];
+
+  const displayedDocuments =
+    currentTab === 'MEETINGS'
+      ? documents.filter(
+          (doc) => doc.templateKey === 'meeting_minutes' || doc.linkedMeetingId != null,
+        )
+      : documents;
 
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">
@@ -154,7 +175,7 @@ export const DocumentListPage: React.FC = () => {
         {/* Scope Tabs */}
         <div className="flex items-center gap-1.5 p-1 bg-slate-100 dark:bg-slate-850 rounded-2xl overflow-x-auto">
           {tabs.map((tab) => {
-            const isActive = filterScope === tab.value;
+            const isActive = currentTab === tab.value;
             return (
               <button
                 key={tab.value}
@@ -192,27 +213,31 @@ export const DocumentListPage: React.FC = () => {
           <Loader2 className="w-8 h-8 animate-spin text-blue-600 mb-2" />
           <p className="text-sm">Đang tải danh sách tài liệu...</p>
         </div>
-      ) : documents.length === 0 ? (
+      ) : displayedDocuments.length === 0 ? (
         <div className="text-center py-20 px-4 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
           <FileText className="w-12 h-12 text-slate-300 dark:text-slate-700 mx-auto mb-3" />
           <h3 className="text-base font-semibold text-slate-800 dark:text-slate-200 mb-1">
             Không tìm thấy tài liệu nào
           </h3>
           <p className="text-xs text-slate-500 max-w-sm mx-auto mb-5">
-            Bắt đầu tài liệu đầu tiên bằng cách chọn tạo mới hoặc khởi tạo nhanh từ các mẫu chuẩn có sẵn.
+            {currentTab === 'MEETINGS'
+              ? 'Chưa có biên bản cuộc họp nào được xuất sang trung tâm tài liệu.'
+              : 'Bắt đầu tài liệu đầu tiên bằng cách chọn tạo mới hoặc khởi tạo nhanh từ các mẫu chuẩn có sẵn.'}
           </p>
-          <button
-            type="button"
-            onClick={handleCreateBlank}
-            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 transition-all"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            Tạo tài liệu đầu tiên
-          </button>
+          {currentTab !== 'MEETINGS' && (
+            <button
+              type="button"
+              onClick={handleCreateBlank}
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 transition-all"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              Tạo tài liệu đầu tiên
+            </button>
+          )}
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-          {documents.map((doc) => (
+          {displayedDocuments.map((doc) => (
             <DocumentCard key={doc.id} document={doc} />
           ))}
         </div>

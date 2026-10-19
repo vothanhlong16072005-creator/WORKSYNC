@@ -18,10 +18,12 @@ import { NotificationsPage } from '@/features/notifications/pages/NotificationsP
 import { DocumentListPage } from '@/features/documents/pages/DocumentListPage';
 import { DocumentEditorPage } from '@/features/documents/pages/DocumentEditorPage';
 import { CompanyDocumentsPage } from '@/features/documents/pages/CompanyDocumentsPage';
+import { PersistentCallManager } from '@/features/meetings/components/PersistentCallManager';
 
 function App() {
   return (
     <BrowserRouter>
+      <PersistentCallManager />
       <Toaster 
         position="top-right" 
         closeButton 

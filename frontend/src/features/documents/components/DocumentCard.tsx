@@ -9,6 +9,7 @@ import {
   User,
   ShieldCheck,
   CheckCircle2,
+  Video,
 } from 'lucide-react';
 import type { DocumentItem, DocumentScope, DocumentType } from '../types/document.types';
 
@@ -93,6 +94,11 @@ export const DocumentCard: React.FC<DocumentCardProps> = ({ document }) => {
         <div className="flex flex-wrap items-center gap-1.5 mb-3">
           {getScopeBadge(document.scope)}
           {getTypeBadge(document.type)}
+          {(document.templateKey === 'meeting_minutes' || document.linkedMeetingId) && (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-purple-50 text-purple-700 dark:bg-purple-950/60 dark:text-purple-300 border border-purple-200/60">
+              <Video className="w-3 h-3 text-purple-600" /> Biên bản họp
+            </span>
+          )}
           {document.project && (
             <span className="inline-flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400 truncate max-w-[150px]">
               <span

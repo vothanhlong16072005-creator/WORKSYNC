@@ -620,6 +620,7 @@ model Meeting {
   createdBy    User          @relation("MeetingCreator", fields: [createdById], references: [id])
   attendees          MeetingAttendee[]
   minutes            MeetingMinute?
+  transcriptChunks   MeetingTranscriptChunk[]
   linkedDocuments    Document[]    @relation("DocumentLinkedMeeting")
   rsvpReminderSentAt DateTime?
   createdAt          DateTime      @default(now())
@@ -654,7 +655,9 @@ model MeetingMinute {
   meeting   Meeting  @relation(fields: [meetingId], references: [id], onDelete: Cascade)
   content   String   @db.Text
 
-  // ⭐ M5.1 — AI Summary fields (added 2026-10-18)
+  // ⭐ M5.1 — AI Summary & Live Transcript fields
+  rawTranscript       String?   @db.Text
+  isTranscribing      Boolean   @default(false)
   aiSummary           String?   @db.Text
   actionItems         Json?
   decisions           Json?
@@ -667,6 +670,19 @@ model MeetingMinute {
   updatedAt DateTime @updatedAt
 
   @@index([meetingId])
+}
+
+model MeetingTranscriptChunk {
+  id          String   @id @default(cuid())
+  meetingId   String
+  meeting     Meeting  @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  speakerId   String
+  speakerName String
+  speakerRole String?
+  text        String   @db.Text
+  timestamp   DateTime @default(now())
+
+  @@index([meetingId, timestamp])
 }
 
 model Document {

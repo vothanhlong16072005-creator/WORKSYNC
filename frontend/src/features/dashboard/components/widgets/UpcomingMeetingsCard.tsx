@@ -1,6 +1,6 @@
+import { useNavigate } from 'react-router-dom';
 import { Video, Calendar } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { toast } from 'sonner';
 import type { UpcomingMeeting } from '../../types/dashboard.types';
 
 interface Props {
@@ -9,6 +9,7 @@ interface Props {
 
 export function UpcomingMeetingsCard({ meetings }: Props) {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const currentMeet = meetings?.[0] ?? {
     id: 'm1',
     title: 'Daily Standup at 09:00 AM',
@@ -17,7 +18,11 @@ export function UpcomingMeetingsCard({ meetings }: Props) {
   };
 
   const handleJoin = () => {
-    toast.success(t('dashboard.joining_call', 'Đang kết nối phòng họp WebRTC...'));
+    if (currentMeet.id && currentMeet.id !== 'm1') {
+      navigate(`/meetings/${currentMeet.id}/prepare`);
+    } else {
+      navigate('/meetings');
+    }
   };
 
   return (

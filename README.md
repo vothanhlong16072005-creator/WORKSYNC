@@ -18,6 +18,9 @@ Du an duoc to chuc theo mo hinh Monorepo dong bo giua Backend va Frontend:
 
 ## 2. Tien do trien khai hien tai (Project Progress)
 
+> ⚠️ **LƯU Ý QUAN TRỌNG:**
+> Tính năng **Cuộc họp trực tuyến (Meetings & WebRTC - M5/M5.1/M5.2)** hiện tại **CHƯA ĐƯỢC TEST VÀ CHỮA LỖI HẾT TOÀN DIỆN** các trường hợp biên (edge-cases) trên môi trường thực tế đa thiết bị. Cần tiếp tục kiểm thử thực tế và hoàn thiện trước khi nghiệm thu sản xuất.
+
 Bang theo doi tien do cac phan he theo lo trinh phat trien:
 
 | Ma Milestone | Ten phan he / Module | Trang thai | Chi tiet thuc hien |
@@ -26,12 +29,12 @@ Bang theo doi tien do cac phan he theo lo trinh phat trien:
 | M1 | Xac thuc va Quan ly tai khoan | Hoan thanh | JWT, Google OAuth 2.0, tu dong khoi tao du an ca nhan |
 | M3 | Quan ly Du an va Cong viec (CRUD API) | Hoan thanh | Scoped task query (mine/project), phan quyen truy cap, IDOR protection |
 | M4 | Bang Kanban va Chi tiet cong viec | Hoan thanh | Keo tha task, modal 2 cot Linear/Jira, phan cap mau uu tien, da ngon ngu |
-| M8 | Bang dieu khien tong quan (Dashboard) | Dang chuan bi | Cac widget thong ke KPI, bieu do phan bo cong viec va tien do |
-| M2 | Diem danh va Cham cong thong minh | Chua bat dau | Check-in/out qua IP/GPS, don tu WFH va nghi phep |
-| M5 | Cuoc hop truc tuyen va WebRTC | Chua bat dau | Len lich cuoc hop, phong hop video call truc tuyen |
-| M6 | Quan ly Tai lieu du an (Documents) | Chua bat dau | Trinh soan thao van ban rich-text |
-| M7 | Tich hop Tro ly AI | Chua bat dau | Tom tat tien do, tao bao cao tu dong |
-| M9 | He thong Thong bao thoi gian thuc | Chua bat dau | Thong bao deadline, phan cong qua Socket.IO |
+| M8 | Bang dieu khien tong quan (Dashboard) | Hoan thanh | Dashboard theo Role (Admin, HR, PM, Employee, Dept Head), Recharts analytics |
+| M2 | Diem danh va Cham cong thong minh | Hoan thanh | Check-in/out GPS/WiFi, don tu WFH, nghi phep, OT, duyet don cap phong ban |
+| M5 | Cuoc hop truc tuyen va WebRTC | Can kiem thu them | Mesh WebRTC, chia se man hinh, phong chuan bi Bauhaus, chat dinh kem file, xuat bao cao Word/CSV |
+| M5.1 | Tri tue Cuoc hop (Meeting Intelligence) | Hoan thanh (Ky thuat) | Live Speech Streaming, tich hop Gemini 1.5 Flash tom tat bien ban va trich xuat Action Items |
+| M6 | Quan ly Tai lieu du an (Documents) | Hoan thanh | Trinh soan thao Tiptap rich-text, phan quyen 4 scopes, AI tom tat, xuat PDF/Docx |
+| M9 | He thong Thong bao thoi gian thuc | Hoan thanh | Socket.IO real-time notification, Web Push (VAPID RFC 8292), cron nhac viec |
 
 ---
 

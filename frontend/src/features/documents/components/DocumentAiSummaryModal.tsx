@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { X, Sparkles, Loader2, Copy, Check } from 'lucide-react';
 import { toast } from 'sonner';
+import { AiFormattedContent } from '@/components/ui/AiFormattedContent';
 
 interface DocumentAiSummaryModalProps {
   isOpen: boolean;
@@ -55,7 +56,7 @@ export const DocumentAiSummaryModal: React.FC<DocumentAiSummaryModalProps> = ({
             </div>
             <div>
               <h2 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                Trợ lý AI Tóm tắt (Gemini 1.5 Flash)
+                Trợ lý AI Tóm tắt WorkSync
               </h2>
               <p className="text-xs text-slate-500 dark:text-slate-400 truncate max-w-md">
                 {documentTitle}
@@ -87,9 +88,7 @@ export const DocumentAiSummaryModal: React.FC<DocumentAiSummaryModalProps> = ({
                   {copied ? 'Đã sao chép' : 'Sao chép'}
                 </button>
               </div>
-              <div className="text-sm text-slate-800 dark:text-slate-200 leading-relaxed whitespace-pre-line">
-                {currentSummary}
-              </div>
+              <AiFormattedContent content={currentSummary} className="mt-2" />
             </div>
           ) : (
             <div className="text-center py-10 px-4">
@@ -98,7 +97,7 @@ export const DocumentAiSummaryModal: React.FC<DocumentAiSummaryModalProps> = ({
                 Tài liệu chưa có tóm tắt AI
               </h3>
               <p className="text-xs text-slate-500 max-w-md mx-auto mb-5">
-                Sử dụng Gemini 1.5 Flash để tự động đọc toàn bộ nội dung tài liệu, rút ra các quyết định quan trọng và danh sách hành động chỉ trong vài giây.
+                Tự động đọc toàn bộ nội dung tài liệu, rút ra các quyết định quan trọng và danh sách hành động chỉ trong vài giây.
               </p>
               <button
                 type="button"

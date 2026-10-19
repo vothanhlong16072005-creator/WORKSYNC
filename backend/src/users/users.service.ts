@@ -103,4 +103,20 @@ export class UsersService {
       orderBy: { name: 'asc' },
     });
   }
+
+  async findAllActive(): Promise<DepartmentUserSummary[]> {
+    return this.prisma.user.findMany({
+      where: { status: 'ACTIVE', deletedAt: null },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        avatar: true,
+        position: true,
+        role: true,
+        departmentId: true,
+      },
+      orderBy: { name: 'asc' },
+    });
+  }
 }

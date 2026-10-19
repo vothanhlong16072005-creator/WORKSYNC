@@ -26,6 +26,7 @@ import { SaveMinutesDto, SaveMinutesSchema } from './dto/save-minutes.dto.js';
 import { UpdateMeetingDto, UpdateMeetingSchema } from './dto/update-meeting.dto.js';
 import { MeetingsService } from './meetings.service.js';
 import { MeetingAiService } from './meeting-ai.service.js';
+import { MeetingsGateway } from './meetings.gateway.js';
 
 /**
  * Safely parse a Zod schema and convert ZodError → 400 BadRequest.
@@ -57,6 +58,7 @@ export class MeetingsController {
   constructor(
     private readonly meetingsService: MeetingsService,
     private readonly meetingAiService: MeetingAiService,
+    private readonly meetingsGateway: MeetingsGateway,
   ) {}
 
   private extractActor(req: AuthenticatedRequest): CurrentActor {
@@ -216,18 +218,51 @@ export class MeetingsController {
   }
 
   /**
-   * 14. POST /api/meetings/:id/ai-summary/generate — Generate hoặc regenerate
-   * Chỉ PM creator / DEPT_HEAD (cùng phòng) / Admin
+   * 14. GET /api/meetings/:id/transcripts — Lấy lịch sử transcript chunks của cuộc họp
+   */
+  @Get(':id/transcripts')
+  async getTranscripts(@Param('id') id: string, @Req() req: AuthenticatedRequest) {
+    const actor = this.extractActor(req);
+    await this.meetingsService.findOne(id, actor);
+    return this.meetingAiService.getTranscripts(id);
+  }
+
+  /**
+   * 15. POST /api/meetings/:id/ai-summary/generate — Generate hoặc regenerate
    */
   @Post(':id/ai-summary/generate')
-  async generateAiSummary(@Param('id') id: string, @Req() req: AuthenticatedRequest) {
+  async generateAiSummary(
+    @Param('id') id: string,
+    @Body() body: { language?: 'VI' | 'EN' },
+    @Req() req: AuthenticatedRequest,
+  ) {
     const actor = this.extractActor(req);
     // Verify access
     const meeting = await this.meetingsService.findOne(id, actor);
-    // RBAC: chỉ creator hoặc Admin
-    if (meeting.createdById !== actor.id && actor.role !== 'ADMIN') {
-      throw new ForbiddenException('Chỉ người tạo cuộc họp hoặc Admin mới có thể tạo AI summary');
+    // Cho phép Creator, PM hoặc Admin tạo tóm tắt
+    if (meeting.createdById !== actor.id && actor.role !== 'ADMIN' && actor.role !== 'PM' && actor.role !== 'DEPARTMENT_HEAD') {
+      throw new ForbiddenException('Bạn không có quyền yêu cầu tạo AI summary cho cuộc họp này');
     }
-    return this.meetingAiService.generateSummary(id);
+    return this.meetingAiService.generateSummary(id, { language: body?.language });
+  }
+
+  /**
+   * 16. POST /api/meetings/:id/export-doc — Xuất biên bản AI thành tài liệu trong ClickUp Docs
+   */
+  @Post(':id/export-doc')
+  async exportToDocument(@Param('id') id: string, @Req() req: AuthenticatedRequest) {
+    const actor = this.extractActor(req);
+    await this.meetingsService.findOne(id, actor);
+    return this.meetingAiService.exportToDocument(id, actor.id);
+  }
+
+  /**
+   * 17. GET /api/meetings/:id/chat — Lấy lịch sử chat và tài liệu đã gửi trong phòng họp
+   */
+  @Get(':id/chat')
+  async getChatHistory(@Param('id') id: string, @Req() req: AuthenticatedRequest): Promise<any> {
+    const actor = this.extractActor(req);
+    await this.meetingsService.findOne(id, actor);
+    return this.meetingsGateway.getMeetingChatHistory(id);
   }
 }

@@ -43,6 +43,12 @@ export class MeetingsGateway implements OnGatewayConnection, OnGatewayDisconnect
   // meetingId -> Map<socketId, RoomParticipant>
   private readonly roomParticipants = new Map<string, Map<string, RoomParticipant>>();
 
+  // meetingId -> Array of chat messages for late joiners (Question 4)
+  private readonly roomChatHistory = new Map<
+    string,
+    Array<{ id: string; meetingId: string; text: string; sender: ClientUserData; createdAt: string }>
+  >();
+
   constructor(private readonly prisma: PrismaService) {}
 
   handleConnection(client: Socket) {
@@ -113,6 +119,15 @@ export class MeetingsGateway implements OnGatewayConnection, OnGatewayDisconnect
         this.roomParticipants.set(meetingId, new Map());
       }
       const participants = this.roomParticipants.get(meetingId)!;
+
+      // Evict any existing socket for the same userId (prevent duplicate camera tiles on F5 or reconnect)
+      for (const [existingSocketId, p] of participants.entries()) {
+        if (p.userId === user.id && existingSocketId !== client.id) {
+          participants.delete(existingSocketId);
+          client.to(meetingId).emit('participant-left', { socketId: existingSocketId });
+        }
+      }
+
       const participantInfo: RoomParticipant = {
         socketId: client.id,
         userId: user.id,
@@ -122,14 +137,41 @@ export class MeetingsGateway implements OnGatewayConnection, OnGatewayDisconnect
       };
       participants.set(client.id, participantInfo);
 
-      // Return current participants to the newly joined peer so they can initiate calls
+      // Return current participants to the newly joined peer (excluding self) so they can initiate calls
       const existingParticipants = Array.from(participants.values()).filter(
-        (p) => p.socketId !== client.id,
+        (p) => p.socketId !== client.id && p.userId !== user.id,
       );
 
       client.emit('room-users', {
         participants: existingParticipants,
       });
+
+      // Synchronize live transcription state and past transcript chunks (Constraint 4)
+      const minute = await this.prisma.meetingMinute.findUnique({
+        where: { meetingId },
+        select: { isTranscribing: true },
+      });
+      const recentChunks = await this.prisma.meetingTranscriptChunk.findMany({
+        where: { meetingId },
+        orderBy: { timestamp: 'asc' },
+        take: 300,
+      });
+
+      client.emit('meeting:sync-state', {
+        isTranscribing: minute?.isTranscribing ?? false,
+        transcripts: recentChunks.map((c) => ({
+          id: c.id,
+          speakerId: c.speakerId,
+          speakerName: c.speakerName,
+          speakerRole: c.speakerRole,
+          text: c.text,
+          timestamp: c.timestamp.toISOString(),
+        })),
+      });
+
+      // Send chat history to late joiners (Question 4)
+      const chatHistory = this.roomChatHistory.get(meetingId) || [];
+      client.emit('chat-history', { messages: chatHistory });
 
       // Broadcast to other peers in room
       client.to(meetingId).emit('participant-joined', {
@@ -205,6 +247,12 @@ export class MeetingsGateway implements OnGatewayConnection, OnGatewayDisconnect
       meetingId: string;
       text: string;
       sender: ClientUserData;
+      attachment?: {
+        name: string;
+        url: string;
+        size?: number;
+        type?: string;
+      };
     },
   ) {
     const messageData = {
@@ -212,9 +260,87 @@ export class MeetingsGateway implements OnGatewayConnection, OnGatewayDisconnect
       meetingId: payload.meetingId,
       text: payload.text,
       sender: payload.sender,
+      attachment: payload.attachment,
       createdAt: new Date().toISOString(),
     };
+
+    if (!this.roomChatHistory.has(payload.meetingId)) {
+      this.roomChatHistory.set(payload.meetingId, []);
+    }
+    const history = this.roomChatHistory.get(payload.meetingId)!;
+    history.push(messageData);
+    if (history.length > 200) history.shift();
+
     this.server.to(payload.meetingId).emit('chat-message', messageData);
+  }
+
+  getMeetingChatHistory(meetingId: string) {
+    return this.roomChatHistory.get(meetingId) || [];
+  }
+
+  /**
+   * Question 6: Cho phép người chủ trì kết thúc cuộc họp ngay lập tức cho tất cả người tham gia
+   */
+  @SubscribeMessage('meeting:end-for-all')
+  async handleEndMeetingForAll(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() payload: { meetingId: string; userId: string },
+  ) {
+    const { meetingId, userId } = payload;
+    if (!meetingId) return;
+
+    try {
+      const meeting = await this.prisma.meeting.findUnique({
+        where: { id: meetingId },
+        include: {
+          attendees: { include: { user: true } },
+        },
+      });
+
+      if (!meeting) return;
+
+      const canEnd =
+        meeting.createdById === userId ||
+        meeting.attendees.some(
+          (a) =>
+            a.userId === userId &&
+            (a.user.role === 'ADMIN' || a.user.role === 'PM' || a.user.role === 'DEPARTMENT_HEAD'),
+        );
+
+      if (!canEnd) {
+        client.emit('error', {
+          message: 'Chỉ người chủ trì hoặc quản lý mới có quyền kết thúc cuộc họp cho tất cả.',
+        });
+        return;
+      }
+
+      // 1. Cập nhật trạng thái cuộc họp thành COMPLETED
+      await this.prisma.meeting.update({
+        where: { id: meetingId },
+        data: {
+          status: 'COMPLETED',
+          endTime: new Date(),
+        },
+      });
+
+      // 2. Ghi nhận thời gian rời cho tất cả người đang trong phòng
+      const participants = this.roomParticipants.get(meetingId);
+      if (participants) {
+        for (const p of participants.values()) {
+          await this.recordParticipantLeave(meetingId, p);
+        }
+        this.roomParticipants.delete(meetingId);
+      }
+
+      // 3. Bắn sự kiện meeting:ended tới toàn bộ phòng
+      this.server.to(meetingId).emit('meeting:ended', {
+        meetingId,
+        endedBy: userId,
+        message: 'Người chủ trì đã kết thúc cuộc họp.',
+      });
+    } catch (err: any) {
+      client.emit('error', { message: err?.message || 'Lỗi khi kết thúc cuộc họp' });
+    }
   }
 
   @SubscribeMessage('media-state-changed')
@@ -233,6 +359,98 @@ export class MeetingsGateway implements OnGatewayConnection, OnGatewayDisconnect
       audioEnabled: payload.audioEnabled,
       videoEnabled: payload.videoEnabled,
       screenSharing: payload.screenSharing,
+    });
+  }
+
+  // ============================================================
+  // ⭐ M5.1 — Live Transcript Streaming Handlers
+  // ============================================================
+
+  @SubscribeMessage('meeting:start-transcription')
+  async handleStartTranscription(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() payload: { meetingId: string; user?: ClientUserData },
+  ) {
+    const { meetingId, user } = payload;
+    if (!meetingId) return;
+
+    await this.prisma.meetingMinute.upsert({
+      where: { meetingId },
+      create: {
+        meetingId,
+        content: '',
+        isTranscribing: true,
+      },
+      update: {
+        isTranscribing: true,
+      },
+    });
+
+    this.server.to(meetingId).emit('meeting:transcription-status', {
+      isTranscribing: true,
+      startedBy: user?.name || 'Người chủ trì',
+    });
+  }
+
+  @SubscribeMessage('meeting:stop-transcription')
+  async handleStopTranscription(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() payload: { meetingId: string },
+  ) {
+    const { meetingId } = payload;
+    if (!meetingId) return;
+
+    await this.prisma.meetingMinute.updateMany({
+      where: { meetingId },
+      data: { isTranscribing: false },
+    });
+
+    this.server.to(meetingId).emit('meeting:transcription-status', {
+      isTranscribing: false,
+    });
+  }
+
+  /**
+   * Technical Constraint 1: Thread-safe chunk persistence into MeetingTranscriptChunk
+   * to avoid race conditions when multiple speakers talk simultaneously.
+   */
+  @SubscribeMessage('meeting:transcript-chunk')
+  async handleTranscriptChunk(
+    @ConnectedSocket() client: Socket,
+    @MessageBody()
+    payload: {
+      meetingId: string;
+      speaker: ClientUserData;
+      text: string;
+      timestamp?: string;
+    },
+  ) {
+    const { meetingId, speaker, text } = payload;
+    const trimmed = text?.trim();
+    if (!meetingId || !trimmed || !speaker?.name) return;
+
+    const chunkTimestamp = payload.timestamp ? new Date(payload.timestamp) : new Date();
+
+    // 1. Thread-safe single insert to avoid race condition
+    const chunk = await this.prisma.meetingTranscriptChunk.create({
+      data: {
+        meetingId,
+        speakerId: speaker.id || 'anonymous',
+        speakerName: speaker.name,
+        speakerRole: speaker.role || 'MEMBER',
+        text: trimmed,
+        timestamp: chunkTimestamp,
+      },
+    });
+
+    // 2. Broadcast live caption & feed chunk to all users in the room
+    this.server.to(meetingId).emit('meeting:live-caption', {
+      id: chunk.id,
+      speakerId: chunk.speakerId,
+      speakerName: chunk.speakerName,
+      speakerRole: chunk.speakerRole,
+      text: chunk.text,
+      timestamp: chunk.timestamp.toISOString(),
     });
   }
 

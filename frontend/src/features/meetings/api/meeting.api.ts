@@ -11,6 +11,8 @@ import type {
   MeetingMinute,
   MeetingScope,
   MeetingStatus,
+  MeetingSummaryResult,
+  MeetingTranscriptChunk,
   UpdateMeetingInput,
 } from '../types/meeting.types';
 
@@ -113,6 +115,46 @@ export const meetingApi = {
    */
   async getReport(id: string): Promise<AttendanceReportData> {
     const res = await apiClient.get<AttendanceReportData>(`/meetings/${id}/report`);
+    return res.data;
+  },
+
+  /**
+   * ⭐ M5.1 — Lấy AI Summary đã lưu
+   */
+  async getAiSummary(id: string): Promise<MeetingSummaryResult> {
+    const res = await apiClient.get<MeetingSummaryResult>(`/meetings/${id}/ai-summary`);
+    return res.data;
+  },
+
+  /**
+   * ⭐ M5.1 — Kích hoạt sinh AI Summary (Gemini 1.5 Flash)
+   */
+  async generateAiSummary(id: string, options?: { language?: 'VI' | 'EN' }): Promise<MeetingSummaryResult> {
+    const res = await apiClient.post<MeetingSummaryResult>(`/meetings/${id}/ai-summary/generate`, options || {});
+    return res.data;
+  },
+
+  /**
+   * ⭐ M5.1 — Lấy toàn bộ các transcript chunks được stream từ Web Speech API
+   */
+  async getTranscripts(id: string): Promise<MeetingTranscriptChunk[]> {
+    const res = await apiClient.get<MeetingTranscriptChunk[]>(`/meetings/${id}/transcripts`);
+    return res.data;
+  },
+
+  /**
+   * ⭐ M5.1 — Xuất biên bản AI sang ClickUp Docs
+   */
+  async exportToDocument(id: string): Promise<{ id: string; title: string }> {
+    const res = await apiClient.post<{ id: string; title: string }>(`/meetings/${id}/export-doc`);
+    return res.data;
+  },
+
+  /**
+   * Lấy lịch sử chat và file đính kèm trong cuộc họp
+   */
+  async getChatHistory(id: string): Promise<any[]> {
+    const res = await apiClient.get<any[]>(`/meetings/${id}/chat`);
     return res.data;
   },
 };

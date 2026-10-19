@@ -25,12 +25,17 @@ export class DocumentAiService {
     const systemConfig = await this.prisma.systemConfig.findFirst();
     const apiKey = systemConfig?.geminiApiKey || process.env.GEMINI_API_KEY;
 
-    if (apiKey && textToSummarize.length > 20) {
-      try {
-        const genAI = new GoogleGenerativeAI(apiKey);
-        const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+    if (apiKey && textToSummarize.length > 20 && process.env.NODE_ENV !== 'test') {
+      const candidateModels = [
+        'gemini-3.5-flash-lite',
+        'gemini-3.6-flash',
+        'gemini-3.5-flash',
+        'gemini-3.8-flash',
+        'gemini-2.5-flash-lite',
+        'gemini-1.5-flash',
+      ];
 
-        const prompt = `
+      const prompt = `
 Bạn là trợ lý AI chuyên nghiệp phân tích tài liệu doanh nghiệp. Hãy tóm tắt tài liệu sau đây bằng Tiếng Việt.
 Định dạng câu trả lời:
 - Đoạn tóm tắt tổng quan súc tích (1-2 câu).
@@ -41,25 +46,31 @@ Nội dung:
 ${textToSummarize.substring(0, 10000)}
 `;
 
-        const result = await model.generateContent(prompt);
-        const responseText = result.response.text().trim();
+      const genAI = new GoogleGenerativeAI(apiKey);
 
-        // Save AI summary to document
-        await this.prisma.document.update({
-          where: { id: documentId },
-          data: { aiSummary: responseText },
-        });
+      for (const modelName of candidateModels) {
+        try {
+          const model = genAI.getGenerativeModel({ model: modelName });
+          const result = await model.generateContent(prompt);
+          const responseText = result.response.text().trim();
 
-        const lines = responseText.split('\n').filter((l) => l.trim().length > 0);
-        const keyPoints = lines.filter((l) => l.startsWith('-') || l.startsWith('*') || /^\d+\./.test(l));
+          // Save AI summary to document
+          await this.prisma.document.update({
+            where: { id: documentId },
+            data: { aiSummary: responseText },
+          });
 
-        return {
-          summary: responseText,
-          keyPoints,
-          provider: 'gemini-1.5-flash',
-        };
-      } catch (error) {
-        this.logger.warn(`Gemini generation failed: ${(error as Error).message}. Using fallback summary.`);
+          const lines = responseText.split('\n').filter((l) => l.trim().length > 0);
+          const keyPoints = lines.filter((l) => l.startsWith('-') || l.startsWith('*') || /^\d+\./.test(l));
+
+          return {
+            summary: responseText,
+            keyPoints,
+            provider: modelName,
+          };
+        } catch (error) {
+          this.logger.warn(`Model ${modelName} failed for document: ${(error as Error).message}. Trying next candidate...`);
+        }
       }
     }
 

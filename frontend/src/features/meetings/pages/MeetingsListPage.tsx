@@ -6,14 +6,17 @@ import {
   RefreshCw,
   Video,
 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { useAuthStore } from '@/stores/auth.store';
 import { CreateMeetingModal } from '../components/CreateMeetingModal';
 import { MeetingCard } from '../components/MeetingCard';
+import { MeetingDetailModal } from '../components/MeetingDetailModal';
 import { MinutesEditor } from '../components/MinutesEditor';
 import { useMeetingsStore } from '../stores/meetings.store';
 import type { Meeting } from '../types/meeting.types';
 
 export const MeetingsListPage: React.FC = () => {
+  const { t } = useTranslation();
   const { user } = useAuthStore();
   const {
     meetings,
@@ -28,6 +31,7 @@ export const MeetingsListPage: React.FC = () => {
 
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [selectedMeetingForMinutes, setSelectedMeetingForMinutes] = useState<Meeting | null>(null);
+  const [selectedMeetingForDetail, setSelectedMeetingForDetail] = useState<Meeting | null>(null);
 
   useEffect(() => {
     loadMeetings();
@@ -68,10 +72,10 @@ export const MeetingsListPage: React.FC = () => {
             </div>
             <div>
               <h1 className="text-xl font-bold tracking-tight text-foreground">
-                Cuộc họp trực tuyến & Biên bản
+                {t('meetings.page_title', 'Cuộc họp trực tuyến & Biên bản')}
               </h1>
               <p className="text-xs text-muted-foreground mt-0.5">
-                Quản lý lịch họp theo Dự án, Phòng ban và 1-1 với phân quyền tự động
+                {t('meetings.page_subtitle', 'Quản lý lịch họp theo Dự án, Phòng ban và Nội bộ với phân quyền tự động')}
               </p>
             </div>
           </div>
@@ -82,7 +86,7 @@ export const MeetingsListPage: React.FC = () => {
             onClick={() => loadMeetings()}
             disabled={loading}
             className="p-2 rounded-xl border border-border bg-card text-muted-foreground hover:text-foreground hover:bg-muted transition-colors disabled:opacity-50"
-            title="Làm mới"
+            title={t('meetings.refresh', 'Làm mới')}
           >
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
           </button>
@@ -92,7 +96,7 @@ export const MeetingsListPage: React.FC = () => {
             className="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold text-primary-foreground bg-primary hover:bg-primary/90 rounded-xl transition-all shadow-xs"
           >
             <Plus className="w-4 h-4" />
-            <span>Tạo cuộc họp</span>
+            <span>{t('meetings.create_btn', 'Tạo cuộc họp')}</span>
           </button>
         </div>
       </div>
@@ -109,7 +113,7 @@ export const MeetingsListPage: React.FC = () => {
                 : 'text-muted-foreground hover:text-foreground'
             }`}
           >
-            Sắp diễn ra
+            {t('meetings.tab_upcoming', 'Sắp diễn ra')}
           </button>
           <button
             onClick={() => setFilterTab('ongoing')}
@@ -120,7 +124,7 @@ export const MeetingsListPage: React.FC = () => {
             }`}
           >
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-            Đang diễn ra
+            {t('meetings.tab_ongoing', 'Đang diễn ra')}
           </button>
           <button
             onClick={() => setFilterTab('past')}
@@ -130,7 +134,7 @@ export const MeetingsListPage: React.FC = () => {
                 : 'text-muted-foreground hover:text-foreground'
             }`}
           >
-            Đã kết thúc
+            {t('meetings.tab_past', 'Đã kết thúc')}
           </button>
         </div>
 
@@ -138,17 +142,17 @@ export const MeetingsListPage: React.FC = () => {
         <div className="flex items-center gap-1.5 text-xs">
           <span className="text-muted-foreground flex items-center gap-1 mr-1">
             <Filter className="w-3.5 h-3.5" />
-            Phạm vi:
+            {t('meetings.scope_filter_label', 'Phạm vi')}:
           </span>
           {(['ALL', 'PROJECT', 'DEPARTMENT', 'ONE_ON_ONE'] as const).map((scope) => {
             const label =
               scope === 'ALL'
-                ? 'Tất cả'
+                ? t('meetings.scope_all', 'Tất cả')
                 : scope === 'PROJECT'
-                ? 'Dự án'
+                ? t('meetings.scope_project', 'Dự án')
                 : scope === 'DEPARTMENT'
-                ? 'Phòng ban'
-                : '1-on-1';
+                ? t('meetings.scope_department', 'Phòng ban')
+                : t('meetings.scope_custom', 'Cuộc họp tự do');
 
             const active = filterScope === scope;
             return (
@@ -211,6 +215,7 @@ export const MeetingsListPage: React.FC = () => {
               key={meeting.id}
               meeting={meeting}
               onOpenMinutes={(m) => setSelectedMeetingForMinutes(m)}
+              onOpenDetail={(m) => setSelectedMeetingForDetail(m)}
             />
           ))}
         </div>
@@ -221,6 +226,15 @@ export const MeetingsListPage: React.FC = () => {
         isOpen={isCreateOpen}
         onClose={() => setIsCreateOpen(false)}
       />
+
+      {/* Meeting Detail & AI Summary Modal */}
+      {selectedMeetingForDetail && (
+        <MeetingDetailModal
+          meeting={selectedMeetingForDetail}
+          isOpen={Boolean(selectedMeetingForDetail)}
+          onClose={() => setSelectedMeetingForDetail(null)}
+        />
+      )}
 
       {/* Minutes Modal */}
       {selectedMeetingForMinutes && (

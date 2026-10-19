@@ -4,15 +4,21 @@ import { ArrowLeft, Calendar, Clock, Loader2, ShieldAlert } from 'lucide-react';
 import { meetingApi } from '../api/meeting.api';
 import { AttendanceReport } from '../components/AttendanceReport';
 import { MeetingScopeBadge } from '../components/MeetingScopeBadge';
+import { useActiveCallStore } from '../stores/active-call.store';
 import type { AttendanceReportData } from '../types/meeting.types';
 
 export const MeetingReportPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { clearActiveMeeting } = useActiveCallStore();
 
   const [data, setData] = useState<AttendanceReportData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    clearActiveMeeting();
+  }, [clearActiveMeeting]);
 
   useEffect(() => {
     if (!id) return;
