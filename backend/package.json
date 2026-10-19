@@ -20,8 +20,8 @@
     "test:cov": "vitest run --coverage",
     "test:debug": "vitest --inspect-brk --no-file-parallelism",
     "test:e2e": "vitest run --config ./vitest.config.e2e.ts",
-    "seed:enterprise": "tsx prisma/seed-enterprise-full.ts",
-    "seed:meetings": "tsx prisma/seed-meetings.ts"
+    "seed:enterprise": "node --experimental-strip-types prisma/seed-enterprise-full.ts",
+    "seed:meetings": "node --experimental-strip-types prisma/seed-meetings.ts"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
