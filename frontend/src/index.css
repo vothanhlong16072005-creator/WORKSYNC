@@ -203,21 +203,28 @@
 
 .kanban-summary {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0.75rem;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 0.85rem;
 }
 
 .kanban-stat {
   position: relative;
   display: flex;
-  min-height: 64px;
+  min-height: 68px;
   align-items: center;
   gap: 0.75rem;
   overflow: hidden;
-  padding: 0.75rem 0.9rem;
-  border: 1px solid hsl(var(--border));
-  border-radius: 5px;
+  padding: 0.85rem 1rem;
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  border-radius: 1rem;
   background: hsl(var(--card));
+  box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.03);
+  transition: all 160ms ease;
+}
+
+.kanban-stat:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.05);
 }
 
 .kanban-stat::before {
@@ -232,8 +239,12 @@
   background: hsl(var(--color-vermilion));
 }
 
+.kanban-stat--overdue::before {
+  background: #e11d48;
+}
+
 .kanban-stat--done::before {
-  background: hsl(var(--color-sun));
+  background: #10b981;
 }
 
 .kanban-stat__number {
@@ -314,36 +325,20 @@
   flex: 1 0 175px;
   flex-direction: column;
   overflow: hidden;
-  border: 1px solid rgba(226, 232, 240, 0.9);
+  border: 1px solid #e2e8f0;
   border-radius: 1rem;
   background: #f8fafc;
-  box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.03);
-}
-
-.kanban-column--progress {
-  border-top: 2px solid #f59e0b;
-}
-
-.kanban-column--review {
-  border-top: 2px solid #2563eb;
-}
-
-.kanban-column--blocked {
-  border-top: 2px solid #c95d43;
-}
-
-.kanban-column--done {
-  border-top: 2px solid #10b981;
+  box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.02);
 }
 
 .kanban-column__header {
   display: flex;
-  min-height: 52px;
+  min-height: 48px;
   align-items: center;
   justify-content: space-between;
   gap: 0.5rem;
   padding: 0.75rem 1rem;
-  border-bottom: 1px solid rgba(226, 232, 240, 0.8);
+  border-bottom: 1px solid #e2e8f0;
   background: #ffffff;
 }
 
@@ -356,10 +351,10 @@
 
 .kanban-column__title {
   overflow: hidden;
-  color: #0f172a;
-  font-size: 0.825rem;
-  font-weight: 800;
-  letter-spacing: 0.015em;
+  color: #1e293b;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -376,7 +371,7 @@
   background: #f1f5f9;
   color: #475569;
   font-size: 0.68rem;
-  font-weight: 800;
+  font-weight: 600;
 }
 
 .kanban-column__menu {
@@ -421,80 +416,33 @@
   border-radius: 0.75rem;
   color: #94a3b8;
   font-size: 0.75rem;
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .kanban-task {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
-  padding: 0.9rem;
-  border: 1px solid rgba(226, 232, 240, 0.9);
+  gap: 0.65rem;
+  padding: 0.85rem;
+  border: 1px solid #e2e8f0;
   border-radius: 0.75rem;
   background: #ffffff;
-  box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.04);
+  box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.03);
   cursor: pointer;
   position: relative;
   overflow: hidden;
   transition: all 180ms ease;
 }
 
-/* Priority Left Accent Stripe (Bauhaus purposeful accents on clean canvas) */
-.kanban-task::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: 0;
-  bottom: 0;
-  width: 4px;
-}
-
-.kanban-task--urgent::before {
-  background: #c95d43;
-}
-
-.kanban-task--urgent {
-  border-color: rgba(201, 93, 67, 0.35) !important;
-  background: #ffffff !important;
-  box-shadow: 0 1px 3px rgba(201, 93, 67, 0.08) !important;
-}
-
-.kanban-task--high::before {
-  background: #f59e0b;
-}
-
-.kanban-task--high {
-  border-color: rgba(245, 158, 11, 0.35) !important;
-  background: #ffffff !important;
-  box-shadow: 0 1px 3px rgba(245, 158, 11, 0.08) !important;
-}
-
-.kanban-task--medium::before {
-  background: #2563eb;
-}
-
-.kanban-task--medium {
-  border-color: rgba(37, 99, 235, 0.25) !important;
-  background: #ffffff !important;
-}
-
-.kanban-task--low::before {
-  background: #94a3b8;
-}
-
-.kanban-task--low {
-  border-color: rgba(203, 213, 225, 0.8) !important;
-  background: #ffffff !important;
-}
-
 .kanban-task:hover {
-  box-shadow: 0 4px 8px -1px rgb(0 0 0 / 0.08);
+  border-color: #cbd5e1;
+  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.05);
   transform: translateY(-1px);
 }
 
 .kanban-task--dragging {
-  border-color: #2563eb !important;
-  box-shadow: 0 10px 20px -3px rgba(15, 23, 42, 0.15) !important;
+  border-color: #3b82f6 !important;
+  box-shadow: 0 10px 20px -3px rgba(15, 23, 42, 0.12) !important;
   transform: rotate(0.8deg);
 }
 

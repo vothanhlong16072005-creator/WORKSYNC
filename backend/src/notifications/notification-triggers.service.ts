@@ -106,7 +106,7 @@ export class NotificationTriggersService {
         userId: attendee.userId,
         type: NotificationType.MEETING,
         category: 'meeting.reminder.1h',
-        title: `⏰ Sắp diễn ra: "${meeting.title}"`,
+        title: `Sắp diễn ra: "${meeting.title}"`,
         body: 'Cuộc họp sẽ bắt đầu trong vòng 1 giờ tới. Vui lòng kiểm tra thiết bị.',
         data: {
           meetingId: meeting.id,
@@ -299,7 +299,7 @@ export class NotificationTriggersService {
       data: {
         taskId: task.id,
         projectId: task.projectId,
-        url: `/projects/${task.projectId}/tasks/${task.id}`,
+        url: task.projectId ? `/projects/${task.projectId}/tasks?taskId=${task.id}` : `/tasks?taskId=${task.id}`,
       },
       actorId: task.actorId,
     });
@@ -329,7 +329,7 @@ export class NotificationTriggersService {
         data: {
           taskId: task.id,
           projectId: task.projectId,
-          url: `/projects/${task.projectId}/tasks/${task.id}`,
+          url: task.projectId ? `/projects/${task.projectId}/tasks?taskId=${task.id}` : `/tasks?taskId=${task.id}`,
         },
         actorId: task.actorId,
       });
@@ -350,12 +350,12 @@ export class NotificationTriggersService {
       userId: task.assigneeId,
       type: NotificationType.TASK,
       category: isUrgent ? 'task.deadline.1h' : 'task.deadline.24h',
-      title: `${isUrgent ? '🚨' : '⏰'} Hạn chót công việc sắp đến: ${task.title}`,
+      title: `Hạn chót công việc sắp đến: ${task.title}`,
       body: `Công việc chỉ còn khoảng ${hours} giờ nữa là đến hạn chót!`,
       data: {
         taskId: task.id,
         projectId: task.projectId,
-        url: `/projects/${task.projectId}/tasks/${task.id}`,
+        url: task.projectId ? `/projects/${task.projectId}/tasks?taskId=${task.id}` : `/tasks?taskId=${task.id}`,
       },
     });
   }

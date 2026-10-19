@@ -2,6 +2,7 @@ import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards, HttpCode,
 import { ProjectsService } from './projects.service.js';
 import { CreateProjectDto } from './dto/create-project.dto.js';
 import { UpdateProjectDto } from './dto/update-project.dto.js';
+import { SwapPmDto } from './dto/swap-pm.dto.js';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard.js';
 import { CurrentUser } from '../common/decorators/current-user.decorator.js';
 import type { CurrentActor } from './project-access.service.js';
@@ -88,5 +89,14 @@ export class ProjectsController {
     @CurrentUser() actor: CurrentActor,
   ) {
     return this.projectsService.changeMemberRole(id, userId, dto, actor);
+  }
+
+  @Patch(':id/swap-pm')
+  swapPm(
+    @Param('id') id: string,
+    @Body() dto: SwapPmDto,
+    @CurrentUser() actor: CurrentActor,
+  ) {
+    return this.projectsService.swapPm(id, dto, actor);
   }
 }

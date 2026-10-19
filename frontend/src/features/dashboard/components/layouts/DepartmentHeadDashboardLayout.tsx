@@ -56,6 +56,10 @@ import { CreateProjectModal } from '@/features/projects/components/CreateProject
 import { EnterpriseFooter } from '../widgets/EnterpriseFooter';
 import { AttendanceDetailModal, type AttendanceTab } from '../widgets/AttendanceDetailModal';
 import { DepartmentAnalyticsCharts } from '../widgets/DepartmentAnalyticsCharts';
+import { ProjectDetailModal } from '../modals/ProjectDetailModal';
+import { SprintManagementModal } from '../modals/SprintManagementModal';
+import { QuickTaskDetailModal } from '../modals/QuickTaskDetailModal';
+import { DeptHeadMemberProfileModal } from '../modals/DeptHeadMemberProfileModal';
 import { apiClient } from '@/lib/api-client';
 import { getErrorMessage } from '@/features/attendance/utils/error-handler';
 import type { DepartmentHeadDashboardData } from '../../types/dashboard.types';
@@ -79,6 +83,36 @@ export function DepartmentHeadDashboardLayout({ userName, initialData }: Departm
   const [selectedAssigneeId, setSelectedAssigneeId] = useState<string | undefined>(undefined);
   const [attendanceModalOpen, setAttendanceModalOpen] = useState(false);
   const [attendanceModalTab, setAttendanceModalTab] = useState<AttendanceTab>('IN_OFFICE');
+
+  // M3.6 Drill-Down Modals
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
+  const [projectDetailOpen, setProjectDetailOpen] = useState(false);
+  const [selectedSprintId, setSelectedSprintId] = useState<string | null>(null);
+  const [sprintModalOpen, setSprintModalOpen] = useState(false);
+  const [selectedMemberId, setSelectedMemberId] = useState<string | null>(null);
+  const [memberProfileOpen, setMemberProfileOpen] = useState(false);
+  const [selectedQuickTask, setSelectedQuickTask] = useState<any | null>(null);
+  const [quickTaskDetailOpen, setQuickTaskDetailOpen] = useState(false);
+
+  const handleOpenProjectDetail = (projectId: string) => {
+    setSelectedProjectId(projectId);
+    setProjectDetailOpen(true);
+  };
+
+  const handleOpenSprintModal = (sprintId: string) => {
+    setSelectedSprintId(sprintId);
+    setSprintModalOpen(true);
+  };
+
+  const handleOpenMemberProfile = (memberId: string) => {
+    setSelectedMemberId(memberId);
+    setMemberProfileOpen(true);
+  };
+
+  const handleOpenQuickTaskDetail = (task: any) => {
+    setSelectedQuickTask(task);
+    setQuickTaskDetailOpen(true);
+  };
 
   // Dashboard backend data
   const [dashboardData, setDashboardData] = useState<DepartmentHeadDashboardData | null>(
@@ -351,7 +385,8 @@ export function DepartmentHeadDashboardLayout({ userName, initialData }: Departm
                   return (
                     <div
                       key={proj.id}
-                      className="group p-4 rounded-2xl border border-slate-200/90 hover:border-blue-400 hover:shadow-md transition-all bg-slate-50/80 hover:bg-white"
+                      onClick={() => handleOpenProjectDetail(proj.id)}
+                      className="group p-4 rounded-2xl border border-slate-200/90 hover:border-blue-400 hover:shadow-md transition-all bg-slate-50/80 hover:bg-white cursor-pointer"
                     >
                       <div className="flex items-start justify-between gap-3">
                         <div className="flex items-start gap-3 min-w-0">
@@ -371,7 +406,7 @@ export function DepartmentHeadDashboardLayout({ userName, initialData }: Departm
                                     : 'bg-indigo-100 text-indigo-700'
                                 }`}
                               >
-                                {isScrum ? '🚀 Scrum / Sprint' : '📋 Kanban Board'}
+                                {isScrum ? 'Scrum / Sprint' : 'Kanban Board'}
                               </span>
                               <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full">
                                 {proj.status}
@@ -428,6 +463,7 @@ export function DepartmentHeadDashboardLayout({ userName, initialData }: Departm
                           </div>
                           <Link
                             to={`/projects/${proj.id}/tasks`}
+                            onClick={(e) => e.stopPropagation()}
                             className="inline-flex items-center gap-1 text-[11px] font-bold text-blue-600 hover:text-blue-700 mt-2 transition-colors"
                           >
                             <span>{isVi ? 'Bảng việc' : 'Board'}</span>
@@ -544,7 +580,8 @@ export function DepartmentHeadDashboardLayout({ userName, initialData }: Departm
                   return (
                     <div
                       key={task.id}
-                      className="group p-3 rounded-2xl border border-slate-200/80 hover:border-amber-300 hover:shadow-xs transition-all bg-white flex items-center justify-between gap-3"
+                      onClick={() => handleOpenQuickTaskDetail(task)}
+                      className="group p-3 rounded-2xl border border-slate-200/80 hover:border-amber-300 hover:shadow-xs transition-all bg-white flex items-center justify-between gap-3 cursor-pointer"
                     >
                       <div className="flex items-center gap-2.5 min-w-0">
                         {/* Assignee Avatar */}
@@ -660,7 +697,8 @@ export function DepartmentHeadDashboardLayout({ userName, initialData }: Departm
                 {activeSprints.map((s) => (
                   <div
                     key={s.id}
-                    className="p-4 rounded-2xl bg-gradient-to-br from-slate-50 to-orange-50/30 border border-slate-200/80 space-y-3"
+                    onClick={() => handleOpenSprintModal(s.id)}
+                    className="p-4 rounded-2xl bg-gradient-to-br from-slate-50 to-orange-50/30 border border-slate-200/80 hover:border-orange-400 hover:shadow-md transition-all space-y-3 cursor-pointer"
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div>
@@ -721,6 +759,7 @@ export function DepartmentHeadDashboardLayout({ userName, initialData }: Departm
 
                       <Link
                         to={`/projects/${s.projectId}/tasks`}
+                        onClick={(e) => e.stopPropagation()}
                         className="text-[11px] font-bold text-blue-600 hover:text-blue-700 flex items-center gap-1"
                       >
                         {isVi ? 'Mở Kanban Board' : 'Open Board'}
@@ -916,7 +955,8 @@ export function DepartmentHeadDashboardLayout({ userName, initialData }: Departm
               return (
                 <div
                   key={m.id}
-                  className="p-4 rounded-2xl border border-slate-200/80 hover:border-blue-300 hover:shadow-md transition-all bg-white flex flex-col justify-between"
+                  onClick={() => handleOpenMemberProfile(m.id)}
+                  className="p-4 rounded-2xl border border-slate-200/80 hover:border-indigo-400 hover:shadow-md transition-all bg-white flex flex-col justify-between cursor-pointer"
                 >
                   <div className="space-y-3">
                     {/* User Profile + Attendance Status badge */}
@@ -999,7 +1039,10 @@ export function DepartmentHeadDashboardLayout({ userName, initialData }: Departm
                   <div className="pt-3 mt-3 border-t border-slate-100">
                     <button
                       type="button"
-                      onClick={() => handleQuickAssignToUser(m.id)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleQuickAssignToUser(m.id);
+                      }}
                       className="w-full inline-flex items-center justify-center gap-1.5 py-1.5 rounded-xl bg-slate-100 hover:bg-blue-50 text-slate-700 hover:text-blue-700 text-xs font-bold transition-colors"
                     >
                       <Zap className="w-3.5 h-3.5 text-amber-500" />
@@ -1042,6 +1085,53 @@ export function DepartmentHeadDashboardLayout({ userName, initialData }: Departm
           wfh: attendance?.wfh ?? 0,
           leave: attendance?.leave ?? 0,
           notCheckedIn: attendance?.notCheckedIn ?? 0,
+        }}
+      />
+
+      {/* M3.6 Drill-Down Modals */}
+      <ProjectDetailModal
+        isOpen={projectDetailOpen}
+        onClose={() => setProjectDetailOpen(false)}
+        projectId={selectedProjectId}
+        canSwapPm={true}
+        candidates={teamWorkload.map((m) => ({
+          id: m.id,
+          name: m.name,
+          email: m.email,
+          avatar: m.avatar,
+          position: m.position,
+          role: m.role,
+          openTasks: m.openTasks,
+        }))}
+        onProjectUpdated={() => {
+          void loadDashboard();
+          void loadMine();
+        }}
+      />
+
+      <SprintManagementModal
+        isOpen={sprintModalOpen}
+        onClose={() => setSprintModalOpen(false)}
+        sprintId={selectedSprintId}
+      />
+
+      <DeptHeadMemberProfileModal
+        isOpen={memberProfileOpen}
+        onClose={() => setMemberProfileOpen(false)}
+        memberId={selectedMemberId}
+        onAssignTask={(memberId) => {
+          handleQuickAssignToUser(memberId);
+        }}
+      />
+
+      <QuickTaskDetailModal
+        isOpen={quickTaskDetailOpen}
+        onClose={() => setQuickTaskDetailOpen(false)}
+        task={selectedQuickTask}
+        onTaskUpdated={() => {
+          void loadDashboard();
+          void loadStats();
+          void loadAll();
         }}
       />
     </div>

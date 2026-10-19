@@ -521,3 +521,146 @@ export type DashboardState =
 
 export type DashboardRole = 'employee' | 'pm' | 'hr' | 'admin' | 'department-head' | 'me';
 
+export interface DeptHeadProjectDetail {
+  id: string;
+  name: string;
+  description: string | null;
+  color: string;
+  status: string;
+  workflowType: string;
+  startDate: string | null;
+  endDate: string | null;
+  pm: { id: string; name: string; email: string; avatar: string | null } | null;
+  createdBy: { id: string; name: string; avatar: string | null } | null;
+  memberCount: number;
+  taskCounts: {
+    total: number;
+    done: number;
+    inProgress: number;
+    blocked: number;
+    overdue: number;
+  };
+  progressPercent: number;
+  members: Array<{
+    id: string;
+    name: string;
+    avatar: string | null;
+    projectRole: string;
+    position?: string | null;
+  }>;
+  recentTasks: Array<{
+    id: string;
+    title: string;
+    status: string;
+    priority: string;
+    assigneeName: string | null;
+    updatedAt: string;
+  }>;
+  sprints: Array<{
+    id: string;
+    name: string;
+    status: string;
+    progressPercent: number;
+    daysRemaining: number;
+    endDate: string | null;
+  }>;
+  activeSprint: {
+    id: string;
+    name: string;
+    progressPercent: number;
+    daysRemaining: number;
+    isAtRisk: boolean;
+  } | null;
+  riskLevel: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+  riskReasons: string[];
+}
+
+export interface DeptHeadSprintDetail {
+  id: string;
+  name: string;
+  goal: string | null;
+  status: string;
+  startDate: string;
+  endDate: string;
+  daysRemaining: number;
+  daysTotal: number;
+  project: {
+    id: string;
+    name: string;
+    color: string;
+  };
+  pm: { id: string; name: string; avatar: string | null } | null;
+  totalTasks: number;
+  doneTasks: number;
+  inProgressTasks: number;
+  blockedTasks: number;
+  totalStoryPoints: number;
+  doneStoryPoints: number;
+  progressPercent: number;
+  burndown: Array<{
+    date: string;
+    dayName: string;
+    ideal: number;
+    actual: number;
+    isToday: boolean;
+  }>;
+  memberContribution: Array<{
+    userId: string;
+    userName: string;
+    avatar: string | null;
+    assignedTasks: number;
+    doneTasks: number;
+    doneStoryPoints: number;
+    contributionPercent: number;
+  }>;
+  blockedTasksList: Array<{
+    id: string;
+    title: string;
+    priority: string;
+    blockedDays: number;
+    assigneeName: string | null;
+  }>;
+  riskLevel: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+  riskReasons: string[];
+}
+
+export interface DeptHeadMemberProfile {
+  id: string;
+  name: string;
+  email: string;
+  avatar: string | null;
+  position: string | null;
+  role: string;
+  department: { id: string; name: string } | null;
+  stats: {
+    openTasks: number;
+    overdueTasks: number;
+    doneThisWeek: number;
+    doneThisMonth: number;
+  };
+  attendanceHistory: Array<{
+    date: string;
+    dayName: string;
+    status: 'OFFICE' | 'WFH' | 'LEAVE' | 'OFF' | 'PENDING';
+    checkInTime: string | null;
+  }>;
+  recentQuickTasks: Array<{
+    id: string;
+    title: string;
+    status: string;
+    dueDate: string;
+  }>;
+  recentProjectTasks: Array<{
+    id: string;
+    title: string;
+    status: string;
+    projectName: string;
+    projectColor: string;
+  }>;
+}
+
+export interface SwapPmRequest {
+  newPmId: string;
+  reason?: string;
+}
+

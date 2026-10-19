@@ -214,58 +214,101 @@ export default function Sidebar({ open, setOpen }: SidebarProps) {
 
             {/* Sub-items (Cây phân cấp các mục công việc & dự án) */}
             {open && tasksExpanded && (
-              <div className="ml-4 pl-3 my-1 border-l-2 border-slate-200 space-y-1">
-                {/* Việc của tôi (All accessible) */}
-                <NavLink
-                  to="/tasks"
-                  end
-                  className={({ isActive }) =>
-                    cn(
-                      "flex items-center gap-2 px-2.5 py-1.5 text-xs font-bold transition-colors relative",
-                      isActive
-                        ? "text-primary font-black bg-slate-100"
-                        : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
-                    )
-                  }
-                >
-                  <Layers className="h-3.5 w-3.5 text-slate-500" />
-                  <span className="truncate">{t('nav.all_my_tasks')}</span>
-                </NavLink>
-
-                {/* Từng dự án & Việc cá nhân */}
-                {projects.map((proj) => {
-                  const label =
-                    proj.kind === "PERSONAL" ? t('nav.personal_tasks') : proj.name;
-                  return (
+              <div className="ml-4 pl-3 my-1 border-l-2 border-slate-100 space-y-2">
+                {/* 1. MỤC CÁ NHÂN (VIỆC CỦA BẠN) */}
+                <div>
+                  <div className="px-2 py-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                    {t('nav.personal_section', 'Việc cá nhân')}
+                  </div>
+                  <div className="space-y-0.5">
                     <NavLink
-                      key={proj.id}
-                      to={`/projects/${proj.id}/tasks`}
+                      to="/tasks"
+                      end
                       className={({ isActive }) =>
                         cn(
-                          "flex items-center gap-2 px-2.5 py-1.5 text-xs font-bold transition-colors relative",
+                          "flex items-center gap-2 px-2.5 py-1.5 text-xs font-semibold rounded-lg transition-colors relative",
                           isActive
-                            ? "text-slate-900 font-black bg-slate-100"
+                            ? "text-primary font-bold bg-primary/10"
                             : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
                         )
                       }
-                      title={`${label} (${proj.openAssignedTaskCount})`}
                     >
-                      <div
-                        className="h-2.5 w-2.5 shrink-0 border border-slate-900 shadow-[1px_1px_0px_0px_rgba(15,23,42,1)]"
-                        style={{ backgroundColor: proj.color || "#3B82F6" }}
-                      />
-                      <span className="truncate flex-1">{label}</span>
-                      {proj.openAssignedTaskCount > 0 && (
-                        <span
-                          className="ml-auto inline-flex items-center justify-center min-w-4 h-4 px-1 text-[10px] font-black text-white bg-red-600 border border-slate-900 shadow-[1px_1px_0px_0px_rgba(15,23,42,1)]"
-                          aria-label={`${proj.openAssignedTaskCount} công việc chưa hoàn thành`}
-                        >
-                          {proj.openAssignedTaskCount}
-                        </span>
-                      )}
+                      <Layers className="h-3.5 w-3.5 text-slate-500" />
+                      <span className="truncate">{t('nav.all_my_tasks', 'Tất cả việc của tôi')}</span>
                     </NavLink>
-                  );
-                })}
+
+                    {projects
+                      .filter((p) => p.kind === 'PERSONAL')
+                      .map((proj) => (
+                        <NavLink
+                          key={proj.id}
+                          to={`/projects/${proj.id}/tasks`}
+                          className={({ isActive }) =>
+                            cn(
+                              "flex items-center gap-2 px-2.5 py-1.5 text-xs font-semibold rounded-lg transition-colors relative",
+                              isActive
+                                ? "text-primary font-bold bg-primary/10"
+                                : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
+                            )
+                          }
+                          title={`${t('nav.personal_tasks', 'Việc riêng tư')} (${proj.openAssignedTaskCount})`}
+                        >
+                          <div
+                            className="h-2 w-2 rounded-full shrink-0"
+                            style={{ backgroundColor: proj.color || "#3B82F6" }}
+                          />
+                          <span className="truncate flex-1">{t('nav.personal_tasks', 'Việc riêng tư')}</span>
+                          {proj.openAssignedTaskCount > 0 && (
+                            <span className="ml-auto inline-flex items-center justify-center min-w-4 h-4 px-1 text-[10px] font-bold text-slate-600 bg-slate-100 rounded-full">
+                              {proj.openAssignedTaskCount}
+                            </span>
+                          )}
+                        </NavLink>
+                      ))}
+                  </div>
+                </div>
+
+                {/* 2. MỤC DỰ ÁN NHÓM (CÁC DỰ ÁN ĐANG THAM GIA) */}
+                {projects.some((p) => p.kind !== 'PERSONAL') && (
+                  <div className="pt-1.5 border-t border-slate-100">
+                    <div className="px-2 py-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                      {t('nav.team_projects_section', 'Dự án tham gia')}
+                    </div>
+                    <div className="space-y-0.5">
+                      {projects
+                        .filter((p) => p.kind !== 'PERSONAL')
+                        .map((proj) => (
+                          <NavLink
+                            key={proj.id}
+                            to={`/projects/${proj.id}/tasks`}
+                            className={({ isActive }) =>
+                              cn(
+                                "flex items-center gap-2 px-2.5 py-1.5 text-xs font-medium rounded-lg transition-colors relative",
+                                isActive
+                                  ? "text-slate-900 font-bold bg-slate-100"
+                                  : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
+                              )
+                            }
+                            title={`${proj.name} (${proj.openAssignedTaskCount})`}
+                          >
+                            <div
+                              className="h-2 w-2 rounded-sm shrink-0"
+                              style={{ backgroundColor: proj.color || "#3B82F6" }}
+                            />
+                            <span className="truncate flex-1">{proj.name}</span>
+                            {proj.openAssignedTaskCount > 0 && (
+                              <span
+                                className="ml-auto inline-flex items-center justify-center min-w-4 h-4 px-1.5 text-[10px] font-semibold text-slate-600 bg-slate-100 rounded-full"
+                                aria-label={`${proj.openAssignedTaskCount} công việc chưa hoàn thành`}
+                              >
+                                {proj.openAssignedTaskCount}
+                              </span>
+                            )}
+                          </NavLink>
+                        ))}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>

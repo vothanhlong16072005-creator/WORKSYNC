@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { DragDropContext, Draggable, Droppable } from '@hello-pangea/dnd';
 import type { DropResult } from '@hello-pangea/dnd';
 import {
@@ -7,7 +7,11 @@ import {
   Calendar,
   CheckCircle2,
   Clock3,
+  Eye,
+  EyeOff,
   Filter,
+  Info,
+  ListOrdered,
   ListTodo,
   MoreHorizontal,
   Plus,
@@ -26,6 +30,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useTaskStore } from '@/stores/task.store';
 import { useProjectStore } from '@/stores/project.store';
+import { useAuthStore } from '@/stores/auth.store';
 import type { BoardTask as Task, TaskStatus } from '@/stores/task.store';
 import { toast } from 'sonner';
 import { useTranslation } from 'react-i18next';
@@ -127,26 +132,26 @@ function getDeadlineInfo(dueDateStr?: string | null) {
       return {
         text: `Quá hạn ${Math.abs(diffDays)} ngày`,
         isOverdue: true,
-        className: 'bg-red-100 text-red-800 border-red-500 font-black',
+        className: 'bg-rose-50 text-rose-700 border-rose-200 font-medium',
       };
     }
     if (diffDays === 0) {
       return {
         text: 'Hết hạn hôm nay',
         isNear: true,
-        className: 'bg-amber-100 text-amber-900 border-amber-500 font-bold',
+        className: 'bg-amber-50 text-amber-800 border-amber-200 font-medium',
       };
     }
     if (diffDays <= 2) {
       return {
         text: `Còn ${diffDays} ngày`,
         isNear: true,
-        className: 'bg-amber-100 text-amber-900 border-amber-500 font-bold',
+        className: 'bg-amber-50 text-amber-800 border-amber-200 font-medium',
       };
     }
     return {
       text: formatShortDate(dueDateStr),
-      className: 'bg-slate-100 text-slate-700 border-slate-300',
+      className: 'bg-slate-50 text-slate-600 border-slate-200 font-normal',
     };
   } catch {
     return null;
@@ -157,6 +162,9 @@ export default function KanbanPage() {
   const { t } = useTranslation();
   const { projectId } = useParams<{ projectId?: string }>();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const urlTaskId = searchParams.get('taskId') || useParams<{ taskId?: string }>().taskId;
+
   const { projects } = useProjectStore();
   const { tasks, status, error, loadBoard, moveTask, createTask, retry } = useTaskStore();
 
@@ -164,6 +172,29 @@ export default function KanbanPage() {
   const selectedTask = useMemo(() => tasks.find((t) => t.id === selectedTaskId) || null, [tasks, selectedTaskId]);
   const [searchQuery, setSearchQuery] = useState('');
   const [teamScopeMode, setTeamScopeMode] = useState<'project' | 'mine'>('project');
+
+  // View Mode: Kanban Board vs Table / List View
+  const [viewMode, setViewMode] = useState<'board' | 'list'>('board');
+  // Feature: Hide completed tasks to keep the workspace clean
+  const [hideCompleted, setHideCompleted] = useState<boolean>(false);
+  // Feature: Overdue quick filter
+  const [filterOverdueOnly, setFilterOverdueOnly] = useState<boolean>(false);
+
+  // Sync selected task with URL taskId (e.g. from notification clicks or direct links)
+  useEffect(() => {
+    if (urlTaskId) {
+      setSelectedTaskId(urlTaskId);
+    }
+  }, [urlTaskId]);
+
+  const handleCloseDetailModal = () => {
+    setSelectedTaskId(null);
+    if (searchParams.has('taskId')) {
+      const next = new URLSearchParams(searchParams);
+      next.delete('taskId');
+      setSearchParams(next, { replace: true });
+    }
+  };
 
   // Filter & Sort States
   const [isFilterOpen, setIsFilterOpen] = useState(false);
@@ -185,11 +216,25 @@ export default function KanbanPage() {
   const [createLabelsInput, setCreateLabelsInput] = useState('');
   const [isCreating, setIsCreating] = useState(false);
 
+  const { user } = useAuthStore();
   const currentProject = useMemo(() => {
     return projects.find((p) => p.id === projectId);
   }, [projects, projectId]);
 
   const isPersonalProject = currentProject?.kind === 'PERSONAL';
+  const isPersonalScope = !projectId || isPersonalProject;
+  const isAdmin = user?.role === 'ADMIN';
+  const isDeptHead = user?.role === 'DEPARTMENT_HEAD';
+  const isPM = user?.role === 'PM';
+
+  const canCreateTask = isPersonalScope || isAdmin || isDeptHead || isPM;
+
+  const creatableProjects = useMemo(() => {
+    return projects.filter((p) => {
+      if (p.kind === 'PERSONAL') return true;
+      return isAdmin || isDeptHead || isPM;
+    });
+  }, [projects, isAdmin, isDeptHead, isPM]);
 
   useEffect(() => {
     if (projectId) {
@@ -203,7 +248,15 @@ export default function KanbanPage() {
     }
   }, [projectId, isPersonalProject, teamScopeMode, loadBoard]);
 
+  // Overdue check
+  const isTaskOverdue = (task: Task) => {
+    if (!task.dueDate || task.status === 'DONE') return false;
+    return new Date(task.dueDate).getTime() < Date.now();
+  };
 
+  const overdueCount = useMemo(() => {
+    return tasks.filter(isTaskOverdue).length;
+  }, [tasks]);
 
   // If user navigated to a project that resulted in 403, or invalid
   useEffect(() => {
@@ -227,13 +280,15 @@ export default function KanbanPage() {
     if (filterPriority !== 'ALL') count++;
     if (filterStatus !== 'ALL') count++;
     if (filterLabel !== 'ALL') count++;
+    if (filterOverdueOnly) count++;
     return count;
-  }, [filterPriority, filterStatus, filterLabel]);
+  }, [filterPriority, filterStatus, filterLabel, filterOverdueOnly]);
 
   const handleResetFilters = () => {
     setFilterPriority('ALL');
     setFilterStatus('ALL');
     setFilterLabel('ALL');
+    setFilterOverdueOnly(false);
     setSearchQuery('');
   };
 
@@ -241,6 +296,11 @@ export default function KanbanPage() {
     const { destination, source, draggableId } = result;
     if (!destination) return;
     if (destination.droppableId === source.droppableId && destination.index === source.index) return;
+
+    if (!isPersonalScope) {
+      toast.info('Bảng dự án đang ở chế độ xem tiến độ chung. Để cập nhật trạng thái công việc của bạn, vui lòng thao tác tại mục "Việc của tôi".');
+      return;
+    }
 
     const nextStatus = destination.droppableId as TaskStatus;
 
@@ -278,7 +338,10 @@ export default function KanbanPage() {
   const handleOpenCreateModal = () => {
     setCreateTitle('');
     setCreateDescription('');
-    setCreateProjectId(projectId || projects[0]?.id || '');
+    const defaultProjId = (projectId && creatableProjects.some((p) => p.id === projectId))
+      ? projectId
+      : (creatableProjects[0]?.id || projects.find((p) => p.kind === 'PERSONAL')?.id || '');
+    setCreateProjectId(defaultProjId);
     setCreateStatus('TODO');
     setCreatePriority('MEDIUM');
     setCreateDueDate('');
@@ -334,7 +397,17 @@ export default function KanbanPage() {
 
   const filteredTasks = useMemo(() => {
     return tasks.filter((task) => {
-      // 1. Text Search Query
+      // 0. Hide completed tasks
+      if (hideCompleted && task.status === 'DONE') {
+        return false;
+      }
+
+      // 1. Overdue only filter
+      if (filterOverdueOnly && !isTaskOverdue(task)) {
+        return false;
+      }
+
+      // 2. Text Search Query
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
         const matchesTitle = task.title.toLowerCase().includes(q);
@@ -343,17 +416,17 @@ export default function KanbanPage() {
         if (!matchesTitle && !matchesId && !matchesLabel) return false;
       }
 
-      // 2. Priority Filter
+      // 3. Priority Filter
       if (filterPriority !== 'ALL' && task.priority !== filterPriority) {
         return false;
       }
 
-      // 3. Status Filter
+      // 4. Status Filter
       if (filterStatus !== 'ALL' && task.status !== filterStatus) {
         return false;
       }
 
-      // 4. Label Filter
+      // 5. Label Filter
       if (filterLabel !== 'ALL') {
         if (!task.labels || !task.labels.includes(filterLabel)) {
           return false;
@@ -362,7 +435,7 @@ export default function KanbanPage() {
 
       return true;
     });
-  }, [tasks, searchQuery, filterPriority, filterStatus, filterLabel]);
+  }, [tasks, hideCompleted, filterOverdueOnly, searchQuery, filterPriority, filterStatus, filterLabel]);
 
   const getColumnTasks = (status: TaskStatus) => {
     return filteredTasks
@@ -447,37 +520,65 @@ export default function KanbanPage() {
                 </button>
               </div>
             )}
+            {!isPersonalScope && (
+              <span className="inline-flex items-center gap-1.5 ml-2 px-2.5 py-1 text-[11px] font-medium text-slate-500 bg-slate-100 rounded-lg">
+                <Info className="w-3.5 h-3.5 text-slate-400" />
+                Chế độ xem dự án (Chỉ xem)
+              </span>
+            )}
           </div>
         </div>
 
-        <Button
-          onClick={handleOpenCreateModal}
-          className="h-10 gap-2 px-4 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-sm hover:shadow-md transition-all active:scale-95"
-        >
-          <Plus className="h-4 w-4" aria-hidden="true" />
-          Tạo công việc
-        </Button>
+        {canCreateTask && (
+          <Button
+            onClick={handleOpenCreateModal}
+            className="h-10 gap-2 px-4 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs shadow-xs hover:shadow-sm transition-all active:scale-95"
+          >
+            <Plus className="h-4 w-4" aria-hidden="true" />
+            Tạo công việc
+          </Button>
+        )}
       </header>
 
-      <section className="kanban-summary" aria-label="Tóm tắt công việc">
-        <div className="kanban-stat">
-          <span className="kanban-stat__number">{filteredTasks.length}</span>
+      <section className="kanban-summary grid grid-cols-2 md:grid-cols-4 gap-3.5" aria-label="Tóm tắt công việc">
+        <div className="kanban-stat rounded-2xl border border-slate-200/90 shadow-2xs hover:shadow-xs transition-all">
+          <span className="kanban-stat__number">{tasks.length}</span>
           <span className="kanban-stat__label">Tổng công việc</span>
-          <ListTodo className="ml-auto h-4 w-4 text-muted-foreground" aria-hidden="true" />
+          <ListTodo className="ml-auto h-5 w-5 text-slate-400" aria-hidden="true" />
         </div>
-        <div className="kanban-stat kanban-stat--active">
-          <span className="kanban-stat__number">{activeCount}</span>
-          <span className="kanban-stat__label">Đang thực hiện</span>
-          <Clock3 className="ml-auto h-4 w-4 text-muted-foreground" aria-hidden="true" />
+        <div className="kanban-stat kanban-stat--active rounded-2xl border border-amber-200/80 shadow-2xs hover:shadow-xs transition-all">
+          <span className="kanban-stat__number text-amber-600">{activeCount}</span>
+          <span className="kanban-stat__label text-amber-800">Đang thực hiện</span>
+          <Clock3 className="ml-auto h-5 w-5 text-amber-500" aria-hidden="true" />
         </div>
-        <div className="kanban-stat kanban-stat--done">
-          <span className="kanban-stat__number">{doneCount}</span>
-          <span className="kanban-stat__label">Hoàn thành</span>
-          <CheckCircle2 className="ml-auto h-4 w-4 text-muted-foreground" aria-hidden="true" />
+        <div
+          onClick={() => setFilterOverdueOnly((prev) => !prev)}
+          className={`kanban-stat kanban-stat--overdue rounded-2xl border transition-all cursor-pointer ${
+            filterOverdueOnly
+              ? 'ring-2 ring-rose-500 bg-rose-50/80 border-rose-300 shadow-xs'
+              : overdueCount > 0
+              ? 'border-rose-200/90 bg-rose-50/30 hover:bg-rose-50/60 shadow-2xs'
+              : 'border-slate-200/90 shadow-2xs'
+          }`}
+          title="Bấm để lọc các công việc quá hạn"
+        >
+          <span className="kanban-stat__number text-rose-600">{overdueCount}</span>
+          <div className="flex flex-col">
+            <span className="kanban-stat__label text-rose-700">Đã quá hạn</span>
+            <span className="text-[10px] text-rose-500 font-semibold">
+              {filterOverdueOnly ? 'Đang lọc quá hạn ✕' : overdueCount > 0 ? 'Bấm để lọc' : 'Không có việc trễ'}
+            </span>
+          </div>
+          <AlertCircle className="ml-auto h-5 w-5 text-rose-500" aria-hidden="true" />
+        </div>
+        <div className="kanban-stat kanban-stat--done rounded-2xl border border-emerald-200/80 shadow-2xs hover:shadow-xs transition-all">
+          <span className="kanban-stat__number text-emerald-600">{doneCount}</span>
+          <span className="kanban-stat__label text-emerald-700">Hoàn thành</span>
+          <CheckCircle2 className="ml-auto h-5 w-5 text-emerald-500" aria-hidden="true" />
         </div>
       </section>
 
-      <div className="kanban-toolbar">
+      <div className="kanban-toolbar flex-wrap gap-2.5">
         <label className="kanban-toolbar__search">
           <Search className="kanban-toolbar__search-icon h-4 w-4" aria-hidden="true" />
           <Input
@@ -489,6 +590,66 @@ export default function KanbanPage() {
             className="kanban-search-input"
           />
         </label>
+
+        {/* View Mode Switcher: Board vs List */}
+        <div className="inline-flex rounded-xl border border-slate-200 bg-slate-100 p-0.5 shrink-0 shadow-2xs">
+          <button
+            type="button"
+            onClick={() => setViewMode('board')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${
+              viewMode === 'board'
+                ? 'bg-white text-slate-900 shadow-xs'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            <FolderKanban className="w-3.5 h-3.5 text-blue-600" />
+            <span>Bảng Kanban</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setViewMode('list')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${
+              viewMode === 'list'
+                ? 'bg-white text-slate-900 shadow-xs'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            <ListOrdered className="w-3.5 h-3.5 text-indigo-600" />
+            <span>Bảng danh sách</span>
+          </button>
+        </div>
+
+        {/* Hide Completed Toggle */}
+        <button
+          type="button"
+          onClick={() => setHideCompleted((prev) => !prev)}
+          className={`flex items-center gap-1.5 px-3 py-2 text-xs font-bold rounded-xl border transition-all ${
+            hideCompleted
+              ? 'bg-indigo-50 border-indigo-300 text-indigo-700 shadow-2xs'
+              : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+          }`}
+          title="Ẩn bớt các công việc đã hoàn thành để tập trung vào việc đang cần làm"
+        >
+          {hideCompleted ? <EyeOff className="w-3.5 h-3.5 text-indigo-600" /> : <Eye className="w-3.5 h-3.5 text-slate-400" />}
+          <span>{hideCompleted ? `Đang ẩn việc đã xong (${doneCount})` : 'Ẩn việc đã xong'}</span>
+        </button>
+
+        {/* Quick Overdue Filter Chip */}
+        {overdueCount > 0 && (
+          <button
+            type="button"
+            onClick={() => setFilterOverdueOnly((prev) => !prev)}
+            className={`flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-xl border transition-all ${
+              filterOverdueOnly
+                ? 'bg-rose-600 border-rose-600 text-white shadow-xs'
+                : 'bg-rose-50 border-rose-200 text-rose-700 hover:bg-rose-100'
+            }`}
+          >
+            <AlertCircle className="w-3.5 h-3.5" />
+            <span>{filterOverdueOnly ? 'Bỏ lọc quá hạn' : `Quá hạn (${overdueCount})`}</span>
+          </button>
+        )}
+
         <Button
           variant="outline"
           onClick={() => setIsFilterOpen(!isFilterOpen)}
@@ -567,6 +728,16 @@ export default function KanbanPage() {
             </div>
           )}
 
+          <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-slate-700 select-none">
+            <input
+              type="checkbox"
+              checked={filterOverdueOnly}
+              onChange={(e) => setFilterOverdueOnly(e.target.checked)}
+              className="w-4 h-4 rounded text-rose-600 focus:ring-rose-500"
+            />
+            <span>Chỉ xem việc đã quá hạn</span>
+          </label>
+
           {(activeFilterCount > 0 || searchQuery) && (
             <Button
               variant="ghost"
@@ -608,11 +779,243 @@ export default function KanbanPage() {
             </section>
           ))}
         </div>
+      ) : viewMode === 'list' ? (
+        <div className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse text-xs">
+              <thead>
+                <tr className="border-b border-slate-200 bg-slate-50/80 text-[11px] font-extrabold text-slate-500 uppercase tracking-wider">
+                  <th className="py-3 px-4">Mã việc</th>
+                  <th className="py-3 px-4">Tiêu đề & Nhãn</th>
+                  <th className="py-3 px-4">Dự án</th>
+                  <th className="py-3 px-4">Ưu tiên</th>
+                  <th className="py-3 px-4">Người thực hiện</th>
+                  <th className="py-3 px-4">Hạn chót & Cảnh báo</th>
+                  <th className="py-3 px-4">Trạng thái</th>
+                  <th className="py-3 px-4 text-right">Thao tác</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {filteredTasks.length === 0 ? (
+                  <tr>
+                    <td colSpan={8} className="py-14 text-center text-slate-400">
+                      <ListTodo className="w-9 h-9 mx-auto mb-2 opacity-40 text-slate-500" />
+                      <p className="font-bold text-slate-700 text-sm">Không có công việc nào phù hợp với bộ lọc</p>
+                      {hideCompleted && (
+                        <p className="text-xs text-slate-400 mt-1">
+                          (Bạn đang bật tính năng ẩn việc đã xong. Hãy bấm "Hiện việc đã xong" để xem lại)
+                        </p>
+                      )}
+                    </td>
+                  </tr>
+                ) : (
+                  filteredTasks.map((task) => {
+                    const deadline = getDeadlineInfo(task.dueDate);
+                    const isOverdue = isTaskOverdue(task);
+                    return (
+                      <tr
+                        key={task.id}
+                        onClick={() => setSelectedTaskId(task.id)}
+                        className={`group cursor-pointer transition-colors ${
+                          isOverdue
+                            ? 'bg-rose-50/30 hover:bg-rose-50/60'
+                            : task.status === 'DONE'
+                            ? 'bg-slate-50/40 hover:bg-slate-50/80 opacity-75'
+                            : 'hover:bg-slate-50/80'
+                        }`}
+                      >
+                        {/* Mã việc */}
+                        <td className="py-3.5 px-4 font-mono font-bold text-slate-700 whitespace-nowrap">
+                          <span className="px-2 py-0.5 rounded-md bg-slate-100 border border-slate-200 text-[11px] shadow-2xs">
+                            {task.id}
+                          </span>
+                        </td>
+
+                        {/* Tiêu đề & Nhãn */}
+                        <td className="py-3.5 px-4 min-w-[240px]">
+                          <div className="font-bold text-slate-900 group-hover:text-blue-600 transition-colors">
+                            {task.title}
+                          </div>
+                          {task.labels && task.labels.length > 0 && (
+                            <div className="flex flex-wrap gap-1 mt-1.5">
+                              {task.labels.map((lbl) => (
+                                <span
+                                  key={lbl}
+                                  className="text-[9px] font-extrabold uppercase px-1.5 py-0.2 rounded bg-slate-100 text-slate-600 border border-slate-200/80 shadow-2xs"
+                                >
+                                  {lbl}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </td>
+
+                        {/* Dự án */}
+                        <td className="py-3.5 px-4 whitespace-nowrap">
+                          {task.project ? (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-200/80 shadow-2xs">
+                              {task.project.name}
+                            </span>
+                          ) : (
+                            <span className="text-slate-400">–</span>
+                          )}
+                        </td>
+
+                        {/* Ưu tiên */}
+                        <td className="py-3.5 px-4 whitespace-nowrap">
+                          <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold shadow-2xs ${
+                            task.priority === 'URGENT'
+                              ? 'bg-rose-100 text-rose-800 border border-rose-200'
+                              : task.priority === 'HIGH'
+                              ? 'bg-amber-100 text-amber-800 border border-amber-200'
+                              : task.priority === 'MEDIUM'
+                              ? 'bg-blue-100 text-blue-800 border border-blue-200'
+                              : 'bg-slate-100 text-slate-700 border border-slate-200'
+                          }`}>
+                            <span className={`w-1.5 h-1.5 rounded-full ${
+                              task.priority === 'URGENT' ? 'bg-rose-600' : task.priority === 'HIGH' ? 'bg-amber-600' : task.priority === 'MEDIUM' ? 'bg-blue-600' : 'bg-slate-500'
+                            }`} />
+                            {PRIORITY_LABELS[task.priority]}
+                          </span>
+                        </td>
+
+                        {/* Người thực hiện */}
+                        <td className="py-3.5 px-4 whitespace-nowrap">
+                          {task.assignee ? (
+                            <div className="flex items-center gap-2">
+                              {task.assignee.avatar ? (
+                                <img src={task.assignee.avatar} alt="" className="w-5 h-5 rounded-full object-cover" />
+                              ) : (
+                                <div className="w-5 h-5 rounded-full bg-slate-200 text-slate-700 font-bold text-[10px] flex items-center justify-center">
+                                  {getInitials(task.assignee.name)}
+                                </div>
+                              )}
+                              <span className="font-medium text-slate-800">{task.assignee.name}</span>
+                            </div>
+                          ) : (
+                            <span className="text-slate-400 italic">Chưa giao</span>
+                          )}
+                        </td>
+
+                        {/* Hạn chót & Quá hạn */}
+                        <td className="py-3.5 px-4 whitespace-nowrap">
+                          {deadline ? (
+                            <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold border shadow-2xs ${deadline.className}`}>
+                              <Calendar className="w-3 h-3 shrink-0" />
+                              {deadline.text}
+                            </span>
+                          ) : (
+                            <span className="text-slate-400">–</span>
+                          )}
+                        </td>
+
+                        {/* Trạng thái (Quick Dropdown if permitted, else static pill) */}
+                        <td className="py-3.5 px-4 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                          {(isPersonalScope || task.assignee?.id === user?.id || isAdmin || isPM) ? (
+                            <select
+                              value={task.status}
+                              onChange={(e) => handleQuickStatusChange(task.id, e.target.value as TaskStatus)}
+                              className={`text-xs font-semibold rounded-lg px-2.5 py-1 border transition-all cursor-pointer shadow-2xs focus:outline-none focus:ring-2 focus:ring-blue-500/20 ${
+                                task.status === 'DONE'
+                                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
+                                  : task.status === 'IN_PROGRESS'
+                                  ? 'bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100'
+                                  : task.status === 'IN_REVIEW'
+                                  ? 'bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100'
+                                  : task.status === 'BLOCKED'
+                                  ? 'bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100'
+                                  : 'bg-slate-100 text-slate-700 border-slate-200 hover:bg-slate-200'
+                              }`}
+                            >
+                              <option value="TODO">Cần làm</option>
+                              <option value="IN_PROGRESS">Đang làm</option>
+                              <option value="IN_REVIEW">Đánh giá</option>
+                              <option value="BLOCKED">Bị chặn</option>
+                              <option value="DONE">Hoàn thành</option>
+                            </select>
+                          ) : (
+                            <span
+                              className={`inline-flex items-center text-xs font-medium rounded-lg px-2.5 py-1 border ${
+                                task.status === 'DONE'
+                                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                  : task.status === 'IN_PROGRESS'
+                                  ? 'bg-blue-50 text-blue-700 border-blue-200'
+                                  : task.status === 'IN_REVIEW'
+                                  ? 'bg-indigo-50 text-indigo-700 border-indigo-200'
+                                  : task.status === 'BLOCKED'
+                                  ? 'bg-rose-50 text-rose-700 border-rose-200'
+                                  : 'bg-slate-100 text-slate-700 border-slate-200'
+                              }`}
+                            >
+                              {getColumnTitle(task.status)}
+                            </span>
+                          )}
+                        </td>
+
+                        {/* Thao tác */}
+                        <td className="py-3.5 px-4 text-right whitespace-nowrap">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedTaskId(task.id);
+                            }}
+                            className="px-2.5 py-1 text-xs font-bold text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg transition-colors"
+                          >
+                            Chi tiết ↗
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Table Footer info */}
+          <div className="px-4 py-3 bg-slate-50/70 border-t border-slate-200/80 flex items-center justify-between text-xs text-slate-500 font-medium">
+            <span>Hiển thị <strong>{filteredTasks.length}</strong> công việc</span>
+            {hideCompleted && doneCount > 0 && (
+              <span className="text-indigo-600 font-semibold">
+                (Đang ẩn {doneCount} việc đã hoàn thành)
+              </span>
+            )}
+          </div>
+        </div>
       ) : (
         <DragDropContext onDragEnd={onDragEnd}>
           <div className="kanban-board" aria-label="Bảng Kanban">
             {COLUMNS.map((column) => {
               const columnTasks = getColumnTasks(column.id);
+
+              // If hideCompleted is true and column is DONE, show collapsed column
+              if (hideCompleted && column.id === 'DONE') {
+                return (
+                  <section className="kanban-column opacity-85 border-dashed" key={column.id} aria-label={column.title}>
+                    <header className="kanban-column__header justify-between">
+                      <div className="kanban-column__title-wrap">
+                        <h2 className="kanban-column__title text-slate-400">Hoàn thành</h2>
+                        <span className="kanban-column__count bg-slate-100 text-slate-500 font-bold">{doneCount}</span>
+                      </div>
+                    </header>
+                    <div className="kanban-column__body items-center justify-center p-6 text-center space-y-2">
+                      <div className="w-10 h-10 rounded-xl bg-slate-100 text-slate-400 flex items-center justify-center mx-auto shadow-2xs">
+                        <EyeOff className="w-5 h-5" />
+                      </div>
+                      <p className="text-xs font-bold text-slate-700">Đã ẩn {doneCount} việc hoàn thành</p>
+                      <p className="text-[11px] text-slate-400">Giúp bạn tập trung vào các việc đang cần làm</p>
+                      <button
+                        type="button"
+                        onClick={() => setHideCompleted(false)}
+                        className="text-xs font-bold text-blue-600 hover:text-blue-800 hover:underline pt-1"
+                      >
+                        Hiện lại cột hoàn thành
+                      </button>
+                    </div>
+                  </section>
+                );
+              }
 
               return (
                 <section className={'kanban-column ' + column.className} key={column.id} aria-label={column.title}>
@@ -628,7 +1031,7 @@ export default function KanbanPage() {
                     </button>
                   </header>
 
-                  <Droppable droppableId={column.id}>
+                  <Droppable droppableId={column.id} isDropDisabled={!isPersonalScope}>
                     {(provided, snapshot) => (
                       <div
                         ref={provided.innerRef}
@@ -646,7 +1049,7 @@ export default function KanbanPage() {
                           const cardPriorityClass = PRIORITY_CARD_FRAME[task.priority];
 
                           return (
-                            <Draggable key={task.id} draggableId={task.id} index={index}>
+                            <Draggable key={task.id} draggableId={task.id} index={index} isDragDisabled={!isPersonalScope}>
                               {(draggable, dragSnapshot) => {
                                 const dragHandleProps = draggable.dragHandleProps;
                                 return (
@@ -671,8 +1074,7 @@ export default function KanbanPage() {
                                       <span className="kanban-task__id">{task.id}</span>
                                       {!projectId && task.project && (
                                         <span
-                                          className="inline-flex items-center px-1.5 py-0.5 text-[10px] font-black uppercase border border-slate-900 shadow-[1px_1px_0px_0px_rgba(15,23,42,1)]"
-                                          style={{ backgroundColor: task.project.color ? `${task.project.color}25` : '#F1F5F9' }}
+                                          className="inline-flex items-center px-2 py-0.5 text-[10px] font-bold rounded-md border border-slate-200/90 text-slate-700 bg-slate-100/90 shadow-2xs"
                                         >
                                           {task.project.name}
                                         </span>
@@ -799,9 +1201,9 @@ export default function KanbanPage() {
                   <select
                     value={createProjectId}
                     onChange={(e) => setCreateProjectId(e.target.value)}
-                    className="w-full h-10 px-3 text-xs font-bold border border-slate-200 bg-white rounded-xl shadow-2xs focus:ring-2 focus:ring-blue-500/20 focus:outline-none"
+                    className="w-full h-10 px-3 text-xs font-medium border border-slate-200 bg-white rounded-xl shadow-2xs focus:ring-2 focus:ring-blue-500/20 focus:outline-none"
                   >
-                    {projects.map((p) => (
+                    {creatableProjects.map((p) => (
                       <option key={p.id} value={p.id}>
                         {p.kind === 'PERSONAL' ? 'Việc cá nhân' : p.name}
                       </option>
@@ -975,7 +1377,7 @@ export default function KanbanPage() {
 
               <button
                 type="button"
-                onClick={() => setSelectedTaskId(null)}
+                onClick={handleCloseDetailModal}
                 className="h-8 w-8 rounded-full flex items-center justify-center text-slate-400 hover:text-slate-700 hover:bg-slate-200/60 transition-colors"
                 aria-label="Đóng chi tiết công việc"
               >
@@ -1185,7 +1587,7 @@ export default function KanbanPage() {
             <footer className="flex justify-end px-6 py-3 border-t border-slate-200 bg-slate-50/70">
               <Button
                 variant="outline"
-                onClick={() => setSelectedTaskId(null)}
+                onClick={handleCloseDetailModal}
                 className="h-9 px-5 text-xs font-bold rounded-lg border-slate-300 hover:bg-slate-100"
               >
                 {t('taskDetail.close')}

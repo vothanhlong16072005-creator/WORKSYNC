@@ -37,6 +37,8 @@ Thumbs.db
 restore-points/
 .tempmediaStorage/
 *.log
+backend/uploads/*
+!backend/uploads/**/.gitkeep
 
 # AI Agent & Editor configurations
 .agents/

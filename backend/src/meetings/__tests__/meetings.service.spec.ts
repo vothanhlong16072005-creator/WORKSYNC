@@ -45,7 +45,12 @@ describe('MeetingsService', () => {
       },
     };
 
-    service = new MeetingsService(prismaMock, accessServiceMock);
+    // M5.1: Triggers + AI service are used inside MeetingsService but
+    // not exercised in these unit tests — provide minimal mocks.
+    const triggersMock = { meetingCreated: vi.fn(), meetingStarted: vi.fn() } as any;
+    const meetingAiMock = { generateSummary: vi.fn() } as any;
+
+    service = new MeetingsService(prismaMock, accessServiceMock, triggersMock, meetingAiMock);
   });
 
   describe('create meeting', () => {
@@ -68,6 +73,7 @@ describe('MeetingsService', () => {
           startTime: '2026-10-18T10:00:00.000Z',
           endTime: '2026-10-18T11:00:00.000Z',
           attendeeIds: [],
+          agenda: [],
         },
         { id: 'pm-1', role: Role.PM, departmentId: 'dept-1' },
       );
@@ -97,6 +103,7 @@ describe('MeetingsService', () => {
           startTime: '2026-10-18T14:00:00.000Z',
           endTime: '2026-10-18T15:30:00.000Z',
           attendeeIds: [],
+          agenda: [],
         },
         { id: 'head-1', role: Role.DEPARTMENT_HEAD, departmentId: 'dept-1' },
       );
@@ -125,6 +132,7 @@ describe('MeetingsService', () => {
           startTime: '2026-10-18T16:00:00.000Z',
           endTime: '2026-10-18T16:30:00.000Z',
           attendeeIds: ['user-2'],
+          agenda: [],
         },
         { id: 'user-1', role: Role.EMPLOYEE, departmentId: 'dept-1' },
       );
@@ -144,6 +152,7 @@ describe('MeetingsService', () => {
             startTime: '2026-10-18T10:00:00.000Z',
             endTime: '2026-10-18T11:00:00.000Z',
             attendeeIds: [],
+            agenda: [],
           },
           { id: 'hacker-1', role: Role.EMPLOYEE, departmentId: 'dept-2' },
         ),
@@ -161,6 +170,7 @@ describe('MeetingsService', () => {
             startTime: '2026-10-18T11:00:00.000Z',
             endTime: '2026-10-18T10:00:00.000Z',
             attendeeIds: [],
+            agenda: [],
           },
           { id: 'user-1', role: Role.EMPLOYEE, departmentId: 'dept-1' },
         ),

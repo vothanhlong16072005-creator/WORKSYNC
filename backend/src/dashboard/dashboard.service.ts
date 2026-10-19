@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
 import {
   EmployeeDashboardDto,
@@ -1640,6 +1640,567 @@ export class DashboardService {
       activeSprints,
       quickTasks,
       teamWorkload,
+    };
+  }
+
+  /**
+   * M3.6: Chi tiết dự án cho modal drill-down của Trưởng phòng
+   */
+  async getDepartmentHeadProjectDetail(projectId: string, actorId: string, actorRole: string) {
+    const project = await this.prisma.project.findUnique({
+      where: { id: projectId },
+      include: {
+        pm: { select: { id: true, name: true, email: true, avatar: true } },
+        createdBy: { select: { id: true, name: true, avatar: true, departmentId: true } },
+        members: {
+          include: {
+            user: { select: { id: true, name: true, avatar: true, position: true } },
+          },
+        },
+        tasks: {
+          where: { deletedAt: null },
+          orderBy: { updatedAt: 'desc' },
+          include: {
+            assignee: { select: { id: true, name: true, avatar: true } },
+          },
+        },
+        sprints: {
+          orderBy: { startDate: 'desc' },
+        },
+      },
+    });
+
+    if (!project) throw new NotFoundException('Dự án không tồn tại');
+
+    // Access check: Admin or DEPT_HEAD
+    if (actorRole !== 'ADMIN') {
+      if (actorRole !== 'DEPARTMENT_HEAD') {
+        throw new ForbiddenException('Chỉ Trưởng phòng hoặc Admin mới có quyền truy cập');
+      }
+      const actor = await this.prisma.user.findUnique({
+        where: { id: actorId },
+        select: { departmentId: true },
+      });
+      const actorDeptId = actor?.departmentId;
+      const isCreator = project.createdById === actorId;
+      const isMember = project.members.some((m) => m.userId === actorId);
+      const isPm = project.pmId === actorId;
+      const isSameDept =
+        actorDeptId &&
+        (project.departmentId === actorDeptId || project.createdBy?.departmentId === actorDeptId);
+
+      if (!isCreator && !isMember && !isPm && !isSameDept) {
+        throw new ForbiddenException('Bạn không có quyền xem dự án ngoài phòng ban');
+      }
+    }
+
+    const now = new Date();
+    const tasks = project.tasks;
+    const totalTasks = tasks.length;
+    const doneTasks = tasks.filter((t) => t.status === 'DONE').length;
+    const inProgressTasks = tasks.filter(
+      (t) => t.status === 'IN_PROGRESS' || t.status === 'IN_REVIEW',
+    ).length;
+    const blockedTasks = tasks.filter((t) => t.status === 'BLOCKED').length;
+    const overdueTasks = tasks.filter(
+      (t) => t.status !== 'DONE' && t.dueDate && new Date(t.dueDate) < now,
+    ).length;
+    const progressPercent = totalTasks > 0 ? Math.round((doneTasks / totalTasks) * 100) : 0;
+
+    const activeSprintModel = project.sprints.find((s) => s.status === 'ACTIVE') || null;
+    let activeSprintInfo = null;
+    if (activeSprintModel) {
+      const sTasks = tasks.filter((t) => t.sprintId === activeSprintModel.id);
+      const sTotal = sTasks.length;
+      const sDone = sTasks.filter((t) => t.status === 'DONE').length;
+      const sPercent = sTotal > 0 ? Math.round((sDone / sTotal) * 100) : 0;
+      const endD = activeSprintModel.endDate ? new Date(activeSprintModel.endDate) : now;
+      const daysRemaining = Math.max(
+        0,
+        Math.ceil((endD.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)),
+      );
+      const isOverdue = endD < now && sPercent < 100;
+
+      activeSprintInfo = {
+        id: activeSprintModel.id,
+        name: activeSprintModel.name,
+        progressPercent: sPercent,
+        daysRemaining,
+        isAtRisk: isOverdue || blockedTasks > 0,
+      };
+    }
+
+    // Risk assessment
+    const riskReasons: string[] = [];
+    let riskLevel: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL' = 'LOW';
+    if (overdueTasks > 5) {
+      riskLevel = 'CRITICAL';
+      riskReasons.push(`${overdueTasks} task đã quá hạn`);
+    } else if (overdueTasks > 0) {
+      riskLevel = 'HIGH';
+      riskReasons.push(`${overdueTasks} task đã quá hạn`);
+    }
+
+    if (blockedTasks > 3) {
+      riskLevel = 'CRITICAL';
+      riskReasons.push(`${blockedTasks} task đang bị tắc nghẽn (Blocked)`);
+    } else if (blockedTasks > 0 && riskLevel === 'LOW') {
+      riskLevel = 'MEDIUM';
+      riskReasons.push(`${blockedTasks} task đang bị tắc nghẽn (Blocked)`);
+    }
+
+    if (activeSprintInfo?.isAtRisk) {
+      if (riskLevel === 'LOW') riskLevel = 'MEDIUM';
+      riskReasons.push('Sprint đang chạy có nguy cơ chậm tiến độ');
+    }
+
+    const pmMember = project.members.find((m) => m.projectRole === 'PM');
+    const resolvedPm =
+      project.pm ||
+      (pmMember
+        ? {
+            id: pmMember.user.id,
+            name: pmMember.user.name,
+            avatar: pmMember.user.avatar,
+            email: '',
+          }
+        : null);
+
+    return {
+      id: project.id,
+      name: project.name,
+      description: project.description,
+      color: project.color,
+      status: project.status,
+      workflowType: project.workflowType,
+      startDate: project.startDate ? project.startDate.toISOString() : null,
+      endDate: project.endDate ? project.endDate.toISOString() : null,
+      pm: resolvedPm,
+      createdBy: project.createdBy
+        ? {
+            id: project.createdBy.id,
+            name: project.createdBy.name,
+            avatar: project.createdBy.avatar,
+          }
+        : null,
+      memberCount: project.members.length,
+      taskCounts: {
+        total: totalTasks,
+        done: doneTasks,
+        inProgress: inProgressTasks,
+        blocked: blockedTasks,
+        overdue: overdueTasks,
+      },
+      progressPercent,
+      members: project.members.map((m) => ({
+        id: m.user.id,
+        name: m.user.name,
+        avatar: m.user.avatar,
+        projectRole: m.projectRole,
+        position: m.user.position,
+      })),
+      recentTasks: tasks.slice(0, 5).map((t) => ({
+        id: t.id,
+        title: t.title,
+        status: t.status,
+        priority: t.priority,
+        assigneeName: t.assignee?.name || null,
+        updatedAt: t.updatedAt.toISOString(),
+      })),
+      sprints: project.sprints.map((s) => {
+        const sTasks = tasks.filter((t) => t.sprintId === s.id);
+        const sTotal = sTasks.length;
+        const sDone = sTasks.filter((t) => t.status === 'DONE').length;
+        const sPercent = sTotal > 0 ? Math.round((sDone / sTotal) * 100) : 0;
+        const endD = s.endDate ? new Date(s.endDate) : now;
+        const daysRemaining = Math.max(
+          0,
+          Math.ceil((endD.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)),
+        );
+        return {
+          id: s.id,
+          name: s.name,
+          status: s.status,
+          progressPercent: sPercent,
+          daysRemaining,
+          endDate: s.endDate ? s.endDate.toISOString() : null,
+        };
+      }),
+      activeSprint: activeSprintInfo,
+      riskLevel,
+      riskReasons,
+    };
+  }
+
+  /**
+   * M3.6: Chi tiết Sprint cho modal drill-down của Trưởng phòng
+   */
+  async getDepartmentHeadSprintDetail(sprintId: string, actorId: string, actorRole: string) {
+    const sprint = await this.prisma.sprint.findUnique({
+      where: { id: sprintId },
+      include: {
+        project: {
+          include: {
+            pm: { select: { id: true, name: true, avatar: true } },
+            createdBy: { select: { departmentId: true } },
+            members: { select: { userId: true, projectRole: true } },
+          },
+        },
+        tasks: {
+          where: { deletedAt: null },
+          include: {
+            assignee: { select: { id: true, name: true, avatar: true } },
+          },
+        },
+      },
+    });
+
+    if (!sprint) throw new NotFoundException('Sprint không tồn tại');
+
+    // Access check
+    if (actorRole !== 'ADMIN') {
+      if (actorRole !== 'DEPARTMENT_HEAD') {
+        throw new ForbiddenException('Chỉ Trưởng phòng hoặc Admin mới có quyền truy cập');
+      }
+      const actor = await this.prisma.user.findUnique({
+        where: { id: actorId },
+        select: { departmentId: true },
+      });
+      const actorDeptId = actor?.departmentId;
+      const isMember = sprint.project.members.some((m) => m.userId === actorId);
+      const isSameDept =
+        actorDeptId &&
+        (sprint.project.departmentId === actorDeptId ||
+          sprint.project.createdBy?.departmentId === actorDeptId);
+
+      if (!isMember && !isSameDept) {
+        throw new ForbiddenException('Bạn không có quyền xem sprint của dự án ngoài phòng ban');
+      }
+    }
+
+    const now = new Date();
+    const start = sprint.startDate ? new Date(sprint.startDate) : now;
+    const end = sprint.endDate ? new Date(sprint.endDate) : now;
+    const daysTotal = Math.max(1, Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)));
+    const daysRemaining = Math.max(0, Math.ceil((end.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)));
+
+    const tasks = sprint.tasks;
+    const totalTasks = tasks.length;
+    const doneTasks = tasks.filter((t) => t.status === 'DONE').length;
+    const inProgressTasks = tasks.filter(
+      (t) => t.status === 'IN_PROGRESS' || t.status === 'IN_REVIEW',
+    ).length;
+    const blockedTasksList = tasks.filter((t) => t.status === 'BLOCKED');
+    const blockedTasksCount = blockedTasksList.length;
+
+    const totalStoryPoints = tasks.reduce((sum, t) => sum + (t.storyPoints || 0), 0);
+    const doneStoryPoints = tasks
+      .filter((t) => t.status === 'DONE')
+      .reduce((sum, t) => sum + (t.storyPoints || 0), 0);
+
+    const progressPercent = totalTasks > 0 ? Math.round((doneTasks / totalTasks) * 100) : 0;
+
+    // Build Burndown Points (Daily timeline)
+    const burndown: {
+      date: string;
+      dayName: string;
+      ideal: number;
+      actual: number;
+      isToday: boolean;
+    }[] = [];
+
+    const effectiveTotalSP = totalStoryPoints > 0 ? totalStoryPoints : Math.max(totalTasks, 1);
+    const todayStr = now.toISOString().split('T')[0];
+
+    for (let i = 0; i <= daysTotal; i++) {
+      const d = new Date(start);
+      d.setDate(start.getDate() + i);
+      const dateStr = d.toISOString().split('T')[0];
+      const ideal = Math.max(0, Math.round(effectiveTotalSP * (1 - i / daysTotal)));
+
+      // Actual remaining up to date d
+      const completedBeforeOrOnDate = tasks.filter((t) => {
+        if (t.status !== 'DONE') return false;
+        const updatedDate = new Date(t.updatedAt).toISOString().split('T')[0];
+        return updatedDate <= dateStr;
+      });
+
+      const spCompleted =
+        totalStoryPoints > 0
+          ? completedBeforeOrOnDate.reduce((sum, t) => sum + (t.storyPoints || 0), 0)
+          : completedBeforeOrOnDate.length;
+
+      const actualRemaining = Math.max(0, effectiveTotalSP - spCompleted);
+      const isPastOrToday = d <= now || dateStr === todayStr;
+
+      burndown.push({
+        date: dateStr,
+        dayName: d.toLocaleDateString('vi-VN', { weekday: 'short' }),
+        ideal,
+        actual: isPastOrToday ? actualRemaining : actualRemaining,
+        isToday: dateStr === todayStr,
+      });
+    }
+
+    // Member Contribution
+    const contribMap = new Map<
+      string,
+      {
+        userId: string;
+        userName: string;
+        avatar: string | null;
+        assignedTasks: number;
+        doneTasks: number;
+        doneStoryPoints: number;
+      }
+    >();
+
+    for (const t of tasks) {
+      if (!t.assignee) continue;
+      const uid = t.assignee.id;
+      const entry = contribMap.get(uid) || {
+        userId: uid,
+        userName: t.assignee.name,
+        avatar: t.assignee.avatar,
+        assignedTasks: 0,
+        doneTasks: 0,
+        doneStoryPoints: 0,
+      };
+      entry.assignedTasks += 1;
+      if (t.status === 'DONE') {
+        entry.doneTasks += 1;
+        entry.doneStoryPoints += t.storyPoints || 0;
+      }
+      contribMap.set(uid, entry);
+    }
+
+    const totalDoneSP = Array.from(contribMap.values()).reduce((sum, c) => sum + c.doneStoryPoints, 0);
+    const memberContribution = Array.from(contribMap.values())
+      .map((c) => ({
+        ...c,
+        contributionPercent:
+          totalDoneSP > 0
+            ? Math.round((c.doneStoryPoints / totalDoneSP) * 100)
+            : doneTasks > 0
+            ? Math.round((c.doneTasks / doneTasks) * 100)
+            : 0,
+      }))
+      .sort((a, b) => b.doneTasks - a.doneTasks)
+      .slice(0, 10);
+
+    // Blocked tasks with days calculation
+    const blockedTasks = blockedTasksList.map((t) => {
+      const blockedDays = Math.max(
+        1,
+        Math.ceil((now.getTime() - new Date(t.updatedAt).getTime()) / (1000 * 60 * 60 * 24)),
+      );
+      return {
+        id: t.id,
+        title: t.title,
+        priority: t.priority,
+        blockedDays,
+        assigneeName: t.assignee?.name || null,
+      };
+    });
+
+    // Risk assessment
+    const riskReasons: string[] = [];
+    let riskLevel: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL' = 'LOW';
+    if (end < now && progressPercent < 100) {
+      riskLevel = 'CRITICAL';
+      riskReasons.push('Sprint đã hết hạn nhưng chưa hoàn thành');
+    }
+    if (blockedTasksCount > 2) {
+      if (riskLevel !== 'CRITICAL') riskLevel = 'HIGH';
+      riskReasons.push(`Có ${blockedTasksCount} task đang bị nghẽn (Blocked)`);
+    } else if (blockedTasksCount > 0 && riskLevel === 'LOW') {
+      riskLevel = 'MEDIUM';
+      riskReasons.push(`Có ${blockedTasksCount} task đang bị nghẽn (Blocked)`);
+    }
+    if (daysRemaining <= 2 && progressPercent < 50) {
+      if (riskLevel !== 'CRITICAL') riskLevel = 'HIGH';
+      riskReasons.push('Còn dưới 2 ngày nhưng tiến độ dưới 50%');
+    }
+
+    return {
+      id: sprint.id,
+      name: sprint.name,
+      goal: sprint.goal,
+      status: sprint.status,
+      startDate: start.toISOString(),
+      endDate: end.toISOString(),
+      daysRemaining,
+      daysTotal,
+      project: {
+        id: sprint.project.id,
+        name: sprint.project.name,
+        color: sprint.project.color,
+      },
+      pm: sprint.project.pm,
+      totalTasks,
+      doneTasks,
+      inProgressTasks,
+      blockedTasks: blockedTasksCount,
+      totalStoryPoints,
+      doneStoryPoints,
+      progressPercent,
+      burndown,
+      memberContribution,
+      blockedTasksList: blockedTasks,
+      riskLevel,
+      riskReasons,
+    };
+  }
+
+  /**
+   * M3.6: Hồ sơ nhân viên & Lịch sử chấm công 7 ngày cho modal của Trưởng phòng
+   */
+  async getDepartmentHeadMemberProfile(memberId: string, actorId: string, actorRole: string) {
+    const member = await this.prisma.user.findUnique({
+      where: { id: memberId },
+      include: {
+        department: { select: { id: true, name: true } },
+      },
+    });
+
+    if (!member) throw new NotFoundException('Nhân viên không tồn tại');
+
+    // Access check: Same department or ADMIN
+    if (actorRole !== 'ADMIN') {
+      if (actorRole !== 'DEPARTMENT_HEAD') {
+        throw new ForbiddenException('Chỉ Trưởng phòng hoặc Admin mới có quyền truy cập');
+      }
+      const actor = await this.prisma.user.findUnique({
+        where: { id: actorId },
+        select: { departmentId: true },
+      });
+      if (actor?.departmentId && member.departmentId !== actor?.departmentId) {
+        throw new ForbiddenException('Nhân viên không thuộc phòng ban của bạn');
+      }
+    }
+
+    const now = new Date();
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(now.getDate() - 7);
+    sevenDaysAgo.setHours(0, 0, 0, 0);
+
+    const oneWeekAgo = new Date();
+    oneWeekAgo.setDate(now.getDate() - 7);
+    const oneMonthAgo = new Date();
+    oneMonthAgo.setDate(now.getDate() - 30);
+
+    const [attendanceRecords, quickTasks, projectTasks, allTasks] = await Promise.all([
+      this.prisma.attendanceRecord.findMany({
+        where: {
+          userId: memberId,
+          date: { gte: sevenDaysAgo },
+        },
+        orderBy: { date: 'asc' },
+      }),
+      this.prisma.quickTask.findMany({
+        where: { assigneeId: memberId },
+        orderBy: [{ dueDate: 'asc' }, { createdAt: 'desc' }],
+        take: 5,
+      }),
+      this.prisma.task.findMany({
+        where: { assigneeId: memberId, deletedAt: null },
+        orderBy: { updatedAt: 'desc' },
+        take: 5,
+        include: {
+          project: { select: { name: true, color: true } },
+        },
+      }),
+      this.prisma.task.findMany({
+        where: { assigneeId: memberId, deletedAt: null },
+        select: { id: true, status: true, dueDate: true, updatedAt: true },
+      }),
+    ]);
+
+    // Task stats
+    const openTasks = allTasks.filter((t) => t.status !== 'DONE').length;
+    const overdueTasks = allTasks.filter(
+      (t) => t.status !== 'DONE' && t.dueDate && new Date(t.dueDate) < now,
+    ).length;
+    const doneThisWeek = allTasks.filter(
+      (t) => t.status === 'DONE' && new Date(t.updatedAt) >= oneWeekAgo,
+    ).length;
+    const doneThisMonth = allTasks.filter(
+      (t) => t.status === 'DONE' && new Date(t.updatedAt) >= oneMonthAgo,
+    ).length;
+
+    // 7-day attendance mini calendar strip
+    const attendanceHistory: {
+      date: string;
+      dayName: string;
+      status: 'OFFICE' | 'WFH' | 'LEAVE' | 'OFF' | 'PENDING';
+      checkInTime: string | null;
+    }[] = [];
+
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(now);
+      d.setDate(now.getDate() - i);
+      const dateStr = d.toISOString().split('T')[0];
+      const dayOfWeek = d.getDay(); // 0 is Sunday, 6 is Saturday
+      const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+
+      const record = attendanceRecords.find(
+        (r) => new Date(r.date).toISOString().split('T')[0] === dateStr,
+      );
+
+      let status: 'OFFICE' | 'WFH' | 'LEAVE' | 'OFF' | 'PENDING' = isWeekend ? 'OFF' : 'PENDING';
+      let checkInTime: string | null = null;
+
+      if (record) {
+        if (record.status === 'ON_TIME' || record.status === 'LATE' || record.status === 'VERY_LATE') {
+          status = 'OFFICE';
+        } else if (record.status === 'WFH') {
+          status = 'WFH';
+        } else if (
+          record.status === 'ABSENT_APPROVED' ||
+          record.status === 'EARLY_LEAVE_APPROVED' ||
+          record.status === 'BUSINESS_TRIP'
+        ) {
+          status = 'LEAVE';
+        }
+        checkInTime = record.checkInTime ? record.checkInTime.toISOString() : null;
+      }
+
+      attendanceHistory.push({
+        date: dateStr,
+        dayName: d.toLocaleDateString('vi-VN', { weekday: 'short' }),
+        status,
+        checkInTime,
+      });
+    }
+
+    return {
+      id: member.id,
+      name: member.name,
+      email: member.email,
+      avatar: member.avatar,
+      position: member.position,
+      role: member.role,
+      department: member.department,
+      stats: {
+        openTasks,
+        overdueTasks,
+        doneThisWeek,
+        doneThisMonth,
+      },
+      attendanceHistory,
+      recentQuickTasks: quickTasks.map((t) => ({
+        id: t.id,
+        title: t.title,
+        status: t.status,
+        dueDate: t.dueDate.toISOString(),
+      })),
+      recentProjectTasks: projectTasks.map((t) => ({
+        id: t.id,
+        title: t.title,
+        status: t.status,
+        projectName: t.project.name,
+        projectColor: t.project.color,
+      })),
     };
   }
 }

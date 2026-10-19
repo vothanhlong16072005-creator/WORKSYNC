@@ -1,4 +1,4 @@
-import { Controller, Get, UseGuards } from '@nestjs/common';
+import { Controller, Get, Param, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard.js';
 import { RolesGuard } from '../common/guards/roles.guard.js';
 import { Roles } from '../common/decorators/roles.decorator.js';
@@ -60,5 +60,41 @@ export class DashboardController {
   @Roles('ADMIN')
   async getAdmin(@CurrentUser() user: AuthUser) {
     return { success: true, data: await this.dashboardService.getAdminDashboard(user.id) };
+  }
+
+  @Get('dept-head/project/:id')
+  @Roles('DEPARTMENT_HEAD', 'ADMIN')
+  async getDeptHeadProject(
+    @Param('id') id: string,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return {
+      success: true,
+      data: await this.dashboardService.getDepartmentHeadProjectDetail(id, user.id, user.role),
+    };
+  }
+
+  @Get('dept-head/sprint/:id')
+  @Roles('DEPARTMENT_HEAD', 'ADMIN')
+  async getDeptHeadSprint(
+    @Param('id') id: string,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return {
+      success: true,
+      data: await this.dashboardService.getDepartmentHeadSprintDetail(id, user.id, user.role),
+    };
+  }
+
+  @Get('dept-head/member/:id')
+  @Roles('DEPARTMENT_HEAD', 'ADMIN')
+  async getDeptHeadMember(
+    @Param('id') id: string,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return {
+      success: true,
+      data: await this.dashboardService.getDepartmentHeadMemberProfile(id, user.id, user.role),
+    };
   }
 }

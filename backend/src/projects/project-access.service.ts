@@ -101,11 +101,16 @@ export class ProjectAccessService {
         id: true,
         projectId: true,
         assigneeId: true,
+        createdById: true,
         project: {
           select: {
             id: true,
+            name: true,
             kind: true,
             personalOwnerId: true,
+            pmId: true,
+            departmentId: true,
+            createdById: true,
             members: {
               where: { userId: actor.id },
               select: { projectRole: true },
@@ -116,7 +121,7 @@ export class ProjectAccessService {
     });
 
     if (!task) {
-      throw new NotFoundException('Task not found');
+      throw new NotFoundException('Công việc không tồn tại hoặc đã bị xóa');
     }
 
     if (actor.role === Role.ADMIN) {
@@ -125,24 +130,27 @@ export class ProjectAccessService {
 
     if (task.project.kind === ProjectKind.PERSONAL) {
       if (task.project.personalOwnerId !== actor.id) {
-        throw new ForbiddenException('You do not have access to this project');
+        throw new ForbiddenException('Bạn không có quyền thao tác trên dự án cá nhân của người khác');
       }
       return { taskId: task.id, projectId: task.projectId };
     }
 
     const membership = task.project.members[0];
-    if (!membership) {
-      throw new ForbiddenException('You do not have access to this project');
-    }
-
     const isAssignee = task.assigneeId === actor.id;
-    const isPM = membership.projectRole === 'PM';
+    const isCreator = task.createdById === actor.id;
+    const isProjectPM = task.project.pmId === actor.id || membership?.projectRole === 'PM';
+    const isDeptHead = actor.role === Role.DEPARTMENT_HEAD && (
+      task.project.createdById === actor.id ||
+      task.project.pmId === actor.id ||
+      (!!actor.departmentId && task.project.departmentId === actor.departmentId)
+    );
 
-    if (!isAssignee && !isPM) {
-      throw new ForbiddenException('You do not have permission to move this task');
+    // Only allow task move if actor is Assignee, Creator, PM, or Department Head
+    if (isAssignee || isCreator || isProjectPM || isDeptHead) {
+      return { taskId: task.id, projectId: task.projectId };
     }
 
-    return { taskId: task.id, projectId: task.projectId };
+    throw new ForbiddenException('Bạn không có quyền di chuyển công việc này. Chỉ người được giao việc, người tạo hoặc Quản lý dự án (PM) mới có quyền thay đổi trạng thái.');
   }
 }
 

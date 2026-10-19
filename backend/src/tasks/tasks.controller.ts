@@ -15,7 +15,7 @@ export class TasksController {
 
   @Post()
   create(@Body() createTaskDto: CreateTaskDto, @CurrentUser() actor: CurrentActor) {
-    return this.tasksService.create(createTaskDto, actor.id);
+    return this.tasksService.create(createTaskDto, actor);
   }
 
   @Get()

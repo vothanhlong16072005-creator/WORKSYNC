@@ -35,7 +35,7 @@ describe('ProjectsService.findMine', () => {
 });
 
 describe('ProjectsService.create', () => {
-  it('forbids non-PM/Admin from creating project', async () => {
+  it('forbids non-DeptHead/Admin from creating project (including PM and EMPLOYEE)', async () => {
     const prisma = {} as PrismaService;
     const accessService = {} as ProjectAccessService;
     const service = new ProjectsService(prisma, accessService);
@@ -43,9 +43,13 @@ describe('ProjectsService.create', () => {
     await expect(
       service.create({ name: 'New' }, { id: 'u-1', role: 'EMPLOYEE' }),
     ).rejects.toBeInstanceOf(ForbiddenException);
+
+    await expect(
+      service.create({ name: 'New' }, { id: 'u-2', role: 'PM' }),
+    ).rejects.toBeInstanceOf(ForbiddenException);
   });
 
-  it('creates team project and assigns creator as PM', async () => {
+  it('creates team project when actor is DEPARTMENT_HEAD and assigns PM', async () => {
     const created = { id: 'p-new', name: 'New', kind: 'TEAM' };
     const tx = {
       project: {
@@ -54,13 +58,16 @@ describe('ProjectsService.create', () => {
     };
     const prisma = {
       $transaction: vi.fn().mockImplementation(async (cb) => cb(tx)),
+      user: {
+        findUnique: vi.fn().mockResolvedValue({ departmentId: 'dept-1' }),
+      },
     } as unknown as PrismaService;
     const accessService = {} as ProjectAccessService;
     const service = new ProjectsService(prisma, accessService);
 
     const result = await service.create(
-      { name: 'New', color: '#FF0000' },
-      { id: 'u-1', role: 'PM' },
+      { name: 'New', color: '#FF0000', pmId: 'pm-1' },
+      { id: 'head-1', role: 'DEPARTMENT_HEAD', departmentId: 'dept-1' },
     );
     expect(result).toEqual(created);
     expect(tx.project.create).toHaveBeenCalledWith(
@@ -68,11 +75,18 @@ describe('ProjectsService.create', () => {
         data: expect.objectContaining({
           name: 'New',
           kind: 'TEAM',
+          pmId: 'pm-1',
           members: {
-            create: expect.objectContaining({
-              userId: 'u-1',
-              projectRole: 'PM',
-            }),
+            create: expect.arrayContaining([
+              expect.objectContaining({
+                userId: 'head-1',
+                projectRole: 'DEPT_HEAD',
+              }),
+              expect.objectContaining({
+                userId: 'pm-1',
+                projectRole: 'PM',
+              }),
+            ]),
           },
         }),
       }),
@@ -210,5 +224,82 @@ describe('ProjectsService.changeMemberRole', () => {
 
     const result = await service.changeMemberRole('p-1', 'u-2', { projectRole: 'LEAD' }, { id: 'u-1', role: 'EMPLOYEE' });
     expect(result).toEqual(updated);
+  });
+});
+
+describe('ProjectsService.swapPm', () => {
+  it('throws NotFoundException if project does not exist', async () => {
+    const prisma = {
+      project: { findUnique: vi.fn().mockResolvedValue(null) },
+    } as unknown as PrismaService;
+    const accessService = {} as ProjectAccessService;
+    const service = new ProjectsService(prisma, accessService);
+
+    await expect(
+      service.swapPm('p-none', { newPmId: 'u-2' }, { id: 'admin-1', role: 'ADMIN' }),
+    ).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it('forbids non-DeptHead / non-Admin from swapping PM', async () => {
+    const prisma = {
+      project: {
+        findUnique: vi.fn().mockResolvedValue({ id: 'p-1', pmId: 'u-1', departmentId: 'd-1' }),
+      },
+    } as unknown as PrismaService;
+    const accessService = {} as ProjectAccessService;
+    const service = new ProjectsService(prisma, accessService);
+
+    await expect(
+      service.swapPm('p-1', { newPmId: 'u-2' }, { id: 'emp-1', role: 'EMPLOYEE' }),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+  });
+
+  it('successfully swaps PM in transaction for DEPARTMENT_HEAD', async () => {
+    const project = { id: 'p-1', pmId: 'old-pm', departmentId: 'd-1' };
+    const newPmUser = { id: 'new-pm', name: 'New PM', status: 'ACTIVE', departmentId: 'd-1' };
+    const tx = {
+      project: {
+        update: vi.fn().mockResolvedValue({ ...project, pmId: 'new-pm' }),
+      },
+      projectMember: {
+        upsert: vi.fn().mockResolvedValue({}),
+      },
+    };
+    const prisma = {
+      project: { findUnique: vi.fn().mockResolvedValue(project) },
+      user: {
+        findUnique: vi.fn().mockImplementation(({ where }) => {
+          if (where.id === 'head-1') return Promise.resolve({ departmentId: 'd-1' });
+          if (where.id === 'new-pm') return Promise.resolve(newPmUser);
+          return Promise.resolve(null);
+        }),
+      },
+      $transaction: vi.fn().mockImplementation(async (cb) => cb(tx)),
+    } as unknown as PrismaService;
+    const accessService = {} as ProjectAccessService;
+    const service = new ProjectsService(prisma, accessService);
+
+    const result = await service.swapPm(
+      'p-1',
+      { newPmId: 'new-pm', reason: 'Reorganizing team' },
+      { id: 'head-1', role: 'DEPARTMENT_HEAD', departmentId: 'd-1' },
+    );
+
+    expect(result.pmId).toBe('new-pm');
+    expect(tx.project.update).toHaveBeenCalledWith({
+      where: { id: 'p-1' },
+      data: { pmId: 'new-pm' },
+      include: expect.any(Object),
+    });
+    expect(tx.projectMember.upsert).toHaveBeenCalledWith({
+      where: { projectId_userId: { projectId: 'p-1', userId: 'old-pm' } },
+      create: { projectId: 'p-1', userId: 'old-pm', projectRole: 'MEMBER' },
+      update: { projectRole: 'MEMBER' },
+    });
+    expect(tx.projectMember.upsert).toHaveBeenCalledWith({
+      where: { projectId_userId: { projectId: 'p-1', userId: 'new-pm' } },
+      create: { projectId: 'p-1', userId: 'new-pm', projectRole: 'PM' },
+      update: { projectRole: 'PM' },
+    });
   });
 });

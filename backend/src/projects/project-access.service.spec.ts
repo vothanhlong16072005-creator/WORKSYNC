@@ -157,7 +157,7 @@ describe('ProjectAccessService.requireTaskMovePermission', () => {
       .resolves.toEqual({ taskId: 'task-1', projectId: 'team-1' });
   });
 
-  it('rejects a non-assignee regular employee', async () => {
+  it('rejects another employee who is not the assignee nor PM', async () => {
     const prisma = {
       task: { findFirst: vi.fn().mockResolvedValue(baseTask) },
     } as unknown as PrismaService;

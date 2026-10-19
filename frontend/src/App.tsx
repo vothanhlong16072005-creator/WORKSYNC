@@ -54,7 +54,9 @@ function App() {
           <Route path="/projects/:id" element={<ProjectDetailPage />} />
           <Route path="/projects/:id/sprints/:sprintId" element={<SprintDetailPage />} />
           <Route path="/tasks" element={<KanbanPage />} />
+          <Route path="/tasks/:taskId" element={<KanbanPage />} />
           <Route path="/projects/:projectId/tasks" element={<KanbanPage />} />
+          <Route path="/projects/:projectId/tasks/:taskId" element={<KanbanPage />} />
           {/* M3.5: Quick Tasks — Giao việc nhanh */}
           <Route path="/quick-tasks" element={<QuickTasksPage />} />
           {/* M5: Meetings — Cuộc họp trực tuyến & Báo cáo */}

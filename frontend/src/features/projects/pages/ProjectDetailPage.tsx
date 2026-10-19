@@ -7,11 +7,9 @@ import {
   Layout,
   Plus,
   Settings,
-  ShieldCheck,
   CheckCircle2,
   Trash2,
   AlertCircle,
-  ExternalLink,
   Layers,
   Inbox,
   UserPlus,
@@ -21,20 +19,26 @@ import {
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useAuthStore } from '@/stores/auth.store';
+import { toast } from 'sonner';
 import { apiClient } from '@/lib/api-client';
 import { projectApi } from '../api/project.api';
 import { documentApi } from '@/features/documents/api/document.api';
 import type { DocumentItem } from '@/features/documents/types/document.types';
 import { DocumentCard } from '@/features/documents/components/DocumentCard';
-import type { ProjectItem } from '../types/project.types';
+import type { ProjectItem, ProjectMemberItem } from '../types/project.types';
 import { WorkflowTypeBadge } from '../components/WorkflowTypeBadge';
-import { SprintCard } from '@/features/sprints/components/SprintCard';
 import { CreateSprintModal } from '@/features/sprints/components/CreateSprintModal';
 import { StartSprintDialog } from '@/features/sprints/components/StartSprintDialog';
 import { CompleteSprintDialog } from '@/features/sprints/components/CompleteSprintDialog';
 import { AddMemberModal } from '../components/AddMemberModal';
+import { RemoveMemberModal } from '../components/RemoveMemberModal';
+import { MemberProfileModal } from '../components/MemberProfileModal';
+import { BurndownChart } from '@/features/sprints/components/BurndownChart';
 import { ProjectKanbanBoard } from '../components/ProjectKanbanBoard';
 import { ProjectTasksTableView } from '../components/ProjectTasksTableView';
+import { CreateProjectTaskModal } from '../components/CreateProjectTaskModal';
+import { CreateProjectDocModal } from '../components/CreateProjectDocModal';
+import { ProjectSprintsView } from '../components/ProjectSprintsView';
 import {
   TaskDetailModal,
   type TaskDetailModalTask,
@@ -49,7 +53,8 @@ export const ProjectDetailPage: React.FC = () => {
   const isEn = i18n.language.startsWith('en');
 
   const { user } = useAuthStore();
-  const { sprints, fetchSprintsByProject, removeSprint } = useSprintStore();
+  const { sprints, fetchSprintsByProject, removeSprint, burndown, fetchBurndown } =
+    useSprintStore();
 
   const [project, setProject] = useState<ProjectItem | null>(null);
   const [tasks, setTasks] = useState<TaskDetailModalTask[]>([]);
@@ -66,10 +71,26 @@ export const ProjectDetailPage: React.FC = () => {
   );
 
   // Modals & Dialogs
+  const [isCreateTaskModalOpen, setIsCreateTaskModalOpen] = useState(false);
+  const [taskModalDefaultSprintId, setTaskModalDefaultSprintId] = useState<string | undefined>(undefined);
+  const [isCreateDocModalOpen, setIsCreateDocModalOpen] = useState(false);
   const [isCreateSprintOpen, setIsCreateSprintOpen] = useState(false);
   const [isAddMemberOpen, setIsAddMemberOpen] = useState(false);
+  const [memberToRemove, setMemberToRemove] = useState<ProjectMemberItem | null>(null);
+  const [memberProfile, setMemberProfile] = useState<ProjectMemberItem | null>(null);
   const [sprintToStart, setSprintToStart] = useState<Sprint | null>(null);
   const [sprintToComplete, setSprintToComplete] = useState<Sprint | null>(null);
+
+  // Member tasks and replacement candidates
+  const memberPendingTasks = useMemo(() => {
+    if (!memberToRemove) return [];
+    return tasks.filter((t) => t.assignee?.id === memberToRemove.userId && t.status !== 'DONE');
+  }, [memberToRemove, tasks]);
+
+  const availableReplacementMembers = useMemo(() => {
+    if (!project?.members || !memberToRemove) return [];
+    return project.members.filter((m) => m.userId !== memberToRemove.userId);
+  }, [project?.members, memberToRemove]);
 
   // Settings form state
   const [editName, setEditName] = useState('');
@@ -88,10 +109,8 @@ export const ProjectDetailPage: React.FC = () => {
       setEditDesc(data.description || '');
       setEditColor(data.color || '#3B82F6');
 
-      // Fetch sprints if SCRUM
-      if (data.workflowType === 'SCRUM') {
-        fetchSprintsByProject(id);
-      }
+      // Fetch sprints for project
+      fetchSprintsByProject(id);
 
       // Fetch full project tasks
       const tasksRes = await apiClient.get<TaskDetailModalTask[]>('/tasks', {
@@ -133,6 +152,13 @@ export const ProjectDetailPage: React.FC = () => {
     return { total, done, inProgress, blocked, percent };
   }, [tasks]);
 
+  // Burndown chart data loader for active sprint in Scrum projects
+  useEffect(() => {
+    if (project?.workflowType === 'SCRUM' && project.activeSprint?.id) {
+      fetchBurndown(project.activeSprint.id);
+    }
+  }, [project?.workflowType, project?.activeSprint?.id, fetchBurndown]);
+
   if (isLoading && !project) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
@@ -167,8 +193,15 @@ export const ProjectDetailPage: React.FC = () => {
     );
   }
 
+  // Resolve PM
+  const pmMember = project.members?.find((m) => m.projectRole === 'PM');
+  const pmUser = project.pm || pmMember?.user;
+
   // RBAC checks
-  const isPM = project.pmId === user?.id || project.pm?.id === user?.id;
+  const isPM =
+    project.pmId === user?.id ||
+    project.pm?.id === user?.id ||
+    project.members?.some((m) => m.userId === user?.id && m.projectRole === 'PM');
   const isDeptHead = user?.role === 'DEPARTMENT_HEAD';
   const isAdmin = user?.role === 'ADMIN';
   const isEmployee = user?.role === 'EMPLOYEE' && !isPM;
@@ -224,22 +257,36 @@ export const ProjectDetailPage: React.FC = () => {
     }
   };
 
-  // Remove member
-  const handleRemoveMember = async (userId: string) => {
-    if (
-      !confirm(
-        t(
-          'projects.remove_member_confirm',
-          'Bạn có chắc muốn xóa thành viên này khỏi dự án?',
-        ),
-      )
-    )
-      return;
+  // Remove member with tasks handover
+  const handleConfirmRemoveMember = async (reassignToUserId?: string) => {
+    if (!project || !memberToRemove) return;
     try {
-      await projectApi.removeMember(project.id, userId);
+      if (reassignToUserId && memberPendingTasks.length > 0) {
+        for (const t of memberPendingTasks) {
+          await apiClient.patch(`/tasks/${t.id}`, { assigneeId: reassignToUserId });
+        }
+      }
+      await projectApi.removeMember(project.id, memberToRemove.userId);
+      toast.success(
+        isEn ? 'Member removed from project' : 'Đã xóa thành viên khỏi dự án',
+        {
+          description: reassignToUserId
+            ? isEn
+              ? `Reassigned ${memberPendingTasks.length} unfinished task(s) to selected member.`
+              : `Đã bàn giao ${memberPendingTasks.length} nhiệm vụ cho nhân sự mới.`
+            : undefined,
+        },
+      );
       fetchProjectData();
+      setMemberToRemove(null);
     } catch (err: unknown) {
-      alert('Error: ' + (err instanceof Error ? err.message : 'Cannot remove'));
+      toast.error(
+        err instanceof Error
+          ? err.message
+          : isEn
+          ? 'Failed to remove member'
+          : 'Không thể xóa thành viên khỏi dự án',
+      );
     }
   };
 
@@ -297,15 +344,52 @@ export const ProjectDetailPage: React.FC = () => {
             <span>{t('projects.back_to_list', 'Quay lại danh sách dự án')}</span>
           </Link>
 
-          {/* Direct link to Kanban task board (/tasks?project=...) */}
-          <Link
-            to={`/tasks?project=${project.id}`}
-            className="inline-flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-2xl bg-blue-600 hover:bg-blue-700 text-white shadow-md active:scale-98 transition-all"
-          >
-            <Layout className="w-4 h-4" />
-            <span>{t('projects.open_kanban', 'Mở Bảng Việc Kanban (/tasks)')}</span>
-            <ExternalLink className="w-3.5 h-3.5 opacity-80" />
-          </Link>
+          {/* Direct Action Command Buttons (Autonomous, zero external redirects!) */}
+          <div className="flex items-center gap-2">
+            {canManageProject && (
+              <button
+                id="btn-header-create-task"
+                type="button"
+                onClick={() => {
+                  setTaskModalDefaultSprintId(project.activeSprint?.id);
+                  setIsCreateTaskModalOpen(true);
+                }}
+                className="inline-flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-2xl bg-blue-600 hover:bg-blue-700 active:scale-98 text-white shadow-md shadow-blue-500/20 transition-all cursor-pointer"
+              >
+                <Plus className="w-4 h-4" />
+                <span>{isEn ? 'Create Task' : 'Tạo Công Việc'}</span>
+              </button>
+            )}
+
+            {canManageProject && (
+              <button
+                id="btn-header-create-doc"
+                type="button"
+                onClick={() => setIsCreateDocModalOpen(true)}
+                className="inline-flex items-center gap-2 px-3.5 py-2 text-xs font-bold rounded-2xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 transition-all cursor-pointer"
+              >
+                <FileText className="w-3.5 h-3.5 text-indigo-600" />
+                <span>{isEn ? 'New Spec / Doc' : 'Soạn Tài Liệu'}</span>
+              </button>
+            )}
+
+            <button
+              type="button"
+              onClick={() => setActiveTab(isScrum ? 'all_tasks' : 'kanban')}
+              className="inline-flex items-center gap-2 px-3.5 py-2 text-xs font-semibold rounded-2xl bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 shadow-xs active:scale-98 transition-all cursor-pointer"
+            >
+              <Layout className="w-4 h-4 text-blue-600" />
+              <span>
+                {isScrum
+                  ? isEn
+                    ? 'All Tasks'
+                    : 'Bảng Tất Cả Việc'
+                  : isEn
+                  ? 'Kanban Board'
+                  : 'Bảng Kanban'}
+              </span>
+            </button>
+          </div>
         </div>
 
         {/* Project Command Header Card */}
@@ -344,15 +428,15 @@ export const ProjectDetailPage: React.FC = () => {
 
             {/* PM Card Snapshot */}
             <div className="flex items-center gap-3 p-3.5 bg-slate-50 rounded-2xl border border-slate-200/80">
-              {project.pm?.avatar ? (
+              {pmUser?.avatar ? (
                 <img
-                  src={project.pm.avatar}
-                  alt={project.pm.name}
+                  src={pmUser.avatar}
+                  alt={pmUser.name}
                   className="w-10 h-10 rounded-full object-cover border border-slate-200"
                 />
               ) : (
                 <div className="w-10 h-10 rounded-full bg-blue-100 text-blue-700 font-bold text-xs flex items-center justify-center">
-                  PM
+                  {pmUser?.name ? pmUser.name.charAt(0).toUpperCase() : 'PM'}
                 </div>
               )}
               <div>
@@ -360,7 +444,7 @@ export const ProjectDetailPage: React.FC = () => {
                   {t('projects.pm', 'Chủ nhiệm PM')}
                 </span>
                 <span className="text-sm font-bold text-slate-900">
-                  {project.pm?.name || t('projects.unassigned_pm', 'Chưa chỉ định')}
+                  {pmUser?.name || t('projects.unassigned_pm', 'Chưa chỉ định')}
                 </span>
               </div>
             </div>
@@ -387,13 +471,13 @@ export const ProjectDetailPage: React.FC = () => {
                 </div>
               </div>
 
-              <Link
-                to={`/projects/${project.id}/sprints/${project.activeSprint.id}`}
-                className="px-4 py-2 text-xs font-semibold rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs active:scale-98 transition-all flex items-center gap-1.5"
+              <button
+                type="button"
+                onClick={() => setActiveTab('sprints')}
+                className="px-4 py-2 text-xs font-semibold rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs active:scale-98 transition-all flex items-center gap-1.5 cursor-pointer"
               >
                 <span>{t('projects.view_sprint_burndown', 'Xem Sprint & Burndown')}</span>
-                <ExternalLink className="w-3.5 h-3.5" />
-              </Link>
+              </button>
             </div>
           )}
 
@@ -446,9 +530,10 @@ export const ProjectDetailPage: React.FC = () => {
               </button>
             )}
 
-            {/* Tab: Sprints (only SCRUM) */}
-            {isScrum && (
+            {/* Tab: Sprints */}
+            {(isScrum || sprints.length > 0 || canManageProject) && (
               <button
+                id="btn-tab-sprints"
                 onClick={() => setActiveTab('sprints')}
                 className={`px-4 py-2 text-xs font-bold rounded-xl transition-all flex items-center gap-2 ${
                   activeTab === 'sprints'
@@ -456,7 +541,7 @@ export const ProjectDetailPage: React.FC = () => {
                     : 'text-slate-600 hover:bg-slate-100'
                 }`}
               >
-                <Flame className="w-3.5 h-3.5" />
+                <Flame className="w-3.5 h-3.5 text-amber-500" />
                 <span>
                   {t('projects.tabs.sprints', 'Sprints')} ({sprints.length})
                 </span>
@@ -528,6 +613,62 @@ export const ProjectDetailPage: React.FC = () => {
         {/* TAB 1: OVERVIEW */}
         {activeTab === 'overview' && (
           <div className="space-y-6">
+            {/* SPRINT HERO: Burndown Chart right at the top for Scrum projects! */}
+            {isScrum && project.activeSprint && (
+              <div className="bg-white rounded-3xl border border-slate-200/90 p-6 sm:p-7 shadow-xs space-y-4">
+                <div className="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-slate-100">
+                  <div className="flex items-center gap-3">
+                    <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 text-white flex items-center justify-center font-bold shadow-sm shadow-emerald-500/20">
+                      <Flame className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[11px] font-bold text-emerald-800 uppercase tracking-wider">
+                          {isEn ? 'Active Sprint Burndown' : 'Tiến Độ Sprint Hiện Tại (Burndown)'}
+                        </span>
+                        <span className="relative flex h-2 w-2">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                          <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                        </span>
+                      </div>
+                      <h3 className="text-lg font-bold text-slate-900 mt-0.5">
+                        {project.activeSprint.name}
+                      </h3>
+                      {project.activeSprint.durationDays ? (
+                        <p className="text-xs text-slate-500 mt-0.5">
+                          {isEn
+                            ? `Sprint duration: ${project.activeSprint.durationDays} days`
+                            : `Thời hạn sprint: ${project.activeSprint.durationDays} ngày`}
+                        </p>
+                      ) : null}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('sprints')}
+                      className="px-4 py-2 text-xs font-bold rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <Flame className="w-3.5 h-3.5 text-amber-600" />
+                      <span>{isEn ? 'Sprint Details' : 'Chi Tiết Sprint'}</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('all_tasks')}
+                      className="px-4 py-2 text-xs font-bold rounded-xl bg-blue-600 hover:bg-blue-700 text-white shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <TableProperties className="w-3.5 h-3.5" />
+                      <span>{isEn ? 'All Tasks' : 'Xem Bảng Task'}</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Burndown Chart Component */}
+                <BurndownChart burndown={burndown} height={280} />
+              </div>
+            )}
+
             {/* Metrics Ribbon */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
               <div className="p-5 rounded-3xl bg-white border border-slate-200/80 shadow-xs">
@@ -639,7 +780,8 @@ export const ProjectDetailPage: React.FC = () => {
                 {project.members?.map((m) => (
                   <div
                     key={m.id}
-                    className="p-3 rounded-2xl bg-slate-50/70 border border-slate-200/60 flex items-center justify-between gap-2.5"
+                    onClick={() => setMemberProfile(m)}
+                    className="p-3 rounded-2xl bg-slate-50/70 border border-slate-200/60 hover:border-blue-300 hover:bg-blue-50/20 transition-all flex items-center justify-between gap-2.5 cursor-pointer group"
                   >
                     <div className="flex items-center gap-2.5 min-w-0">
                       {m.user.avatar ? (
@@ -672,25 +814,73 @@ export const ProjectDetailPage: React.FC = () => {
 
         {/* TAB 2: INTEGRATED KANBAN BOARD (FOR NON-SCRUM) */}
         {activeTab === 'kanban' && !isScrum && (
-          <ProjectKanbanBoard
-            projectId={project.id}
-            projectName={project.name}
-            tasks={tasks}
-            members={project.members}
-            isEmployeeOnly={isEmployee}
-            onTaskClick={(task) => setSelectedTaskForModal(task)}
-            onTaskMove={handleMoveTaskOnBoard}
-            onRefresh={fetchProjectData}
-          />
+          <div className="space-y-4">
+            <div className="flex items-center justify-between pb-2">
+              <div>
+                <h3 className="text-sm font-bold text-slate-800">
+                  {isEn ? 'Interactive Kanban Board' : 'Bảng Luồng Công Việc Kanban'}
+                </h3>
+                <p className="text-xs text-slate-500">
+                  {isEn
+                    ? 'Drag and drop tasks between columns to update progress in real-time'
+                    : 'Kéo thả thẻ nhiệm vụ trực tiếp để cập nhật trạng thái thời gian thực'}
+                </p>
+              </div>
+              {canManageProject && (
+                <button
+                  type="button"
+                  onClick={() => setIsCreateTaskModalOpen(true)}
+                  className="px-4 py-2 text-xs font-bold rounded-2xl bg-blue-600 hover:bg-blue-700 active:scale-98 text-white shadow-md shadow-blue-500/20 flex items-center gap-1.5 cursor-pointer transition-all"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>{isEn ? 'Create Task' : 'Tạo Công Việc'}</span>
+                </button>
+              )}
+            </div>
+            <ProjectKanbanBoard
+              projectId={project.id}
+              projectName={project.name}
+              tasks={tasks}
+              members={project.members}
+              isEmployeeOnly={isEmployee}
+              onTaskClick={(task) => setSelectedTaskForModal(task)}
+              onTaskMove={handleMoveTaskOnBoard}
+              onRefresh={fetchProjectData}
+            />
+          </div>
         )}
 
         {/* TAB 3: ALL TASKS TABLE VIEW (BESIDE MEMBERS TAB) */}
         {activeTab === 'all_tasks' && (
-          <ProjectTasksTableView
-            tasks={tasks}
-            members={project.members}
-            onTaskClick={(task) => setSelectedTaskForModal(task)}
-          />
+          <div className="space-y-4">
+            <div className="flex items-center justify-between pb-2">
+              <div>
+                <h3 className="text-sm font-bold text-slate-800">
+                  {isEn ? 'All Project Tasks Table' : 'Danh Sách Chi Tiết Công Việc'}
+                </h3>
+                <p className="text-xs text-slate-500">
+                  {isEn
+                    ? 'Comprehensive registry of all tasks, story points, deadlines, and assignees'
+                    : 'Bảng theo dõi toàn diện các nhiệm vụ, điểm phân bổ, hạn định và nhân sự thực hiện'}
+                </p>
+              </div>
+              {canManageProject && (
+                <button
+                  type="button"
+                  onClick={() => setIsCreateTaskModalOpen(true)}
+                  className="px-4 py-2 text-xs font-bold rounded-2xl bg-blue-600 hover:bg-blue-700 active:scale-98 text-white shadow-md shadow-blue-500/20 flex items-center gap-1.5 cursor-pointer transition-all"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>{isEn ? 'Create Task' : 'Tạo Công Việc'}</span>
+                </button>
+              )}
+            </div>
+            <ProjectTasksTableView
+              tasks={tasks}
+              members={project.members}
+              onTaskClick={(task) => setSelectedTaskForModal(task)}
+            />
+          </div>
         )}
 
         {/* TAB 4: BACKLOG (SCRUM ONLY) */}
@@ -712,13 +902,16 @@ export const ProjectDetailPage: React.FC = () => {
                 </p>
               </div>
 
-              <Link
-                to={`/tasks?project=${project.id}`}
-                className="px-3.5 py-2 text-xs font-semibold rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors flex items-center gap-1.5"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                <span>{isEn ? 'Add Task to Project' : 'Thêm Task Vào Dự Án'}</span>
-              </Link>
+              {canManageProject && (
+                <button
+                  type="button"
+                  onClick={() => setIsCreateTaskModalOpen(true)}
+                  className="px-3.5 py-2 text-xs font-bold rounded-xl bg-blue-600 hover:bg-blue-700 active:scale-98 text-white transition-all flex items-center gap-1.5 cursor-pointer shadow-md shadow-blue-500/20"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>{isEn ? 'Add Task to Backlog' : 'Thêm Task Vào Backlog'}</span>
+                </button>
+              )}
             </div>
 
             {backlogTasks.length === 0 ? (
@@ -791,90 +984,39 @@ export const ProjectDetailPage: React.FC = () => {
           </div>
         )}
 
-        {/* TAB 5: SPRINTS (SCRUM ONLY) */}
-        {activeTab === 'sprints' && isScrum && (
-          <div className="space-y-6">
-            <div className="flex flex-wrap items-center justify-between gap-4 bg-white p-6 rounded-3xl border border-slate-200/80 shadow-xs">
-              <div>
-                <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-                  <Flame className="w-5 h-5 text-orange-500" />
-                  <span>{isEn ? 'Manage Sprint Cycles' : 'Quản Lý Các Chu Kỳ Sprint'}</span>
-                  <span className="px-2.5 py-0.5 text-xs font-bold rounded-full bg-slate-100 text-slate-700">
-                    {sprints.length}
-                  </span>
-                </h3>
-                <p className="text-xs text-slate-500 mt-1">
-                  {isEn
-                    ? 'Scrum 2-week development cycle planning, burndown and velocity tracking'
-                    : 'Kế hoạch chu kỳ phát triển Scrum 2 tuần, theo dõi burndown và velocity'}
-                </p>
-              </div>
-
-              {canManageSprint ? (
-                <button
-                  onClick={() => setIsCreateSprintOpen(true)}
-                  className="px-4 py-2 text-xs font-bold rounded-xl bg-blue-600 hover:bg-blue-700 text-white shadow-xs active:scale-98 transition-all flex items-center gap-2"
-                >
-                  <Plus className="w-4 h-4" />
-                  <span>{isEn ? 'Create New Sprint' : 'Tạo Sprint Mới'}</span>
-                </button>
-              ) : isDeptHead ? (
-                <span className="text-xs text-slate-500 bg-slate-100 px-3 py-1.5 rounded-xl border border-slate-200 flex items-center gap-1.5">
-                  <ShieldCheck className="w-3.5 h-3.5 text-blue-600" />
-                  {isEn
-                    ? 'Department Head: Monitor Sprint Progress (Read-only)'
-                    : 'Trưởng phòng: Giám sát tiến độ Sprint (Read-only)'}
-                </span>
-              ) : null}
-            </div>
-
-            {sprints.length === 0 ? (
-              <div className="p-12 text-center bg-white rounded-3xl border border-dashed border-slate-200 text-slate-400">
-                <Flame className="w-12 h-12 mx-auto mb-3 opacity-30 text-orange-500" />
-                <h4 className="text-base font-bold text-slate-700">
-                  {isEn ? 'No Sprints Available' : 'Chưa có Sprint nào'}
-                </h4>
-                <p className="text-xs text-slate-400 mt-1">
-                  {isEn
-                    ? 'Create your first sprint to activate the Agile Scrum process for this project.'
-                    : 'Bắt đầu khởi tạo Sprint đầu tiên để kích hoạt quy trình Agile Scrum cho dự án.'}
-                </p>
-                {canManageSprint && (
-                  <button
-                    onClick={() => setIsCreateSprintOpen(true)}
-                    className="mt-4 px-4 py-2 text-xs font-semibold rounded-xl bg-blue-600 text-white shadow-xs hover:bg-blue-700"
-                  >
-                    + {isEn ? 'Create First Sprint' : 'Tạo Sprint Đầu Tiên'}
-                  </button>
-                )}
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {sprints.map((sprint) => (
-                  <SprintCard
-                    key={sprint.id}
-                    sprint={sprint}
-                    projectId={project.id}
-                    isPMOrAdmin={canManageSprint}
-                    onStart={(s) => setSprintToStart(s)}
-                    onComplete={(s) => setSprintToComplete(s)}
-                    onDelete={async (s) => {
-                      if (
-                        confirm(
-                          isEn
-                            ? `Are you sure you want to delete sprint "${s.name}"?`
-                            : `Bạn có chắc muốn xóa sprint "${s.name}"?`,
-                        )
-                      ) {
-                        await removeSprint(s.id);
-                        fetchSprintsByProject(project.id);
-                      }
-                    }}
-                  />
-                ))}
-              </div>
-            )}
-          </div>
+        {/* TAB 5: SPRINTS & ITERATIONS */}
+        {activeTab === 'sprints' && (
+          <ProjectSprintsView
+            projectId={project.id}
+            projectName={project.name}
+            sprints={sprints}
+            tasks={tasks}
+            members={project.members}
+            canManageSprint={Boolean(canManageSprint)}
+            canManageProject={Boolean(canManageProject)}
+            onCreateSprint={() => setIsCreateSprintOpen(true)}
+            onStartSprint={(s) => setSprintToStart(s)}
+            onCompleteSprint={(s) => setSprintToComplete(s)}
+            onDeleteSprint={async (s) => {
+              if (
+                confirm(
+                  isEn
+                    ? `Are you sure you want to delete sprint "${s.name}"?`
+                    : `Bạn có chắc muốn xóa sprint "${s.name}"?`,
+                )
+              ) {
+                await removeSprint(s.id);
+                fetchSprintsByProject(project.id);
+              }
+            }}
+            onCreateTaskInSprint={(sprintId) => {
+              setTaskModalDefaultSprintId(sprintId);
+              setIsCreateTaskModalOpen(true);
+            }}
+            onTaskClick={(task) => setSelectedTaskForModal(task)}
+            onTaskStatusChange={handleTaskStatusChange}
+            onAssignTaskToSprint={handleAssignTaskToSprint}
+          />
         )}
 
         {/* TAB 6: MEMBERS */}
@@ -911,7 +1053,8 @@ export const ProjectDetailPage: React.FC = () => {
               {project.members?.map((m) => (
                 <div
                   key={m.id}
-                  className="p-4 rounded-2xl bg-slate-50/70 border border-slate-200/70 flex items-center justify-between gap-3"
+                  onClick={() => setMemberProfile(m)}
+                  className="p-4 rounded-2xl bg-slate-50/70 border border-slate-200/70 hover:border-blue-300 hover:bg-blue-50/20 hover:shadow-2xs transition-all flex items-center justify-between gap-3 cursor-pointer group"
                 >
                   <div className="flex items-center gap-3 min-w-0">
                     {m.user.avatar ? (
@@ -938,7 +1081,11 @@ export const ProjectDetailPage: React.FC = () => {
                     m.projectRole !== 'DEPT_HEAD' &&
                     m.userId !== project.pmId && (
                       <button
-                        onClick={() => handleRemoveMember(m.userId)}
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setMemberToRemove(m);
+                        }}
                         title={isEn ? 'Remove member' : 'Xóa thành viên'}
                         className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-colors cursor-pointer"
                       >
@@ -1068,13 +1215,16 @@ export const ProjectDetailPage: React.FC = () => {
                 </p>
               </div>
 
-              <Link
-                to="/documents"
-                className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white shadow-xs transition-colors"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                {isEn ? 'Create Document' : 'Soạn Tài Liệu Mới'}
-              </Link>
+              {canManageProject && (
+                <button
+                  type="button"
+                  onClick={() => setIsCreateDocModalOpen(true)}
+                  className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white shadow-xs transition-colors cursor-pointer"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  {isEn ? 'Create Document' : 'Soạn Tài Liệu Mới'}
+                </button>
+              )}
             </div>
 
             {projectDocs.length === 0 ? (
@@ -1090,13 +1240,16 @@ export const ProjectDetailPage: React.FC = () => {
                     ? 'Create technical architecture documents or attach specs to tasks to build your project knowledge base.'
                     : 'Hãy tạo tài liệu đặc tả kiến trúc hoặc đính kèm spec vào task để lưu trữ tri thức dự án.'}
                 </p>
-                <Link
-                  to="/documents"
-                  className="inline-flex items-center gap-1 px-4 py-2 text-xs font-semibold rounded-xl bg-slate-900 hover:bg-slate-800 text-white transition-colors"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  {isEn ? 'Go to Documents' : 'Vào Kho Tài Liệu'}
-                </Link>
+                {canManageProject && (
+                  <button
+                    type="button"
+                    onClick={() => setIsCreateDocModalOpen(true)}
+                    className="inline-flex items-center gap-1 px-4 py-2 text-xs font-semibold rounded-xl bg-slate-900 hover:bg-slate-800 text-white transition-colors cursor-pointer"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    {isEn ? 'Create First Document' : 'Tạo Tài Liệu Đầu Tiên'}
+                  </button>
+                )}
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
@@ -1108,16 +1261,6 @@ export const ProjectDetailPage: React.FC = () => {
           </div>
         )}
       </div>
-
-      {/* Pop-up Modal: Task Detail (Accessible by all members) */}
-      <TaskDetailModal
-        task={selectedTaskForModal}
-        onClose={() => setSelectedTaskForModal(null)}
-        onStatusChange={handleTaskStatusChange}
-        canChangeStatus={
-          canManageProject || selectedTaskForModal?.assignee?.id === user?.id
-        }
-      />
 
       {/* Sprints Modals */}
       <CreateSprintModal
@@ -1156,6 +1299,77 @@ export const ProjectDetailPage: React.FC = () => {
         isOpen={isAddMemberOpen}
         onClose={() => setIsAddMemberOpen(false)}
         onSuccess={() => {
+          fetchProjectData();
+        }}
+      />
+
+      {/* Embedded Create Project Task Modal (Autonomous, zero external redirects!) */}
+      <CreateProjectTaskModal
+        isOpen={isCreateTaskModalOpen}
+        onClose={() => {
+          setIsCreateTaskModalOpen(false);
+          setTaskModalDefaultSprintId(undefined);
+        }}
+        onSuccess={fetchProjectData}
+        projectId={project.id}
+        projectName={project.name}
+        members={project.members || []}
+        sprints={sprints}
+        defaultSprintId={taskModalDefaultSprintId ?? project.activeSprint?.id}
+      />
+
+      {/* Embedded Create Project Document Modal (Autonomous, zero external redirects!) */}
+      <CreateProjectDocModal
+        isOpen={isCreateDocModalOpen}
+        onClose={() => setIsCreateDocModalOpen(false)}
+        onSuccess={async () => {
+          try {
+            const docsRes = await documentApi.fetchProjectDocuments(project.id);
+            setProjectDocs(docsRes.items || []);
+          } catch {
+            // quiet
+          }
+        }}
+        projectId={project.id}
+        projectName={project.name}
+      />
+
+      {/* Remove Member Modal with pending tasks handover */}
+      <RemoveMemberModal
+        isOpen={Boolean(memberToRemove)}
+        onClose={() => setMemberToRemove(null)}
+        member={memberToRemove}
+        pendingTasks={memberPendingTasks}
+        availableMembers={availableReplacementMembers}
+        onConfirm={handleConfirmRemoveMember}
+      />
+
+      {/* Member Quick Profile Popup */}
+      <MemberProfileModal
+        isOpen={Boolean(memberProfile)}
+        onClose={() => setMemberProfile(null)}
+        member={memberProfile}
+        projectName={project.name}
+        memberTasks={
+          memberProfile ? tasks.filter((t) => t.assignee?.id === memberProfile.userId) : []
+        }
+        onSelectTask={(task) => setSelectedTaskForModal(task)}
+      />
+
+      {/* Full Task Detail / PM Edit & Manage Modal */}
+      <TaskDetailModal
+        task={selectedTaskForModal}
+        onClose={() => setSelectedTaskForModal(null)}
+        onStatusChange={handleTaskStatusChange}
+        canChangeStatus={true}
+        projectMembers={project.members || []}
+        onTaskUpdated={(updatedTask) => {
+          setTasks((prev) => prev.map((t) => (t.id === updatedTask.id ? updatedTask : t)));
+          fetchProjectData();
+        }}
+        onTaskDeleted={(taskId) => {
+          setTasks((prev) => prev.filter((t) => t.id !== taskId));
+          setSelectedTaskForModal(null);
           fetchProjectData();
         }}
       />

@@ -46,8 +46,7 @@ export const ProjectListPage: React.FC = () => {
 
   const canCreateProject =
     user?.role === 'ADMIN' ||
-    user?.role === 'DEPARTMENT_HEAD' ||
-    user?.role === 'PM';
+    user?.role === 'DEPARTMENT_HEAD';
 
   // Filtered projects
   const filteredProjects = useMemo(() => {

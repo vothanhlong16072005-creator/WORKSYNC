@@ -24,6 +24,14 @@ export class CreateTaskDto {
   @IsOptional()
   assigneeId?: string;
 
+  @IsString()
+  @IsOptional()
+  sprintId?: string;
+
+  @IsString()
+  @IsOptional()
+  epicId?: string;
+
   @IsInt()
   @IsOptional()
   position?: number;

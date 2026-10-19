@@ -1,7 +1,8 @@
-import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
 import { ProjectKind, Role } from '@prisma/client';
 import { CreateProjectDto } from './dto/create-project.dto.js';
 import { UpdateProjectDto } from './dto/update-project.dto.js';
+import { SwapPmDto } from './dto/swap-pm.dto.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { ProjectAccessService, type CurrentActor } from './project-access.service.js';
 
@@ -27,14 +28,13 @@ export class ProjectsService {
   ) {}
 
   async create(dto: CreateProjectDto, actor: CurrentActor) {
-    // RBAC (M3.5): PM, DEPT_HEAD, hoặc Admin có thể tạo team project
+    // RBAC: Chỉ Trưởng phòng (DEPARTMENT_HEAD) hoặc Admin mới có quyền tạo dự án
     if (
-      actor.role !== Role.PM &&
       actor.role !== Role.DEPARTMENT_HEAD &&
       actor.role !== Role.ADMIN
     ) {
       throw new ForbiddenException(
-        'Chỉ PM, Trưởng phòng hoặc Admin mới có quyền tạo dự án',
+        'Chỉ Trưởng phòng hoặc Quản trị viên mới có quyền tạo dự án',
       );
     }
 
@@ -49,12 +49,7 @@ export class ProjectsService {
     }
 
     // Determine PM ID and project creator role
-    let pmId: string | null = null;
-    if (actor.role === Role.PM) {
-      pmId = actor.id;
-    } else if (dto.pmId) {
-      pmId = dto.pmId;
-    }
+    let pmId: string | null = dto.pmId ?? null;
 
     const membersToCreate: { userId: string; projectRole: string; joinedAt: Date }[] = [];
     const addedUserIds = new Set<string>();
@@ -320,8 +315,23 @@ export class ProjectsService {
 
     const activeSprint = sprints.find((s) => s.status === 'ACTIVE') || null;
 
+    const pmMember = project.members?.find((m) => m.projectRole === 'PM');
+    const resolvedPm =
+      project.pm ||
+      (pmMember
+        ? {
+            id: pmMember.user.id,
+            name: pmMember.user.name,
+            avatar: pmMember.user.avatar,
+            email: pmMember.user.email,
+          }
+        : null);
+    const resolvedPmId = project.pmId || (pmMember ? pmMember.userId : null);
+
     return {
       ...project,
+      pmId: resolvedPmId,
+      pm: resolvedPm,
       tasks: undefined, // Không trả về toàn bộ mảng tasks thô ở findOne để nhẹ payload
       activeSprint,
       progress: {
@@ -370,6 +380,89 @@ export class ProjectsService {
     return this.prisma.project.update({
       where: { id },
       data: { deletedAt: new Date() },
+    });
+  }
+
+  async swapPm(projectId: string, dto: SwapPmDto, actor: CurrentActor) {
+    const project = await this.prisma.project.findUnique({
+      where: { id: projectId },
+      include: { pm: true, members: { include: { user: true } } },
+    });
+    if (!project) throw new NotFoundException('Dự án không tồn tại');
+
+    // Verify actor can swap (DEPT_HEAD cùng phòng hoặc ADMIN)
+    if (actor.role !== Role.ADMIN) {
+      if (actor.role !== Role.DEPARTMENT_HEAD) {
+        throw new ForbiddenException('Chỉ Trưởng phòng hoặc Admin mới có quyền đổi PM');
+      }
+      let actorDeptId = (actor as any).departmentId;
+      if (!actorDeptId) {
+        const u = await this.prisma.user.findUnique({
+          where: { id: actor.id },
+          select: { departmentId: true },
+        });
+        actorDeptId = u?.departmentId;
+      }
+      if (project.departmentId && actorDeptId && project.departmentId !== actorDeptId) {
+        throw new ForbiddenException('Chỉ có thể đổi PM cho dự án thuộc phòng ban của mình');
+      }
+    }
+
+    // Verify new PM exists and is active
+    const newPmUser = await this.prisma.user.findUnique({
+      where: { id: dto.newPmId },
+      include: { department: true },
+    });
+    if (!newPmUser || newPmUser.status !== 'ACTIVE' || newPmUser.deletedAt) {
+      throw new BadRequestException('PM mới không hợp lệ hoặc đã nghỉ việc');
+    }
+    if (newPmUser.id === project.pmId) {
+      throw new BadRequestException('PM mới trùng với PM hiện tại của dự án');
+    }
+
+    if (actor.role === Role.DEPARTMENT_HEAD) {
+      let actorDeptId = (actor as any).departmentId;
+      if (!actorDeptId) {
+        const u = await this.prisma.user.findUnique({
+          where: { id: actor.id },
+          select: { departmentId: true },
+        });
+        actorDeptId = u?.departmentId;
+      }
+      if (actorDeptId && newPmUser.departmentId !== actorDeptId) {
+        throw new BadRequestException('PM mới phải thuộc cùng phòng ban với Trưởng phòng');
+      }
+    }
+
+    const oldPmId = project.pmId;
+
+    return this.prisma.$transaction(async (tx) => {
+      // 1. Update project.pmId
+      const updated = await tx.project.update({
+        where: { id: projectId },
+        data: { pmId: dto.newPmId },
+        include: {
+          pm: { select: { id: true, name: true, email: true, avatar: true } },
+        },
+      });
+
+      // 2. Update old PM's ProjectMember role -> MEMBER
+      if (oldPmId) {
+        await tx.projectMember.upsert({
+          where: { projectId_userId: { projectId, userId: oldPmId } },
+          create: { projectId, userId: oldPmId, projectRole: 'MEMBER' },
+          update: { projectRole: 'MEMBER' },
+        });
+      }
+
+      // 3. Update new PM's ProjectMember role -> PM
+      await tx.projectMember.upsert({
+        where: { projectId_userId: { projectId, userId: dto.newPmId } },
+        create: { projectId, userId: dto.newPmId, projectRole: 'PM' },
+        update: { projectRole: 'PM' },
+      });
+
+      return updated;
     });
   }
 }

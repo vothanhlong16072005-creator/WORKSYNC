@@ -119,23 +119,74 @@
 
 ---
 
-## Milestone Tracker
+## 2026-10-17 — Module M3.5: Trưởng phòng & Giao việc nhanh (QuickTask)
+- [x] **Database & Prisma Schema**: Thêm role `DEPARTMENT_HEAD`, bổ sung trường `pmId` và `workflowType` (SCRUM/KANBAN/DAILY/SIMPLE) vào `Project`, mở rộng `Sprint` và tạo model `QuickTask`.
+- [x] **Backend**: Tạo module `QuickTaskModule` (6 REST endpoints), phương thức `UsersService.findByDepartmentOrMine()` và siết chặt phân quyền RBAC cho Trưởng phòng.
+- [x] **Frontend**: Nút ⚡ `QuickTaskButton` trên header, modal giao việc nhanh `QuickTaskModal`, trang `/quick-tasks`, và layout dashboard riêng biệt cho Trưởng phòng `DepartmentHeadDashboardLayout`.
+- [x] **Kiểm thử**: 24 test files backend (187 tests pass) và 5 test files frontend (47 tests pass).
+
+---
+
+## 2026-10-18 & 2026-10-19 — M3.6, M5.1, M6 & M9: Trưởng phòng, Quản lý Sprint Jira & Tài liệu
+- [x] **M3.6 (Department Head Dashboard Drill-Down & PM Swap)**:
+  - Backend: Endpoint `PATCH /api/projects/:id/swap-pm` cho phép Trưởng phòng đổi PM trong transaction atomic an toàn; bộ 3 API drill-down `/dept-head/project/:id`, `/dept-head/sprint/:id`, `/dept-head/member/:id`.
+  - Frontend: Bộ modal in-place chuẩn Bauhaus (không chuyển trang): `ProjectDetailModal` (4 tab + cảnh báo rủi ro), `SwapPmModal`, `SprintManagementModal` (biểu đồ Burndown Recharts + bảng đóng góp thành viên), `DeptHeadMemberProfileModal` (kèm dải chấm công 7 ngày), `QuickTaskDetailModal`.
+- [x] **M3.6 Phase 3 (Project Sprints & Task Planning Hub - Chuẩn Jira)**:
+  - Khắc phục triệt để lỗi React Hook order violation trong `ProjectDetailPage.tsx` (loại bỏ màn hình trắng).
+  - Xây dựng component [`ProjectSprintsView`](../frontend/src/features/projects/components/ProjectSprintsView.tsx): Thẻ Sprint dạng khối theo chu kỳ, thanh tiến độ % và SP, bảng danh sách công việc bên dưới với checkbox hoàn thành một chạm, người được giao, độ ưu tiên, hạn chót báo đỏ khi quá hạn, điểm Story Points.
+  - Tích hợp nút `+ Tạo Sprint Mới` và `+ Thêm Công Việc` trực tiếp tại từng Sprint (tự động chọn Sprint).
+  - Bổ sung khối `Product Backlog` cho các task chưa phân bổ kèm dropdown gán việc tức thì.
+- [x] **M6 (Document Management System)**:
+  - 5 use cases: Spec đính kèm task, Deliverables nộp sản phẩm nghiệm thu, Tài liệu dự án, Biên bản họp đồng bộ từ M5, Quy chế công ty (`/documents/company`).
+  - Hỗ trợ tải tệp đính kèm đa định dạng tới 25MB và quản lý phiên bản tài liệu.
+- [x] **M9 (Real-time Notifications & Web Push)**:
+  - Thông báo thời gian thực qua Socket.IO và Web Push (VAPID).
+  - Chuẩn hóa tiêu đề chuyên nghiệp, loại bỏ hoàn toàn emoji rườm rà.
+- [x] **M5.1 (Meeting AI Summary với Gemini 1.5 Flash)**:
+  - Backend core: `MeetingAiService`, migration Prisma lưu 7 trường dữ liệu phân tích AI (summary, action items, decisions, key discussions, risks, questions, sentiment).
+- [x] **Kiểm thử**: 269 backend tests pass 100%, 85 frontend tests pass 100%, production build 0 lỗi trong 5.48s.
+
+---
+
+## Milestone Tracker & Lộ Trình Phát Triển
 
 | Milestone | Target | Status | Notes |
 |-----------|--------|--------|-------|
-| **M0: Docs & Setup** | Week 1 | ✅ Completed | Monorepo scaffolded |
-| **M1: Auth + User** | Week 2 | ✅ Completed | JWT, Google OAuth, Personal Project provisioning |
-| **M2: Attendance** | Week 3 | ✅ Completed | Geofence GPS FPT Tower, IP CIDR, WFH, Quỹ phép, 75/75 tests pass |
-| **M3: Project & Task (CRUD)** | Week 4-5 | ✅ Completed | Scoped reads, project access control, board-position PATCH |
-| **M4: Kanban Board (UI)** | Week 5-6 | ✅ Completed | Modern SaaS UI, @hello-pangea/dnd, badge counts, optimistic update |
-| **M3.5: Project Sprint Task Extended** | Week 6-6.5 | 📋 Plan Ready (16/10) | SprintController mới, role DEPT_HEAD, 4 workflow types, Quick Task, Dept Head Dashboard. Xem [plan](./M3.5-PROJECT-SPRINT-TASK-EXTENDED-PLAN.md). **Triển khai TRƯỚC M5** vì Sprint + Dept Head dashboard là nền tảng cho non-IT workflow. |
-| **M5: Meetings + WebRTC** | Week 6.5-7 | 🔄 Pending (sau M3.5) | WebRTC video room, screen share, AI summary |
-| **M6: Documents (ClickUp Docs)** | Week 7-8 | ⬜ Not started | Tiptap editor, cây phân cấp tài liệu |
-| **M7: AI Integration (Gemini)** | Week 8-9 | ⬜ Not started | Summary meetings & tasks |
-| **M8: Reports & Dashboard** | Week 9-10 | ✅ Completed (Dashboard) | Modern Enterprise SaaS, Real KPI, Recharts, Sprint |
-| **M9: Notification System** | Week 10 | ⬜ Not started | Socket.IO |
-| **M10: Testing & Polish** | Week 11 | ⬜ Not started | E2E, accessibility |
-| **M11: Deploy** | Week 12 | ⬜ Not started | Docker + VPS |
+| **M0: Docs & Setup** | Week 1 | ✅ Completed | Monorepo NestJS + React Vite + PostgreSQL + Prisma |
+| **M1: Auth + User** | Week 2 | ✅ Completed | JWT, Google OAuth, RBAC đa vai trò (ADMIN, HR, PM, EMPLOYEE, DEPT_HEAD) |
+| **M2: Attendance** | Week 3 | ✅ Completed | GPS Geofence FPT, Multi-office, WFH, Quỹ phép, 365-day Heatmap, Export Excel/PDF |
+| **M3: Project & Task** | Week 4-5 | ✅ Completed | Quản lý dự án, Task details chuẩn Linear/Jira, Story points, Giao việc |
+| **M4: Kanban Board** | Week 5-6 | ✅ Completed | Kanban kéo thả phân quyền, Board read-only bảo vệ dữ liệu, Personal vs Team tasks |
+| **M3.5: Dept Head + Quick Task** | Week 6 | ✅ Completed | Dashboard Trưởng phòng, QuickTask giao việc 1-chạm, 4 workflow types |
+| **M3.6: Sprints & Project Hub (Jira)**| Week 6.5 | ✅ Completed | Modal drill-down, PM swap, Burndown Chart, Jira-style Sprint & Task Planning Hub |
+| **M5: Meetings & WebRTC** | Week 7 | 🟡 Code Complete (Chờ UAT) | Phòng họp trực tuyến WebRTC, chia sẻ màn hình, nạp dữ liệu biên bản |
+| **M5.1: Meeting AI Summary (Gemini)**| Week 7.5 | 🔄 In Progress | Backend core hoàn thành 100%. Tiếp theo: Ráp bộ 4 UI components vào `MeetingReportPage` |
+| **M6: Document Management System** | Week 8 | 🟡 Code Complete (Chờ UAT) | Specs, Deliverables, Kho tài liệu, Quy chế công ty, Tiptap editor |
+| **M9: Notification & Web Push** | Week 8.5 | 🟡 Code Complete (Chờ UAT) | Socket.IO real-time, VAPID Web Push native, Notification center |
+| **M7: Advanced Analytics & Reports** | Week 9-10 | 📋 Kế hoạch tiếp theo | Báo cáo chuyên sâu phòng ban, Heatmap tải công việc, Velocity metrics, Xuất file doanh nghiệp |
+| **M10: Testing, UAT & Polish** | Week 11 | 📋 Kế hoạch tiếp theo | UAT nghiệm thu thực tế M5/M6/M9, E2E testing, Tối ưu accessibility WCAG AA |
+| **M11: Deployment & Production** | Week 12 | 📋 Kế hoạch tiếp theo | Dockerized deployment, Nginx reverse proxy, CI/CD pipeline |
+
+---
+
+## 🚀 Lộ Trình Phát Triển Còn Lại (Remaining Roadmap)
+
+### 1. Giai đoạn Ưu tiên Ngay (Immediate Next Steps)
+- **Module M5.1 (Hoàn thiện Giao diện AI Summary với Gemini 1.5 Flash)**:
+  - Triển khai 4 components frontend: `MeetingAiSummaryPanel`, `ActionItemList` (kèm nút tạo Task 1-click), `DecisionList`, `RisksAndQuestionsPanel`.
+  - Tích hợp vào `MeetingReportPage` và luồng tự động tạo biên bản họp sau khi kết thúc cuộc họp.
+- **Nghiệm thu Thực tế & Hardening (UAT Verification)**:
+  - Thử nghiệm thực tế luồng Cuộc họp trực tuyến (M5), Quản lý tài liệu & đính kèm (M6), Thông báo Web Push (M9) cùng người dùng để chốt nghiệm thu kỹ thuật.
+
+### 2. Giai đoạn Mở Rộng Tính Năng (Upcoming Features)
+- **Module M7 (Báo cáo & Phân tích chuyên sâu - Advanced Analytics & Reporting)**:
+  - Biểu đồ năng suất (Team Velocity & Burnup), Heatmap phân bổ tải công việc toàn phòng ban.
+  - Bộ công cụ xuất báo cáo tiến độ Sprint và tổng hợp chấm công định dạng PDF/Excel chuẩn doanh nghiệp.
+- **Phase 2 (Mở rộng dài hạn)**:
+  - Mobile PWA tối ưu trải nghiệm thiết bị di động.
+  - Đồng bộ Google Calendar 2 chiều cho lịch họp.
+  - Live Audio Transcription (chuyển giọng nói thành văn bản thời gian thực trong cuộc họp).
+  - Multi-tenant enterprise organization.
 
 ---
 

@@ -184,7 +184,7 @@ export const documentApi = {
     const res = await apiClient.get(`/documents/attachments/${attId}/download`, {
       responseType: 'blob',
     });
-    const contentType = res.headers['content-type'] || 'application/octet-stream';
+    const contentType = String(res.headers['content-type'] || 'application/octet-stream');
     const blob = new Blob([res.data], { type: contentType });
     const url = window.URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -202,7 +202,7 @@ export const documentApi = {
     const res = await apiClient.get(`/documents/attachments/${attId}/download`, {
       responseType: 'blob',
     });
-    const contentType = res.headers['content-type'] || (fileName?.endsWith('.pdf') ? 'application/pdf' : 'application/octet-stream');
+    const contentType = String(res.headers['content-type'] || (fileName?.endsWith('.pdf') ? 'application/pdf' : 'application/octet-stream'));
     const blob = new Blob([res.data], { type: contentType });
     const url = window.URL.createObjectURL(blob);
     window.open(url, '_blank');

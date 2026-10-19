@@ -42,15 +42,54 @@ export class TasksService {
     private readonly triggers: NotificationTriggersService,
   ) {}
 
-  async create(createTaskDto: CreateTaskDto, userId: string) {
+  async create(createTaskDto: CreateTaskDto, actorOrUserId: CurrentActor | string) {
+    const actor: CurrentActor = typeof actorOrUserId === 'string'
+      ? { id: actorOrUserId, role: Role.EMPLOYEE }
+      : actorOrUserId;
+    const userId = actor.id;
+
     const project = await this.prisma.project.findUnique({
       where: { id: createTaskDto.projectId },
-      select: { kind: true, personalOwnerId: true, name: true },
+      select: {
+        id: true,
+        kind: true,
+        personalOwnerId: true,
+        name: true,
+        pmId: true,
+        departmentId: true,
+        createdById: true,
+        members: {
+          where: { userId },
+          select: { projectRole: true },
+        },
+      },
     });
+
+    if (!project) {
+      throw new NotFoundException('Dự án không tồn tại hoặc đã bị xóa');
+    }
+
+    if (project.kind === ProjectKind.PERSONAL) {
+      if (project.personalOwnerId !== userId) {
+        throw new ForbiddenException('Bạn không có quyền tạo công việc trên bảng cá nhân của người khác');
+      }
+    } else {
+      const isProjectPM = project.pmId === userId || project.members[0]?.projectRole === 'PM';
+      const isDeptHead = actor.role === Role.DEPARTMENT_HEAD && (
+        project.createdById === userId ||
+        project.pmId === userId ||
+        (!!actor.departmentId && project.departmentId === actor.departmentId)
+      );
+      const isAdmin = actor.role === Role.ADMIN;
+
+      if (!isAdmin && !isDeptHead && !isProjectPM) {
+        throw new ForbiddenException('Chỉ Quản trị viên, Trưởng phòng hoặc Quản lý dự án (PM) mới có quyền tạo công việc trong dự án nhóm');
+      }
+    }
 
     const status = createTaskDto.status || TaskStatus.TODO;
     const priority = createTaskDto.priority || Priority.MEDIUM;
-    const assigneeId = createTaskDto.assigneeId || (project?.kind === ProjectKind.PERSONAL ? userId : null);
+    const assigneeId = createTaskDto.assigneeId || (project.kind === ProjectKind.PERSONAL ? userId : null);
     const labels = createTaskDto.labels || createTaskDto.tags || [];
 
     let position = createTaskDto.position;
