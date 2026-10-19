@@ -8,6 +8,7 @@
     "projects": "DỰ ÁN & SPRINTS",
     "quick_tasks": "GIAO VIỆC NHANH",
     "meetings": "CUỘC HỌP",
+    "calendar": "LỊCH LÀM VIỆC",
     "notifications": "THÔNG BÁO",
     "documents": "TÀI LIỆU",
     "settings": "CÀI ĐẶT"
@@ -413,5 +414,82 @@
     "create_failed": "Lỗi khi tạo cuộc họp",
     "delete_success": "Đã xóa cuộc họp",
     "delete_failed": "Không thể xóa cuộc họp"
+  },
+  "calendar": {
+    "title": "Lịch làm việc",
+    "subtitle": "Timeline tổng hợp Công việc, Sprint, Cuộc họp, Nghỉ phép và Chấm công",
+    "scope": {
+      "mine": "Của tôi",
+      "department": "Phòng ban",
+      "company": "Toàn công ty"
+    },
+    "view": {
+      "day": "Ngày",
+      "week": "Tuần",
+      "month": "Tháng"
+    },
+    "nav": {
+      "today": "Hôm nay",
+      "prev": "Trước",
+      "next": "Tiếp theo"
+    },
+    "kpi": {
+      "total": "Tổng sự kiện",
+      "tasks": "Công việc",
+      "sprints": "Sprints",
+      "meetings": "Cuộc họp",
+      "leave": "Nghỉ phép",
+      "wfh": "WFH",
+      "overtime": "Tăng ca"
+    },
+    "filter": {
+      "title": "Bộ lọc nâng cao",
+      "project": "Dự án",
+      "all_projects": "Tất cả dự án",
+      "assignee": "Người thực hiện",
+      "all_assignees": "Tất cả nhân sự",
+      "types": "Loại sự kiện",
+      "status": "Trạng thái",
+      "priority": "Độ ưu tiên",
+      "search": "Tìm kiếm tiêu đề...",
+      "reset": "Đặt lại",
+      "active_filters": "bộ lọc đang áp dụng"
+    },
+    "export": "Xuất file .ics",
+    "conflict_banner": "Đã phát hiện xung đột lịch làm việc cần chú ý",
+    "item": {
+      "openDetail": "Mở chi tiết",
+      "joinMeeting": "Vào phòng họp",
+      "reschedule": "Đổi lịch",
+      "creator": "Người tạo",
+      "assignee": "Người thực hiện",
+      "time": "Thời gian",
+      "duration": "Thời lượng",
+      "roomCode": "Mã phòng"
+    },
+    "permission": {
+      "cannotRescheduleTitle": "Không thể đổi lịch",
+      "cannotRescheduleGeneric": "Vui lòng liên hệ người tạo để thay đổi lịch.",
+      "cannotRescheduleLeave": "Không thể tự ý đổi lịch nghỉ phép. Vui lòng gửi yêu cầu mới tới HR.",
+      "cannotRescheduleTask": "Chỉ người tạo task hoặc người được giao mới đổi được. Liên hệ {{creatorName}}.",
+      "cannotRescheduleMeeting": "Chỉ người tạo cuộc họp mới đổi được. Liên hệ {{creatorName}}.",
+      "companyScopeAdminOnly": "Chỉ Quản trị viên mới có quyền xem toàn công ty."
+    },
+    "rescheduleModal": {
+      "title": "Xác nhận đổi lịch sự kiện",
+      "desc": "Kéo thả để thay đổi thời gian diễn ra",
+      "from": "Thời gian cũ",
+      "to": "Thời gian mới",
+      "reason": "Lý do đổi lịch (tuỳ chọn)",
+      "reason_placeholder": "Nhập lý do dời lịch để các bên liên quan nắm được...",
+      "confirm": "Xác nhận đổi lịch",
+      "cancel": "Hủy bỏ"
+    },
+    "conflict": {
+      "meetingOverlap": "{{userName}} có 2 cuộc họp trùng giờ",
+      "overdueOverload": "{{userName}} có {{count}} task trễ hạn trong ngày",
+      "leaveDuringMeeting": "{{userName}} nghỉ phép nhưng có cuộc họp cùng ngày"
+    },
+    "empty": "Không có sự kiện hoặc công việc nào trong khoảng thời gian này."
   }
 }

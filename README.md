@@ -29,11 +29,12 @@ Bang theo doi tien do cac phan he theo lo trinh phat trien:
 | M1 | Xac thuc va Quan ly tai khoan | Hoan thanh | JWT, Google OAuth 2.0, tu dong khoi tao du an ca nhan |
 | M3 | Quan ly Du an va Cong viec (CRUD API) | Hoan thanh | Scoped task query (mine/project), phan quyen truy cap, IDOR protection |
 | M4 | Bang Kanban va Chi tiet cong viec | Hoan thanh | Keo tha task, modal 2 cot Linear/Jira, phan cap mau uu tien, da ngon ngu |
-| M8 | Bang dieu khien tong quan (Dashboard) | Hoan thanh | Dashboard theo Role (Admin, HR, PM, Employee, Dept Head), Recharts analytics |
+| M7 | Bang dieu khien tong quan (Dashboard) | Hoan thanh | Dashboard theo Role (Admin, HR, PM, Employee, Dept Head), Recharts analytics |
 | M2 | Diem danh va Cham cong thong minh | Hoan thanh | Check-in/out GPS/WiFi, don tu WFH, nghi phep, OT, duyet don cap phong ban |
 | M5 | Cuoc hop truc tuyen va WebRTC | Can kiem thu them | Mesh WebRTC, chia se man hinh, phong chuan bi Bauhaus, chat dinh kem file, xuat bao cao Word/CSV |
 | M5.1 | Tri tue Cuoc hop (Meeting Intelligence) | Hoan thanh (Ky thuat) | Live Speech Streaming, tich hop Gemini 1.5 Flash tom tat bien ban va trich xuat Action Items |
 | M6 | Quan ly Tai lieu du an (Documents) | Hoan thanh | Trinh soan thao Tiptap rich-text, phan quyen 4 scopes, AI tom tat, xuat PDF/Docx |
+| M8 | Lich lam viec tong hop (Work Calendar) | Hoan thanh | Hop nhat 6 nguon (Tasks, Sprints, Meetings, Leaves, WFH, OT), 3 scopes, 3 views, drag-drop RBAC, export .ics |
 | M9 | He thong Thong bao thoi gian thuc | Hoan thanh | Socket.IO real-time notification, Web Push (VAPID RFC 8292), cron nhac viec |
 
 ---
@@ -66,12 +67,20 @@ Bang theo doi tien do cac phan he theo lo trinh phat trien:
   - Cot trai: Tieu de ro rang, thanh tien trinh trang thai 5 buoc cho phep click chuyen trang thai ngay, phan mo ta va nhan phan loai.
   - Cot phai: Bang thuoc tinh hop nhat gom Nguoi phu trach, Nguoi tao task, Han chot kem canh bao dong, Uoc tinh gio, Thoi gian da thuc hien, Story points, Du an va Sprint lien ket.
 
-### E. Ho tro Da ngon ngu Quoc te (Bilingual i18n)
+### E. Lich lam viec tong hop (Work Calendar Timeline - M8)
+- Hop nhat 6 nguon du lieu tren 1 timeline duy nhat: Tasks, Sprints, Meetings, LeaveRequests (Phep nam), WfhRequests (WFH), OvertimeRequests (Tang ca).
+- 3 che do xem (Day, Week, Month) va 3 pham vi (Ca nhan `mine`, Phong ban `department`, Toan cong ty `company`).
+- Phat hien xung dot tu dong: Trung gio hop, qua tai cong viec qua han, va cuoc hop trong ngay nghi phep.
+- Keo tha doi lich (Drag-drop reschedule) kiem soat quyen RBAC nghiem ngat: Chi nguoi tao hoac PM/Admin moi co quyen doi lich, nguoi khac bi khoa va hien thi toast canh bao.
+- Xuat file lich RFC 5545 iCalendar (.ics) dong bo de dang voi Google Calendar, Outlook, Apple Calendar.
+
+### F. Ho tro Da ngon ngu Quoc te (Bilingual i18n)
 - Tich hop he thong da ngon ngu react-i18next voi bo tu dien Tieng Viet va Tieng Anh.
 - Nut chuyen doi ngon ngu VI / EN truc tiep tren Header, cho phep chuyen toan bo giao dien tuc thi ma khong can load lai trang.
 
-### F. Thanh dieu huong (Sidebar) thong minh
+### G. Thanh dieu huong (Sidebar) thong minh
 - Menu Cong viec phan cap dang cay, tu dong cap nhat badge so do dem so luong cong viec chua hoan thanh duoc giao cho nguoi dung.
+- Menu Lich lam viec (`/calendar`) tich hop cho moi vai tro.
 
 ---
 

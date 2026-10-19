@@ -12,6 +12,7 @@ import {
   Layers,
   FolderKanban,
   CalendarClock,
+  CalendarRange,
   Zap,
   Bell,
 } from 'lucide-react';
@@ -48,6 +49,7 @@ export default function Sidebar({ open, setOpen }: SidebarProps) {
       roles: ['PM', 'DEPARTMENT_HEAD', 'ADMIN', 'EMPLOYEE'],
     },
     { icon: Video, label: t('nav.meetings'), path: '/meetings' },
+    { icon: CalendarRange, label: t('nav.calendar', 'Lịch làm việc'), path: '/calendar' },
     {
       icon: Bell,
       label: t('nav.notifications', 'Thông báo'),

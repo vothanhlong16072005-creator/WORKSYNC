@@ -19,6 +19,7 @@ import { DocumentListPage } from '@/features/documents/pages/DocumentListPage';
 import { DocumentEditorPage } from '@/features/documents/pages/DocumentEditorPage';
 import { CompanyDocumentsPage } from '@/features/documents/pages/CompanyDocumentsPage';
 import { PersistentCallManager } from '@/features/meetings/components/PersistentCallManager';
+import { WorkCalendarPage } from '@/features/calendar/pages/WorkCalendarPage';
 
 function App() {
   return (
@@ -68,6 +69,8 @@ function App() {
           <Route path="/documents" element={<DocumentListPage />} />
           <Route path="/documents/company" element={<CompanyDocumentsPage />} />
           <Route path="/documents/:id" element={<DocumentEditorPage />} />
+          {/* M8: Work Calendar — Timeline Lịch làm việc tổng hợp */}
+          <Route path="/calendar" element={<WorkCalendarPage />} />
           {/* Attendance is open to ALL authenticated roles; tab-level guards run inside the page. */}
           <Route path="/attendance" element={<AttendancePage />} />
           {/* Future route-level guards:

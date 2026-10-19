@@ -8,6 +8,7 @@
     "projects": "PROJECTS & SPRINTS",
     "quick_tasks": "QUICK TASKS",
     "meetings": "MEETINGS",
+    "calendar": "CALENDAR",
     "notifications": "NOTIFICATIONS",
     "documents": "DOCUMENTS",
     "settings": "SETTINGS"
@@ -413,5 +414,82 @@
     "create_failed": "Failed to schedule meeting",
     "delete_success": "Meeting deleted",
     "delete_failed": "Failed to delete meeting"
+  },
+  "calendar": {
+    "title": "Work Calendar",
+    "subtitle": "Integrated Timeline for Tasks, Sprints, Meetings, Leaves, and Attendance",
+    "scope": {
+      "mine": "Mine",
+      "department": "Department",
+      "company": "Company Wide"
+    },
+    "view": {
+      "day": "Day",
+      "week": "Week",
+      "month": "Month"
+    },
+    "nav": {
+      "today": "Today",
+      "prev": "Prev",
+      "next": "Next"
+    },
+    "kpi": {
+      "total": "Total Events",
+      "tasks": "Tasks",
+      "sprints": "Sprints",
+      "meetings": "Meetings",
+      "leave": "Leaves",
+      "wfh": "WFH",
+      "overtime": "Overtime"
+    },
+    "filter": {
+      "title": "Advanced Filters",
+      "project": "Project",
+      "all_projects": "All Projects",
+      "assignee": "Assignee",
+      "all_assignees": "All Members",
+      "types": "Event Types",
+      "status": "Status",
+      "priority": "Priority",
+      "search": "Search title...",
+      "reset": "Reset",
+      "active_filters": "active filters"
+    },
+    "export": "Export .ics",
+    "conflict_banner": "Schedule conflicts detected requiring attention",
+    "item": {
+      "openDetail": "Open Details",
+      "joinMeeting": "Join Room",
+      "reschedule": "Reschedule",
+      "creator": "Creator",
+      "assignee": "Assignee",
+      "time": "Time",
+      "duration": "Duration",
+      "roomCode": "Room Code"
+    },
+    "permission": {
+      "cannotRescheduleTitle": "Cannot Reschedule",
+      "cannotRescheduleGeneric": "Please contact the creator to change the schedule.",
+      "cannotRescheduleLeave": "Cannot reschedule leave request directly. Please submit a new request to HR.",
+      "cannotRescheduleTask": "Only task creator or assignee can reschedule. Contact {{creatorName}}.",
+      "cannotRescheduleMeeting": "Only meeting host can reschedule. Contact {{creatorName}}.",
+      "companyScopeAdminOnly": "Only Administrators have permission to view company-wide calendar."
+    },
+    "rescheduleModal": {
+      "title": "Confirm Reschedule",
+      "desc": "Drag and drop to adjust event timeframe",
+      "from": "Original Time",
+      "to": "New Time",
+      "reason": "Reason (Optional)",
+      "reason_placeholder": "Enter rescheduling note for stakeholders...",
+      "confirm": "Confirm Reschedule",
+      "cancel": "Cancel"
+    },
+    "conflict": {
+      "meetingOverlap": "{{userName}} has 2 overlapping meetings",
+      "overdueOverload": "{{userName}} has {{count}} overdue tasks today",
+      "leaveDuringMeeting": "{{userName}} is on approved leave but has a meeting scheduled"
+    },
+    "empty": "No events or tasks scheduled in this timeframe."
   }
 }

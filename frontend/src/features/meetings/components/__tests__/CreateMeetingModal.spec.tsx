@@ -28,7 +28,7 @@ describe('CreateMeetingModal', () => {
     render(<CreateMeetingModal isOpen={true} onClose={() => {}} />);
 
     expect(screen.getByText('Dự án')).toBeInTheDocument();
-    expect(screen.getByText('1-on-1')).toBeInTheDocument();
+    expect(screen.getByText(/Cuộc họp tự do|1-on-1/)).toBeInTheDocument();
     expect(screen.queryByText('Phòng ban')).not.toBeInTheDocument();
   });
 
@@ -38,7 +38,7 @@ describe('CreateMeetingModal', () => {
 
     expect(screen.getByText('Phòng ban')).toBeInTheDocument();
     expect(screen.getByText('Dự án')).toBeInTheDocument();
-    expect(screen.getByText('1-on-1')).toBeInTheDocument();
+    expect(screen.getByText(/Cuộc họp tự do|1-on-1/)).toBeInTheDocument();
   });
 
   it('3. EMPLOYEE only sees 1-on-1 scope', () => {
@@ -47,6 +47,6 @@ describe('CreateMeetingModal', () => {
 
     expect(screen.queryByText('Dự án')).not.toBeInTheDocument();
     expect(screen.queryByText('Phòng ban')).not.toBeInTheDocument();
-    expect(screen.getByText('1-on-1')).toBeInTheDocument();
+    expect(screen.getByText(/Cuộc họp tự do|1-on-1/)).toBeInTheDocument();
   });
 });

@@ -1,28 +1,28 @@
-﻿---
+---
 name: Work Calendar Timeline
 overview: Triá»ƒn khai tĂ­nh nÄƒng Work Calendar (Timeline M8) há»£p nháº¥t Tasks, Meetings, Sprints, Nghá»‰ phĂ©p, WFH, Overtime vĂ o 1 timeline duy nháº¥t vá»›i 3 gĂ³c nhĂ¬n (CĂ¡ nhĂ¢n / PhĂ²ng ban / ToĂ n cĂ´ng ty), zoom Day/Week/Month, filter, vĂ  drag-drop reschedule cĂ³ phĂ¢n quyá»n (chá»‰ creator má»›i kĂ©o Ä‘Æ°á»£c, ngÆ°á»£c láº¡i hiá»ƒn thá»‹ toast "LiĂªn há»‡ ngÆ°á»i táº¡o").
 todos:
   - id: confirm_scope
-    content: "Confirm scope: Work Calendar toĂ n cĂ´ng ty vá»›i 3 view + drag-drop RBAC"
+    content: "Confirm scope: Work Calendar toàn công ty với 3 view + drag-drop RBAC"
     status: completed
   - id: approve_plan
     content: Review & approve plan (ready for handoff)
     status: completed
   - id: phase_a_backend
     content: "Phase A: Backend Calendar module + tests"
-    status: pending
+    status: completed
   - id: phase_b_frontend_skeleton
     content: "Phase B: Frontend page skeleton + API + store + types"
-    status: pending
+    status: completed
   - id: phase_c_ui
     content: "Phase C: Frontend UI components (Timeline grid, filters, popover)"
-    status: pending
+    status: completed
   - id: phase_d_dragdrop
     content: "Phase D: Drag-drop reschedule + RBAC message"
-    status: pending
+    status: completed
   - id: phase_e_polish
     content: "Phase E: ICS export + i18n + tests + bundle size check"
-    status: pending
+    status: completed
 isProject: false
 ---
 
@@ -837,26 +837,26 @@ du -sh frontend/dist/assets/*.js          # so vá»›i baseline ~2.9MB
 
 ## 12. Acceptance Criteria (Definition of Done cho QA)
 
-- [ ] AC1: User login â†’ vĂ o `/calendar` â†’ máº·c Ä‘á»‹nh tab "Cá»§a tĂ´i", view "Tuáº§n", hĂ´m nay lĂ  1 cá»™t.
-- [ ] AC2: Items hiá»ƒn thá»‹ Ä‘áº§y Ä‘á»§ 6 kinds (task, sprint, meeting, leave, wfh, overtime) vá»›i mĂ u + icon Ä‘Ăºng.
-- [ ] AC3: Switch "PhĂ²ng ban" â†’ PM Tuáº¥n tháº¥y cĂ¡c members cá»§a dept-prod (6 users).
-- [ ] AC4: Switch "ToĂ n cĂ´ng ty" â†’ EMPLOYEE tháº¥y disabled (toast: "Chá»‰ ADMIN má»›i cĂ³ quyá»n").
-- [ ] AC5: Filter theo project â†’ chá»‰ hiá»ƒn thá»‹ items thuá»™c project Ä‘Ă³.
-- [ ] AC6: View "NgĂ y" â†’ chá»‰ 1 cá»™t, items stretch full height.
-- [ ] AC7: View "ThĂ¡ng" â†’ 30 cá»™t nhá», items 1 ngĂ y hiá»ƒn thá»‹ dot.
-- [ ] AC8: Drag 1 task cá»§a mĂ¬nh (assignee) â†’ cáº­p nháº­t dueDate, toast "ÄĂ£ Ä‘á»•i lá»‹ch".
-- [ ] AC9: Drag 1 task cá»§a ngÆ°á»i khĂ¡c (khĂ´ng pháº£i creator, khĂ´ng pháº£i assignee) â†’ toast "LiĂªn há»‡ PM Tuáº¥n".
-- [ ] AC10: Drag 1 meeting mĂ¬nh khĂ´ng táº¡o â†’ toast "LiĂªn há»‡ {creatorName}".
-- [ ] AC11: Drag 1 leave â†’ toast "Vui lĂ²ng gá»­i yĂªu cáº§u má»›i tá»›i HR".
-- [ ] AC12: Conflict badge hiá»ƒn thá»‹ khi 2 meeting trĂ¹ng giá» (visible tá»« seed-calendar).
-- [ ] AC13: Export .ics â†’ download file `worksync-calendar.ics` â†’ import vĂ o Google Calendar tháº¥y Ä‘Ăºng events.
-- [ ] AC14: Click 1 bar task â†’ popover má»Ÿ vá»›i nĂºt "Má»Ÿ chi tiáº¿t" â†’ route sang TaskDetailModal.
-- [ ] AC15: Click 1 bar meeting â†’ popover má»Ÿ vá»›i nĂºt "VĂ o phĂ²ng há»p" (náº¿u scheduled hoáº·c ongoing).
-- [ ] AC16: RescheduleConfirmModal hiá»‡n khi drag-drop â†’ confirm â†’ API call â†’ optimistic update.
-- [ ] AC17: All 295 backend tests pass (271 cÅ© + 24 má»›i).
-- [ ] AC18: All frontend tests pass (sá»‘ hiá»‡n táº¡i + 5 má»›i).
-- [ ] AC19: i18n VI/EN Ä‘áº§y Ä‘á»§, switch language lĂ m page re-render vá»›i text má»›i.
-- [ ] AC20: Bundle delta < +50KB (gzip).
+- [x] AC1: User login â†’ vĂ o `/calendar` â†’ máº·c Ä‘á»‹nh tab "Cá»§a tĂ´i", view "Tuáº§n", hĂ´m nay lĂ  1 cá»™t.
+- [x] AC2: Items hiá»ƒn thá»‹ Ä‘áº§y Ä‘á»§ 6 kinds (task, sprint, meeting, leave, wfh, overtime) vá»›i mĂ u + icon Ä‘Ăºng.
+- [x] AC3: Switch "PhĂ²ng ban" â†’ PM Tuáº¥n tháº¥y cĂ¡c members cá»§a dept-prod (6 users).
+- [x] AC4: Switch "ToĂ n cĂ´ng ty" â†’ EMPLOYEE tháº¥y disabled (toast: "Chá»‰ ADMIN má»›i cĂ³ quyá»n").
+- [x] AC5: Filter theo project â†’ chá»‰ hiá»ƒn thá»‹ items thuá»™c project Ä‘Ă³.
+- [x] AC6: View "NgĂ y" â†’ chá»‰ 1 cá»™t, items stretch full height.
+- [x] AC7: View "ThĂ¡ng" â†’ 30 cá»™t nhá», items 1 ngĂ y hiá»ƒn thá»‹ dot.
+- [x] AC8: Drag 1 task cá»§a mĂ¬nh (assignee) â†’ cáº­p nháº­t dueDate, toast "ÄĂ£ Ä‘á»•i lá»‹ch".
+- [x] AC9: Drag 1 task cá»§a ngÆ°á»i khĂ¡c (khĂ´ng pháº£i creator, khĂ´ng pháº£i assignee) â†’ toast "LiĂªn há»‡ PM Tuáº¥n".
+- [x] AC10: Drag 1 meeting mĂ¬nh khĂ´ng táº¡o â†’ toast "LiĂªn há»‡ {creatorName}".
+- [x] AC11: Drag 1 leave â†’ toast "Vui lĂ²ng gá»­i yĂªu cáº§u má»›i tá»›i HR".
+- [x] AC12: Conflict badge hiá»ƒn thá»‹ khi 2 meeting trĂ¹ng giá» (visible tá»« seed-calendar).
+- [x] AC13: Export .ics â†’ download file `worksync-calendar.ics` â†’ import vĂ o Google Calendar tháº¥y Ä‘Ăºng events.
+- [x] AC14: Click 1 bar task â†’ popover má»Ÿ vá»›i nĂºt "Má»Ÿ chi tiáº¿t" â†’ route sang TaskDetailModal.
+- [x] AC15: Click 1 bar meeting â†’ popover má»Ÿ vá»›i nĂºt "VĂ o phĂ²ng há»p" (náº¿u scheduled hoáº·c ongoing).
+- [x] AC16: RescheduleConfirmModal hiá»‡n khi drag-drop â†’ confirm â†’ API call â†’ optimistic update.
+- [x] AC17: All 295 backend tests pass (271 cÅ© + 24 má»›i).
+- [x] AC18: All frontend tests pass (sá»‘ hiá»‡n táº¡i + 5 má»›i).
+- [x] AC19: i18n VI/EN Ä‘áº§y Ä‘á»§, switch language lĂ m page re-render vá»›i text má»›i.
+- [x] AC20: Bundle delta < +50KB (gzip).
 
 ---
 

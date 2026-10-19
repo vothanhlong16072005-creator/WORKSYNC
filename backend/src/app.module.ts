@@ -13,6 +13,7 @@ import { SprintsModule } from './sprints/sprints.module.js';
 import { MeetingsModule } from './meetings/meetings.module.js';
 import { NotificationsModule } from './notifications/notifications.module.js';
 import { DocumentsModule } from './documents/documents.module.js';
+import { CalendarModule } from './calendar/calendar.module.js';
 
 @Module({
   imports: [
@@ -28,6 +29,7 @@ import { DocumentsModule } from './documents/documents.module.js';
     MeetingsModule,
     NotificationsModule,
     DocumentsModule,
+    CalendarModule,
   ],
   controllers: [AppController],
   providers: [AppService],

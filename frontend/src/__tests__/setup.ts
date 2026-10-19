@@ -18,21 +18,32 @@ vi.mock('react-i18next', async (importOriginal) => {
     // Provide a stand-in useTranslation that respects a per-test language override
     useTranslation: () => ({
       i18n,
-      t: (key: string, opts?: Record<string, unknown>) => {
+      t: (key: string, opts?: any, maybeOpts?: any) => {
+        const defaultValue =
+          typeof opts === 'string'
+            ? opts
+            : typeof maybeOpts === 'string'
+              ? maybeOpts
+              : (opts?.defaultValue as string | undefined);
+
         if (key.includes('.')) {
           // Resolve nested key from current language bundle (e.g. "dashboard.pm.x")
           const parts = key.split('.');
           let cur: any = (i18n.getResourceBundle(i18n.language || 'vi', 'translation') || {});
           for (const p of parts) cur = cur?.[p];
           if (typeof cur === 'string') {
-            if (opts && typeof cur === 'string') {
+            const interpolationOpts = typeof opts === 'object' ? opts : maybeOpts;
+            if (interpolationOpts) {
               // Simple interpolation
               return cur.replace(/\{\{(\w+)\}\}/g, (_: string, k: string) =>
-                opts[k] !== undefined ? String(opts[k]) : `{{${k}}}`,
+                interpolationOpts[k] !== undefined ? String(interpolationOpts[k]) : `{{${k}}}`,
               );
             }
             return cur;
           }
+        }
+        if (defaultValue !== undefined) {
+          return defaultValue;
         }
         return key;
       },
