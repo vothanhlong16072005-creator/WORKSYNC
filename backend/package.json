@@ -22,7 +22,8 @@
     "test:e2e": "vitest run --config ./vitest.config.e2e.ts",
     "seed:enterprise": "node --experimental-strip-types prisma/seed-enterprise-full.ts",
     "seed:meetings": "node --experimental-strip-types prisma/seed-meetings.ts",
-    "seed:calendar": "node --experimental-strip-types prisma/seed-calendar.ts"
+    "seed:calendar": "node --experimental-strip-types prisma/seed-calendar.ts",
+    "seed:chat": "node --experimental-strip-types prisma/seed-chat.ts"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",

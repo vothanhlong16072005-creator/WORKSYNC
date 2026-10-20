@@ -20,6 +20,7 @@ import { DocumentEditorPage } from '@/features/documents/pages/DocumentEditorPag
 import { CompanyDocumentsPage } from '@/features/documents/pages/CompanyDocumentsPage';
 import { PersistentCallManager } from '@/features/meetings/components/PersistentCallManager';
 import { WorkCalendarPage } from '@/features/calendar/pages/WorkCalendarPage';
+import { ChatPage } from '@/features/chat/pages/ChatPage';
 
 function App() {
   return (
@@ -71,6 +72,9 @@ function App() {
           <Route path="/documents/:id" element={<DocumentEditorPage />} />
           {/* M8: Work Calendar — Timeline Lịch làm việc tổng hợp */}
           <Route path="/calendar" element={<WorkCalendarPage />} />
+          {/* M9: Real-time Chat — Trò chuyện doanh nghiệp */}
+          <Route path="/chat" element={<ChatPage />} />
+          <Route path="/chat/:conversationId" element={<ChatPage />} />
           {/* Attendance is open to ALL authenticated roles; tab-level guards run inside the page. */}
           <Route path="/attendance" element={<AttendancePage />} />
           {/* Future route-level guards:

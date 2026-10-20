@@ -15,6 +15,7 @@ import {
   CalendarRange,
   Zap,
   Bell,
+  MessageSquare,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -50,6 +51,7 @@ export default function Sidebar({ open, setOpen }: SidebarProps) {
     },
     { icon: Video, label: t('nav.meetings'), path: '/meetings' },
     { icon: CalendarRange, label: t('nav.calendar', 'Lịch làm việc'), path: '/calendar' },
+    { icon: MessageSquare, label: t('nav.chat', 'Tin nhắn'), path: '/chat' },
     {
       icon: Bell,
       label: t('nav.notifications', 'Thông báo'),

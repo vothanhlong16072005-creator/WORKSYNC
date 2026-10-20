@@ -35,7 +35,8 @@ Bang theo doi tien do cac phan he theo lo trinh phat trien:
 | M5.1 | Tri tue Cuoc hop (Meeting Intelligence) | Hoan thanh (Ky thuat) | Live Speech Streaming, tich hop Gemini 1.5 Flash tom tat bien ban va trich xuat Action Items |
 | M6 | Quan ly Tai lieu du an (Documents) | Hoan thanh | Trinh soan thao Tiptap rich-text, phan quyen 4 scopes, AI tom tat, xuat PDF/Docx |
 | M8 | Lich lam viec tong hop (Work Calendar) | Hoan thanh | Hop nhat 6 nguon (Tasks, Sprints, Meetings, Leaves, WFH, OT), 3 scopes, 3 views, drag-drop RBAC, export .ics |
-| M9 | He thong Thong bao thoi gian thuc | Hoan thanh | Socket.IO real-time notification, Web Push (VAPID RFC 8292), cron nhac viec |
+| M9 | He thong Thong bao & Nhac viec | Hoan thanh | Socket.IO real-time notification, Web Push (VAPID RFC 8292), cron nhac viec |
+| M9-Chat | Tro chuyen Truc tuyen & Nhom (Real-time Chat) | Hoan thanh | Socket.IO namespace /chat, Direct 1-1, Project/Dept groups, file <=25MB, emoji reactions, typing, presence, avatar context menu |
 
 ---
 
@@ -81,6 +82,16 @@ Bang theo doi tien do cac phan he theo lo trinh phat trien:
 ### G. Thanh dieu huong (Sidebar) thong minh
 - Menu Cong viec phan cap dang cay, tu dong cap nhat badge so do dem so luong cong viec chua hoan thanh duoc giao cho nguoi dung.
 - Menu Lich lam viec (`/calendar`) tich hop cho moi vai tro.
+- Menu Tin nhan (`/chat`) voi huy hieu thong bao so tin nhan chua doc thoi gian thuc.
+
+### H. Tro chuyen Truc tuyen & Nhom (Real-time Chat - M9)
+- Kien truc Native PostgreSQL + NestJS Socket.IO doc lap bao mat, khong phu thuoc dich vu ben ngoai.
+- 3 loai phong tro chuyen: Ca nhan 1-1 (`DIRECT`), Nhom du an (`PROJECT`), Nhom phong ban (`DEPARTMENT`).
+- Dinh kem tep tin an toan toi 25MB (luu tru `/uploads/chat`), ho tro Lightbox xem anh phong to truc tiep.
+- Tha bieu cam emoji (reactions), tra loi trich dan (quote reply), xoa tin nhan an toan.
+- Chi bao dang nhap (typing indicator), theo doi trang thai online/offline va xac nhan da doc.
+- Menu chuot phai tren Avatar bat ky (`ChatContextMenu`) giup khoi tao hoi thoai tuc thi khong can roi khoi man hinh hien tai.
+- Giao dien 2 cot responsive Bauhaus Light Enterprise, khong dung emoji tren nut bam, ho tro 100% da ngon ngu VI/EN.
 
 ---
 

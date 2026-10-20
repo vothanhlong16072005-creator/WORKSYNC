@@ -14,6 +14,7 @@ import { MeetingsModule } from './meetings/meetings.module.js';
 import { NotificationsModule } from './notifications/notifications.module.js';
 import { DocumentsModule } from './documents/documents.module.js';
 import { CalendarModule } from './calendar/calendar.module.js';
+import { ChatModule } from './chat/chat.module.js';
 
 @Module({
   imports: [
@@ -30,6 +31,7 @@ import { CalendarModule } from './calendar/calendar.module.js';
     NotificationsModule,
     DocumentsModule,
     CalendarModule,
+    ChatModule,
   ],
   controllers: [AppController],
   providers: [AppService],
