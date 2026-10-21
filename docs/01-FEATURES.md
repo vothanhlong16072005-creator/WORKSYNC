@@ -1,6 +1,6 @@
 # ✅ Danh Mục Tính Năng Chi Tiết (Feature List) — WorkSync
-> **Phiên bản:** 2.0 (Enterprise Updated) | **Ngày cập nhật:** 21/10/2026  
-> **Cấu trúc phân quyền:** Phân theo 5 vai trò hệ thống (`ADMIN`, `HR`, `DEPARTMENT_HEAD`, `PM`, `EMPLOYEE`) và 9 phân hệ chức năng lõi đã triển khai trong thực tế.
+> **Phiên bản:** 2.0 (Enterprise Comprehensive) | **Ngày cập nhật:** 21/10/2026  
+> **Cấu trúc:** Phân loại theo 5 vai trò (`ADMIN`, `HR`, `DEPARTMENT_HEAD`, `PM`, `EMPLOYEE`) và 9 phân hệ chức năng thực tế.
 
 ---
 
@@ -26,140 +26,184 @@
 
 ---
 
-## 📌 Danh Mục Chi Tiết 9 Phân Hệ Chức Năng Đã Triển Khai
+## 📌 Danh Mục Checklist Chi Tiết Từng Module
 
-### 🔐 F1. Xác Thực, Hồ Sơ & Phân Quyền (Auth & Users)
-- [x] `POST /api/auth/register` — Đăng ký tài khoản mới kèm tự động cấp phát Dự án cá nhân (`PERSONAL`).
-- [x] `POST /api/auth/login` — Đăng nhập bằng email/password, trả về Access Token JWT và Refresh Token HttpOnly.
-- [x] `POST /api/auth/google` — Đăng nhập / Đăng ký nhanh qua Google OAuth 2.0 (Idempotent user & project creation).
-- [x] `POST /api/auth/refresh` — Quay vòng Refresh Token tự động ngầm dưới client (Silent Refresh).
-- [x] `POST /api/auth/logout` — Đăng xuất, hủy phiên làm việc và xóa cookie.
-- [x] `GET /api/auth/me` — Lấy thông tin hồ sơ và quyền hạn của người dùng hiện tại.
-- [x] `PATCH /api/users/profile` — Cập nhật thông tin cá nhân, chức danh, ảnh đại diện và tùy chọn ngôn ngữ (`VI`/`EN`).
-- [x] `GET /api/users` — Danh sách người dùng hệ thống (có tìm kiếm, phân trang và lọc theo phòng ban).
-- [x] `GET /api/users/assignable` — Danh sách thành viên có thể giao việc trong phạm vi dự án hoặc phòng ban.
-- [x] `CRUD /api/departments` — Quản trị danh mục phòng ban trực thuộc doanh nghiệp (Dành cho Admin).
+### 🔐 F1. Xác Thực & Phân Quyền (Auth & RBAC)
+- [x] `POST /api/auth/register` — Đăng ký tài khoản mới kèm tự động tạo dự án cá nhân `PERSONAL` (ALL)
+- [x] `POST /api/auth/login` — Đăng nhập trả về JWT Access Token + Refresh Token HttpOnly (ALL)
+- [x] `POST /api/auth/google` — Đăng nhập / Đăng ký 1-click với Google OAuth 2.0 (ALL)
+- [x] `POST /api/auth/refresh` — Làm mới Access Token ngầm tự động (Silent Refresh) (ALL)
+- [x] `POST /api/auth/logout` — Hủy phiên làm việc và xóa cookie (ALL)
+- [x] `GET /api/auth/me` — Lấy thông tin tài khoản và quyền hạn hiện tại (ALL)
+- [x] `PATCH /api/auth/change-password` — Đổi mật khẩu cá nhân (ALL)
 
 ---
 
-### ⏰ F2. Điểm Danh Thông Minh & Quản Trị Chuyên Cần (Smart Attendance)
-- [x] `POST /api/attendance/check-in` — Điểm danh 1-Click: Gửi tọa độ GPS + IP Public, tự động phát hiện chi nhánh FPT gần nhất (Đà Nẵng, Hà Nội, TP.HCM) và xác thực Geofence 500m.
-- [x] `POST /api/attendance/check-out` — Điểm danh ra về: Tự động tính toán số giờ làm việc thực tế, phân loại đúng giờ hoặc về sớm.
-- [x] `GET /api/attendance/today` — Trạng thái chuyên cần hôm nay kèm dải tiến trình Live-ticking và định vị bản đồ OpenStreetMap Leaflet.
-- [x] `GET /api/attendance/my-history` — Lịch sử điểm danh cá nhân kèm Bảng nhiệt (Calendar Heatmap) 365 ngày GitHub-style.
-- [x] `POST /api/attendance/wfh-request` — Đăng ký làm việc từ xa (WFH) kèm cơ chế tự động duyệt nếu quá 09:30.
-- [x] `POST /api/attendance/leave-request` — Đăng ký nghỉ phép (Nghỉ ốm, phép năm, không lương) kèm trừ quỹ phép tự động trong transaction.
-- [x] `POST /api/attendance/early-leave-request` — Đăng ký về sớm có lý do chính đáng trước 17:30.
-- [x] `POST /api/attendance/overtime-request` — Đăng ký làm thêm giờ (OT) với công thức tính giờ chuẩn HRM.
-- [x] `POST /api/attendance/break-log` — Ghi nhận thời gian ra ngoài tạm thời và tự động trừ giờ nghỉ trưa (12:00 – 13:00).
-- [x] `GET /api/attendance/approval-queue` — Hàng đợi xét duyệt đơn từ dành cho HR, Trưởng phòng và PM.
-- [x] `PATCH /api/attendance/approve-request` / `reject-request` — Phê duyệt hoặc từ chối đơn có lưu lý do và gửi thông báo tức thì.
-- [x] `GET /api/attendance/export/excel` / `export/pdf` — Xuất báo cáo chuyên cần doanh nghiệp định dạng Excel và PDF.
+### 👤 F2. Quản Lý Người Dùng & Phòng Ban (Users & Departments)
+
+**Quản trị viên (Admin):**
+- [x] `GET /api/users` — Danh sách người dùng hệ thống (tìm kiếm, phân trang, lọc phòng ban) (ADMIN, HR, DEPT_HEAD)
+- [x] `POST /api/users` — Tạo tài khoản nhân sự mới (ADMIN)
+- [x] `GET /api/users/:id` — Chi tiết hồ sơ nhân sự (ALL)
+- [x] `PATCH /api/users/:id` — Cập nhật thông tin nhân sự (ADMIN, HR)
+- [x] `PATCH /api/users/:id/role` — Cấp phát / Điều chỉnh 5 vai trò hệ thống (ADMIN)
+- [x] `PATCH /api/users/:id/status` — Kích hoạt hoặc tạm khóa tài khoản (ADMIN, HR)
+- [x] `DELETE /api/users/:id` — Xóa mềm tài khoản (`deletedAt`) (ADMIN)
+- [x] `CRUD /api/departments` — Quản trị danh mục phòng ban (ADMIN)
+
+**Nhân viên tự quản:**
+- [x] `GET /api/users/profile` — Xem thông tin hồ sơ của chính mình (ALL)
+- [x] `PATCH /api/users/profile` — Cập nhật họ tên, vị trí, ảnh đại diện avatar (ALL)
+- [x] `PATCH /api/users/language` — Thay đổi ngôn ngữ giao diện `VI` hoặc `EN` (ALL)
+- [x] `GET /api/users/assignable` — Lấy danh sách thành viên có thể giao việc (ALL)
 
 ---
 
-### 🗂️ F3. Quản Trị Dự Án & Kế Hoạch Sprint Chuẩn Jira (Projects & Sprints)
-- [x] `GET /api/projects/mine` — Danh sách dự án người dùng tham gia kèm huy hiệu đếm công việc mở.
-- [x] `POST /api/projects` — Tạo dự án nhóm mới (Giới hạn bảo mật: Chỉ Trưởng phòng `DEPARTMENT_HEAD` và `ADMIN`).
-- [x] `GET /api/projects/:id` — Chi tiết dự án, thành viên, tiến độ KPI và thông tin PM Lead.
-- [x] `PATCH /api/projects/:id` — Cập nhật thông tin dự án, cấu hình mô hình làm việc (`SCRUM`, `KANBAN`, `DAILY`, `SIMPLE`).
-- [x] `PATCH /api/projects/:id/swap-pm` — Hoán đổi vị trí PM dự án an toàn trong database transaction (Quyền Trưởng phòng).
-- [x] `POST /api/projects/:id/members` — Thêm thành viên vào dự án nhóm kèm phân định vai trò dự án.
-- [x] `GET /api/sprints/project/:projectId` — Danh sách Sprint Agile theo chu kỳ kèm thống kê Story Points và tỷ lệ hoàn thành.
-- [x] `POST /api/sprints` — Khởi tạo Sprint mới với tên gọi, mục tiêu, ngày bắt đầu và ngày kết thúc.
-- [x] `PATCH /api/sprints/:id/start` / `complete` — Kích hoạt bắt đầu hoặc đóng Sprint (tự động chuyển việc dở dang về Backlog).
-- [x] `GET /api/sprints/:id/burndown` — Biểu đồ Burndown Chart trực quan hóa năng suất tiêu hao Story Points của nhóm theo ngày.
-- [x] `GET /api/projects/:id/backlog` — Danh mục Product Backlog chứa các yêu cầu công việc chưa phân bổ vào Sprint.
+### ⏰ F3. Điểm Danh Thông Minh & Quản Trị Chuyên Cần (Smart Attendance)
+
+**Điểm danh Check-in / Check-out:**
+- [x] `POST /api/attendance/check-in` — Check-in 1-Click: Thẩm định IP Wifi + GPS Geofencing 500m (3 chi nhánh FPT) (ALL)
+- [x] `POST /api/attendance/check-out` — Check-out: Tính tổng giờ làm việc và phát hiện về sớm (ALL)
+- [x] `GET /api/attendance/today` — Trạng thái chuyên cần hôm nay kèm dải tiến trình Live-ticking (ALL)
+- [x] `GET /api/attendance/history` — Lịch sử chấm công cá nhân kèm Bảng nhiệt 365 ngày (ALL)
+- [x] `GET /api/attendance/office-presets` — Tọa độ và bán kính các văn phòng FPT Đà Nẵng, Hà Nội, TP.HCM (ALL)
+
+**Đăng ký & Đơn từ:**
+- [x] `POST /api/attendance/wfh` — Đăng ký làm việc từ xa (WFH) (ALL)
+- [x] `POST /api/attendance/leave-request` — Đăng ký nghỉ phép (ốm, phép năm, không lương) (ALL)
+- [x] `GET /api/attendance/leave-balance` — Tra cứu số ngày phép năm còn lại (ALL)
+- [x] `POST /api/attendance/early-leave` — Đăng ký về sớm trước 17:30 có lý do chính đáng (ALL)
+- [x] `POST /api/attendance/overtime` — Đăng ký làm thêm giờ (OT) chuẩn công thức HRM (ALL)
+- [x] `POST /api/attendance/break/start` / `end` — Ghi nhận thời gian ra ngoài và tự động trừ giờ ăn trưa (ALL)
+- [x] `GET /api/attendance/requests` — Danh sách các đơn từ đã nộp của cá nhân (ALL)
+
+**Xét duyệt & Quản lý (HR, Trưởng phòng, PM):**
+- [x] `GET /api/attendance/approval-queue` — Hàng đợi các đơn từ cần xét duyệt (HR, DEPT_HEAD, PM)
+- [x] `PATCH /api/attendance/wfh-requests/:id/approve` / `reject` — Phê duyệt hoặc từ chối WFH (HR, DEPT_HEAD, PM)
+- [x] `PATCH /api/attendance/wfh-requests/auto-approve-pending` — Tự động duyệt WFH lúc 09:30 (SYSTEM)
+- [x] `PATCH /api/attendance/leave-requests/:id/approve` / `reject` — Phê duyệt đơn nghỉ phép và trừ quỹ phép (HR, DEPT_HEAD)
+- [x] `PATCH /api/attendance/early-leave/:id/approve` / `reject` — Duyệt đơn về sớm (HR, DEPT_HEAD, PM)
+- [x] `PATCH /api/attendance/overtime/:id/approve` / `reject` — Duyệt đơn làm thêm giờ (HR, DEPT_HEAD, PM)
+- [x] `GET /api/attendance/export/excel` — Xuất bảng chấm công định dạng Excel `.xlsx` (HR, ADMIN)
+- [x] `GET /api/attendance/export/pdf` — Xuất báo cáo chuyên cần định dạng PDF (HR, ADMIN)
 
 ---
 
-### 📋 F4. Bảng Công Việc Kanban & Chi Tiết Nhiệm Vụ Linear (Tasks & Kanban)
-- [x] `GET /api/tasks?scope=mine|project` — Tải danh sách công việc theo 2 góc nhìn: Việc của tôi (cá nhân + được giao) và Dự án nhóm.
+### 🗂️ F4. Quản Trị Dự Án & Kế Hoạch Sprint Jira (Projects & Sprints)
+
+**Dự án nhóm & Không gian cá nhân:**
+- [x] `GET /api/projects/mine` — Danh sách dự án cá nhân & dự án nhóm tham gia (ALL)
+- [x] `POST /api/projects` — Tạo dự án nhóm mới (Giới hạn: Chỉ DEPT_HEAD và ADMIN)
+- [x] `GET /api/projects/:id` — Chi tiết dự án, thành viên và thông tin PM Lead (Project Members)
+- [x] `PATCH /api/projects/:id` — Cập nhật thông tin dự án, cấu hình mô hình `SCRUM`/`KANBAN`/`DAILY`/`SIMPLE` (PM, DEPT_HEAD, ADMIN)
+- [x] `PATCH /api/projects/:id/swap-pm` — Hoán đổi vị trí Project Manager an toàn trong transaction (DEPT_HEAD, ADMIN)
+- [x] `POST /api/projects/:id/members` — Thêm thành viên vào dự án nhóm (PM, DEPT_HEAD, ADMIN)
+- [x] `DELETE /api/projects/:id/members/:userId` — Xóa thành viên khỏi dự án (PM, DEPT_HEAD, ADMIN)
+
+**Quản lý Sprint Agile (Jira-style):**
+- [x] `GET /api/sprints/project/:projectId` — Danh sách Sprint Agile theo chu kỳ kèm thống kê Story Points (Project Members)
+- [x] `POST /api/sprints` — Khởi tạo Sprint mới với tên gọi, chu kỳ và mục tiêu (PM, ADMIN)
+- [x] `PATCH /api/sprints/:id/start` — Kích hoạt bắt đầu Sprint (PM, ADMIN)
+- [x] `PATCH /api/sprints/:id/complete` — Đóng hoàn thành Sprint, tự động hoàn trả task dở dang về Backlog (PM, ADMIN)
+- [x] `GET /api/sprints/:id/burndown` — Biểu đồ Burndown Chart tiêu hao Story Points của nhóm theo ngày (Project Members)
+- [x] `GET /api/projects/:id/backlog` — Khối Product Backlog chứa các công việc chưa phân bổ (Project Members)
+- [x] `CRUD /api/projects/:id/epics` — Quản trị các Epic lớn của dự án (PM, ADMIN)
+
+---
+
+### 📋 F5. Quản Lý Công Việc & Bảng Kanban (Tasks & Kanban)
+
+**Bảng công việc & Tạo việc:**
+- [x] `GET /api/tasks?scope=mine` — Danh sách công việc cá nhân và công việc được giao tại tab "Việc của tôi" (ALL)
+- [x] `GET /api/tasks?scope=project&projectId=...` — Bảng công việc nhóm của dự án (Project Members)
 - [x] `POST /api/tasks` — Tạo công việc mới:
-  - Cho phép chọn mục **"Việc cá nhân"** (mặc định tại `/tasks`).
-  - Cho phép PM / Trưởng phòng chọn thành viên đội ngũ làm **Người phụ trách (Assignee)** kèm gửi thông báo tức thì.
-  - Thiết lập Story Points, Giờ ước lượng, Hạn chót, Nhãn phân loại và Mức độ ưu tiên.
-- [x] `PATCH /api/tasks/:id/board-position` — Kéo thả thay đổi trạng thái và vị trí thẻ task với kiểm soát quyền hạn (RBAC) chống IDOR.
-- [x] `PATCH /api/tasks/:id/status` — Chuyển trạng thái công việc nhanh qua dropdown hoặc dải tiến trình workflow 5 bước.
-- [x] `GET /api/tasks/:id` — Modal chi tiết Task 2 cột chuẩn Linear / Jira Cloud:
-  - Cột chính: Tiêu đề, Dải tiến trình trạng thái, Mô tả định dạng rich-text, Nhãn tags.
-  - Cột thông số: Người phụ trách, Người tạo, Hạn chót cảnh báo màu, Giờ ước tính, Giờ thực tế, Story Points, Sprint.
-- [x] Bảng danh sách đồng bộ (Table View): Hỗ trợ sắp xếp theo hạn chót/ưu tiên/ngày tạo, bộ lọc nhãn/mức độ và tính năng ẩn việc đã xong.
-- [x] Hệ thống khung viền nhận diện ưu tiên 4 cấp độ: `URGENT` (đỏ rực), `HIGH` (cam), `MEDIUM` (xanh lam), `LOW` (xám).
-- [x] Hỗ trợ Đa ngôn ngữ (i18n): Song ngữ Tiếng Việt và English 100% trên toàn bộ giao diện bảng và thẻ.
+  - Cho phép chọn mục "Việc cá nhân" (mặc định tại `/tasks`) (ALL)
+  - Cho phép PM / Trưởng phòng chọn thành viên đội ngũ làm **Người phụ trách (Assignee)** (PM, DEPT_HEAD, ADMIN)
+  - Hỗ trợ gán Story Points, Giờ ước tính, Hạn chót, Nhãn tags và Độ ưu tiên (ALL)
+- [x] `PATCH /api/tasks/:id/board-position` — Kéo thả thay đổi trạng thái và vị trí cột Kanban nguyên tử (Assignee, PM, Creator)
+- [x] `PATCH /api/tasks/:id/status` — Chuyển trạng thái nhanh qua dải tiến trình 5 bước (Assignee, PM, Creator)
+- [x] `GET /api/tasks/:id` — Modal chi tiết Task 2 cột chuẩn Linear / Jira Cloud (ALL)
+- [x] `PATCH /api/tasks/:id` — Cập nhật thông tin mô tả, deadline, độ ưu tiên (Assignee, PM, Creator)
+- [x] `DELETE /api/tasks/:id` — Xóa mềm công việc (`deletedAt`) (PM, Creator, ADMIN)
+- [x] Bảng danh sách đồng bộ (Table List View): Bộ lọc nâng cao, tìm kiếm và tính năng ẩn việc đã xong (ALL)
+- [x] Hệ thống khung viền nhận diện ưu tiên 4 cấp độ: `URGENT`, `HIGH`, `MEDIUM`, `LOW` (ALL)
+- [x] Đa ngôn ngữ (i18n): Song ngữ Tiếng Việt & Tiếng Anh 100% trên toàn bộ giao diện bảng (ALL)
+
+**Trao đổi & Nhật ký công việc:**
+- [x] `POST /api/tasks/:id/work-logs` — Ghi nhận số giờ làm việc thực tế (Assignee)
+- [x] `GET /api/tasks/:id/work-logs` — Xem nhật ký thời gian của công việc (Project Members)
+- [x] `GET /api/tasks/:id/comments` — Tải danh sách bình luận thảo luận (Project Members)
+- [x] `POST /api/tasks/:id/comments` — Thêm bình luận mới kèm thả cảm xúc emoji (Project Members)
 
 ---
 
-### ⚡ F5. Trưởng Phòng Ban & Giao Việc Nhanh (Department Head & Quick Tasks)
-- [x] `DepartmentHeadDashboardLayout` — Giao diện bảng điều khiển riêng biệt dành riêng cho Trưởng phòng: Thống kê quân số, tình trạng vắng mặt, danh sách dự án trực thuộc và cảnh báo rủi ro.
-- [x] `GET /api/dept-head/overview` — Tổng hợp số liệu chuyên sâu về tỷ lệ hoàn thành dự án và tiến độ Sprint trong phòng ban.
-- [x] `POST /api/quick-tasks` — Nút giao việc nhanh ⚡ `QuickTaskButton`: Tạo và giao việc khẩn cấp cho bất kỳ nhân viên nào trong phòng ban chỉ với 1-chạm.
-- [x] `GET /api/quick-tasks` — Danh sách các công việc giao nhanh, theo dõi trạng thái phản hồi và mức độ khẩn cấp.
-- [x] `PATCH /api/quick-tasks/:id/status` — Người được giao cập nhật trạng thái thực hiện công việc nhanh.
-- [x] `ProjectDetailModal` & `DeptHeadMemberProfileModal` — Bộ modal tra cứu thông tin dự án và nhân viên in-place không cần chuyển trang.
+### ⚡ F6. Trưởng Phòng Ban & Giao Việc Nhanh (Department Head & Quick Tasks)
+- [x] `DepartmentHeadDashboardLayout` — Giao diện bảng điều khiển chuyên biệt cho Trưởng phòng: Thống kê quân số, tình trạng vắng mặt, tiến độ các dự án trực thuộc (DEPT_HEAD, ADMIN)
+- [x] `GET /api/dashboard/department-head` — Tổng hợp số liệu chuyên sâu về hiệu suất phòng ban (DEPT_HEAD, ADMIN)
+- [x] `POST /api/quick-tasks` — Nút giao việc nhanh ⚡ `QuickTaskButton`: Giao việc khẩn cấp 1-chạm cho nhân viên không cần tạo dự án (DEPT_HEAD, PM, ADMIN)
+- [x] `GET /api/quick-tasks` — Danh sách các công việc giao nhanh gửi đi và nhận được (ALL)
+- [x] `PATCH /api/quick-tasks/:id/status` — Cập nhật tiến độ hoàn thành công việc nhanh (Assignee, Assigner)
+- [x] `ProjectDetailModal` & `DeptHeadMemberProfileModal` — Bộ modal tra cứu dự án và nhân sự in-place không cần chuyển trang (DEPT_HEAD, ADMIN)
 
 ---
 
-### 📹 F6. Cuộc Họp Trực Tuyến & Biên Bản Thông Minh AI (Meetings & Gemini AI)
-- [x] `POST /api/meetings` — Khởi tạo cuộc họp trực tuyến theo dự án, phòng ban hoặc mời đồng nghiệp tự do.
-- [x] `GET /api/meetings/upcoming` / `past` — Danh sách cuộc họp sắp diễn ra và lịch sử các cuộc họp đã kết thúc.
-- [x] `POST /api/meetings/:id/rsvp` — Phản hồi lời mời tham gia cuộc họp (`ACCEPTED`, `DECLINED`, `PENDING`).
+### 📹 F7. Cuộc Họp Trực Tuyến & Biên Bản AI (Meetings & Gemini AI)
+- [x] `POST /api/meetings` — Lên lịch cuộc họp trực tuyến theo dự án, phòng ban hoặc mời đồng nghiệp tự do (PM, DEPT_HEAD, HR, ADMIN)
+- [x] `GET /api/meetings/upcoming` / `past` — Danh sách cuộc họp sắp diễn ra và lịch sử cuộc họp (ALL)
+- [x] `POST /api/meetings/:id/rsvp` — Phản hồi lời mời tham gia (`ACCEPTED`, `DECLINED`, `PENDING`) (Attendees)
 - [x] **Phòng họp trực tuyến WebRTC chuẩn Google Meet**:
-  - Truyền phát âm thanh, video chất lượng cao, chia sẻ màn hình với spotlight presenter.
-  - Chế độ cửa sổ nổi Picture-in-Picture (PiP) và thu nhỏ góc màn hình (`isMinimized`).
-  - Bộ điều khiển nổi kính mờ bo tròn, drawer danh sách người tham gia và trạng thái mic/cam.
-  - Kết thúc cuộc họp tức thời cho tất cả người tham gia (`HostEndMeetingModal`).
+  - Truyền phát âm thanh, video chất lượng cao, chia sẻ màn hình với spotlight presenter (Attendees)
+  - Chế độ cửa sổ nổi Picture-in-Picture (PiP) và Chế độ thu nhỏ góc màn hình (`isMinimized`) (Attendees)
+  - Bật/Tắt mic, camera, chia sẻ màn hình, drawer danh sách người tham gia (Attendees)
+  - Kết thúc cuộc họp ngay lập tức cho tất cả người tham gia (`HostEndMeetingModal`) (Host, PM, ADMIN)
 - [x] **Live Speech-to-Text tiếng Việt**:
-  - Tích hợp Web Speech API với bộ đệm câu thông minh (`Smart Sentence Buffer`) gom câu hoàn chỉnh theo ngữ nghĩa.
-  - Lưu trữ phân mảnh độc lập (`MeetingTranscriptChunk`) loại bỏ race condition khi nhiều người nói cùng lúc.
+  - Web Speech API với bộ đệm câu thông minh (`Smart Sentence Buffer`) gom câu hoàn chỉnh theo ngữ nghĩa tiếng Việt (Attendees)
+  - Lưu trữ phân mảnh độc lập (`MeetingTranscriptChunk`) loại bỏ race condition khi nhiều người nói (Attendees)
 - [x] **Trí tuệ nhân tạo Gemini 1.5 Flash Meeting Intelligence**:
-  - `POST /api/meetings/:id/ai-summary/generate` — Tự động phân tích toàn bộ cuộc họp.
-  - Trích xuất: Tóm tắt điều hành, Quyết định đạt được, Bảng Action Items (kèm người nhận & nút tạo Task 1-click lên Kanban), Phân tích rủi ro.
-  - Cơ chế tự động thử lại đa mô hình (Multi-Model Fallback) chống quá tải dịch vụ.
+  - `POST /api/meetings/:id/ai-summary/generate` — Tự động phân tích hội thoại cuộc họp (Host, PM, ADMIN)
+  - Trích xuất: Tóm tắt điều hành, Quyết định đạt được, Bảng Action Items (kèm nút tạo Task 1-click lên Kanban), Phân tích rủi ro (Host, PM, ADMIN)
+  - Cơ chế Multi-Model Fallback tự động chống quá tải dịch vụ (SYSTEM)
 - [x] **Báo cáo & Xuất bản chuyên cần**:
-  - Xuất biên bản cuộc họp ra **file Word (.doc)** định dạng chuẩn văn bản hành chính doanh nghiệp.
-  - Xuất số liệu chuyên cần ra **file CSV / Excel** có UTF-8 BOM.
-  - Tự động xuất biên bản sang hệ thống tài liệu ClickUp Docs (`POST /api/meetings/:id/export-doc`).
+  - Nút tải **file Word (.doc)** định dạng chuẩn văn bản hành chính đầy đủ chữ ký xác nhận của Thư ký / Chủ tọa (ALL)
+  - Nút xuất **file CSV / Excel** số liệu chuyên cần có UTF-8 BOM (ALL)
+  - Tự động xuất biên bản họp sang kho tài liệu ClickUp Docs (`POST /api/meetings/:id/export-doc`) (Host, PM, ADMIN)
 
 ---
 
-### 📄 F7. Quản Trị Tri Thức Doanh Nghiệp (Document Management System)
-- [x] `POST /api/documents` — Khởi tạo tài liệu mới với trình soạn thảo rich-text Tiptap.
-- [x] `GET /api/documents` — Danh sách tài liệu đa phạm vi: Cá nhân, Dự án, Phòng ban, Toàn công ty.
+### 📄 F8. Quản Trị Tri Thức Doanh Nghiệp (Document Management System)
+- [x] `POST /api/documents` — Tạo tài liệu mới với trình soạn thảo rich-text Tiptap (ALL)
+- [x] `GET /api/documents` — Danh sách tài liệu (lọc theo dự án, phòng ban, cá nhân hoặc công ty) (ALL)
 - [x] 5 Phân loại tài liệu chuẩn nghiệp vụ:
-  - `TASK_REQUIREMENT` — Tài liệu đặc tả yêu cầu công việc.
-  - `TASK_SUBMISSION` — Báo cáo kết quả / sản phẩm bàn giao nghiệm thu task (Deliverables).
-  - `PROJECT` — Tài liệu thiết kế và kiến trúc dự án.
-  - `MEETING_MINUTES` — Biên bản cuộc họp đồng bộ từ phân hệ M5.
-  - `COMPANY_POLICY` — Quy chế, chính sách và cẩm nang doanh nghiệp (`/documents/company`).
-- [x] `POST /api/documents/:id/attachments` — Tải tệp đính kèm đa định dạng hỗ trợ dung lượng lên tới 25MB.
-- [x] `GET /api/documents/:id/versions` — Quản lý lịch sử các phiên bản tài liệu và khôi phục về phiên bản cũ.
-- [x] `GET /api/documents/search/fulltext` — Tìm kiếm toàn văn thông minh theo tiêu đề và nội dung tài liệu.
-- [x] `POST /api/documents/:id/ai-summary` — Dùng AI tóm tắt nhanh nội dung tài liệu dài.
+  - `TASK_REQUIREMENT` — Tài liệu đặc tả yêu cầu công việc
+  - `TASK_SUBMISSION` — Báo cáo nghiệm thu sản phẩm bàn giao (Deliverables)
+  - `PROJECT` — Tài liệu thiết kế và kiến trúc dự án
+  - `MEETING_MINUTES` — Biên bản cuộc họp đồng bộ từ phân hệ M5
+  - `COMPANY_POLICY` — Quy chế, chính sách áp dụng toàn doanh nghiệp (`/documents/company`)
+- [x] `POST /api/documents/:id/attachments` — Tải lên tệp đính kèm tài liệu dung lượng tối đa 25MB (Creator, PM)
+- [x] `GET /api/documents/:id/versions` — Quản lý lịch sử các phiên bản và khôi phục về phiên bản cũ (ALL)
+- [x] `GET /api/documents/search/fulltext` — Tìm kiếm toàn văn thông minh theo tiêu đề và nội dung (ALL)
+- [x] `POST /api/documents/:id/ai-summary` — Dùng AI tóm tắt nhanh nội dung tài liệu dài (ALL)
 
 ---
 
-### 📅 F8. Lịch Làm Việc Doanh Nghiệp Hợp Nhất (Work Calendar)
-- [x] `GET /api/calendar/timeline` — Hợp nhất 6 luồng dữ liệu thời gian: Tasks, Sprints, Meetings, Nghỉ phép, WFH, Làm thêm giờ (OT).
-- [x] Hỗ trợ 3 chế độ xem linh hoạt: Lịch ngày (Day), Lịch tuần (Week), Lịch tháng (Month).
-- [x] Bộ máy phát hiện xung đột lịch trình (`Conflict Detection Engine`):
-  - `meeting_overlap` — Trùng lặp giờ giữa 2 cuộc họp.
-  - `overdue_overload` — Dồn ứ quá tải các công việc quá hạn trong cùng một ngày.
-  - `leave_during_meeting` — Xếp lịch họp vào ngày nhân sự đang nghỉ phép.
-- [x] `PATCH /api/calendar/items/:kind/:id/reschedule` — Kéo thả trực tiếp trên lưới lịch để dời ngày làm việc có kiểm tra quyền hạn (Assignee/Creator/PM/Admin).
-- [x] `RescheduleConfirmModal` — Hộp thoại xác nhận dời lịch hiển thị thời gian cũ -> mới và lý do thay đổi.
-- [x] `GET /api/calendar/export` — Xuất toàn bộ lịch trình ra file chuẩn **RFC 5545 iCalendar (`.ics`)** tương thích Google Calendar, Outlook và Apple Calendar.
+### 📅 F9. Lịch Làm Việc Doanh Nghiệp Hợp Nhất (Work Calendar)
+- [x] `GET /api/calendar/timeline` — Hợp nhất 6 nguồn dữ liệu: Tasks, Sprints, Meetings, Nghỉ phép, WFH, Làm thêm giờ (ALL)
+- [x] Hỗ trợ 3 góc nhìn linh hoạt: Lịch ngày (Day), Lịch tuần (Week), Lịch tháng (Month) (ALL)
+- [x] Bộ máy phát hiện xung đột lịch trình (`Conflict Detection Engine`): Trùng giờ họp, dồn task quá hạn, họp trong ngày nghỉ phép (ALL)
+- [x] `PATCH /api/calendar/items/:kind/:id/reschedule` — Kéo thả trực tiếp trên lưới lịch để dời ngày làm việc có kiểm tra RBAC (Assignee, Creator, PM)
+- [x] `RescheduleConfirmModal` — Hộp thoại xác nhận dời lịch lưu lý do thay đổi (ALL)
+- [x] `GET /api/calendar/export` — Xuất toàn bộ lịch trình ra file chuẩn **RFC 5545 iCalendar (`.ics`)** (ALL)
 
 ---
 
-### 💬 F9. Trò Chuyện Trực Tuyến & Thông Báo Đa Kênh (Chat & Notifications)
-- [x] Kiến trúc Native PostgreSQL + NestJS Socket.IO (Namespace `/chat`), độc lập và bảo mật 100%.
-- [x] `POST /api/chat/conversations/direct/:targetUserId` — Tạo hoặc mở cuộc trò chuyện trực tiếp 1-1.
-- [x] `POST /api/chat/conversations/project/:projectId` — Nhóm trò chuyện tự động đồng bộ theo thành viên dự án.
-- [x] `POST /api/chat/conversations/department/:departmentId` — Nhóm trò chuyện tự động theo phòng ban.
-- [x] `GET /api/chat/conversations/:id/messages` — Tải lịch sử tin nhắn kèm tin nhắn trích dẫn (reply quote) và tệp đính kèm.
-- [x] `POST /api/chat/conversations/:id/messages/file` — Tải lên tệp đính kèm an toàn lưu trữ trên ổ đĩa nội bộ (`/uploads/chat`).
-- [x] `POST /api/chat/messages/:messageId/reactions` — Thả cảm xúc emoji tương tác (👍, ❤️, 😂, 🎉, 🚀) và đồng bộ real-time.
-- [x] `PATCH /api/chat/conversations/:id/pin` / `mute` — Ghim hội thoại quan trọng lên đầu và Bật/Tắt thông báo cuộc trò chuyện.
-- [x] Menu ngữ cảnh chuột phải trên Avatar (`ChatContextMenu`): Nhấp chuột phải vào bất kỳ avatar người dùng nào trên bảng Kanban, dự án hoặc tài liệu để mở nhanh cuộc trò chuyện.
-- [x] Thông báo đẩy Web Push native (chuẩn VAPID) và chuông thông báo thời gian thực với phân loại chuyên nghiệp, không dùng emoji thô.
+### 💬 F10. Trò Chuyện Trực Tuyến & Thông Báo Đa Kênh (Chat & Notifications)
+- [x] Kiến trúc Native PostgreSQL + Socket.IO (Namespace `/chat`), vận hành nội bộ bảo mật 100% (ALL)
+- [x] `POST /api/chat/conversations/direct/:targetUserId` — Tạo hoặc mở cuộc trò chuyện 1-1 trực tiếp (ALL)
+- [x] `POST /api/chat/conversations/project/:projectId` — Nhóm trò chuyện tự động đồng bộ theo dự án (Project Members)
+- [x] `POST /api/chat/conversations/department/:departmentId` — Nhóm trò chuyện tự động theo phòng ban (Department Members)
+- [x] `GET /api/chat/conversations/:id/messages` — Tải lịch sử tin nhắn kèm reply quote và tệp đính kèm (Conversation Members)
+- [x] `POST /api/chat/conversations/:id/messages/file` — Gửi tệp đính kèm an toàn lưu trên ổ đĩa nội bộ `/uploads/chat` (Conversation Members)
+- [x] `POST /api/chat/messages/:id/reactions` — Thả cảm xúc emoji tương tác (👍, ❤️, 😂, 🎉, 🚀) (Conversation Members)
+- [x] `PATCH /api/chat/conversations/:id/pin` / `mute` — Ghim hội thoại và Bật/Tắt thông báo (Conversation Members)
+- [x] Menu ngữ cảnh chuột phải trên Avatar (`ChatContextMenu`): Nhấp chuột phải trên avatar bất kỳ để mở nhanh chat (ALL)
+- [x] Thông báo đẩy Web Push native (chuẩn VAPID) và chuông thông báo thời gian thực (ALL)

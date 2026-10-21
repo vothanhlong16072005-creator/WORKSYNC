@@ -1,180 +1,482 @@
-# 🔌 Hợp Đồng Giao Tiếp API (API Contract) — WorkSync
-> **Phiên bản:** 2.0 (Enterprise Updated) | **Ngày cập nhật:** 21/10/2026  
+# 🔌 Hợp Đồng Giao Tiếp API Chi Tiết (API Contract Specification) — WorkSync
+> **Phiên bản:** 2.0 (Enterprise Comprehensive) | **Ngày cập nhật:** 21/10/2026  
 > **Base URL:** `http://localhost:4000/api`  
 > **Auth Header:** `Authorization: Bearer <accessToken>`  
-> **Cấu trúc phản hồi chuẩn (Standard Envelope):**
+> **Cấu trúc phản hồi chuẩn (Standard JSON Envelope):**
 > ```json
 > {
 >   "success": true,
 >   "data": { ... },
->   "meta": { "total": 100, "page": 1, "limit": 20 },
+>   "meta": { "total": 100, "page": 1, "limit": 20, "totalPages": 5 },
 >   "error": null
 > }
 > ```
 
 ---
 
-## 🔐 1. Xác Thực & Người Dùng (Auth & Users)
+## 🔐 1. Xác Thực & Phân Quyền (Auth & Users)
 
-| Method | Endpoint | Quyền hạn | Mô tả chức năng |
-| :--- | :--- | :---: | :--- |
-| `POST` | `/api/auth/register` | ALL | Đăng ký tài khoản mới; tự động cấp phát dự án `PERSONAL`. |
-| `POST` | `/api/auth/login` | ALL | Đăng nhập email & mật khẩu; trả về Access Token & set HttpOnly Cookie. |
-| `POST` | `/api/auth/google` | ALL | Đăng nhập/Đăng ký nhanh qua Google OAuth 2.0. |
-| `POST` | `/api/auth/refresh` | ALL | Làm mới Access Token ngầm (Silent Refresh). |
-| `POST` | `/api/auth/logout` | ALL | Hủy phiên làm việc và xóa cookie refreshToken. |
-| `GET` | `/api/auth/me` | ALL | Lấy thông tin tài khoản và danh sách quyền hạn người dùng hiện tại. |
-| `GET` | `/api/users` | ADMIN, HR, DEPT_HEAD | Danh sách người dùng hệ thống kèm tìm kiếm và lọc phòng ban. |
-| `GET` | `/api/users/assignable` | ALL | Lấy danh sách thành viên hợp lệ để giao việc (theo phòng ban hoặc dự án). |
-| `GET` | `/api/users/:id` | ALL | Xem thông tin hồ sơ người dùng. |
-| `PATCH` | `/api/users/profile` | ALL | Cập nhật hồ sơ cá nhân: Họ tên, vị trí, ảnh đại diện, ngôn ngữ (`VI`/`EN`). |
-| `PATCH` | `/api/users/:id/role` | ADMIN | Phân quyền vai trò mới cho tài khoản (`ADMIN`, `HR`, `DEPARTMENT_HEAD`, `PM`, `EMPLOYEE`). |
+### `POST /api/auth/register`
+- **Mục đích:** Đăng ký tài khoản người dùng mới; hệ thống tự động khởi tạo dự án cá nhân (`PERSONAL`) song hành.
+- **Quyền hạn:** Mọi đối tượng (Public).
+- **Request Body:**
+```json
+{
+  "email": "developer@worksync.com",
+  "password": "Password@123",
+  "name": "Lê Văn Cường",
+  "departmentId": "dept-eng-001",
+  "position": "Frontend Developer"
+}
+```
+- **Response 201 Created:**
+```json
+{
+  "success": true,
+  "data": {
+    "user": {
+      "id": "cmv123abc456",
+      "email": "developer@worksync.com",
+      "name": "Lê Văn Cường",
+      "role": "EMPLOYEE",
+      "department": { "id": "dept-eng-001", "name": "Kỹ thuật phần mềm" }
+    },
+    "personalProject": {
+      "id": "proj-personal-usr1",
+      "name": "Việc cá nhân",
+      "kind": "PERSONAL"
+    },
+    "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+  }
+}
+```
+
+### `POST /api/auth/login`
+- **Request Body:**
+```json
+{
+  "email": "pm@worksync.com",
+  "password": "Password@123"
+}
+```
+- **Response 200 OK:**
+```json
+{
+  "success": true,
+  "data": {
+    "user": {
+      "id": "usr-pm-001",
+      "email": "pm@worksync.com",
+      "name": "Nguyễn Minh Tuấn",
+      "role": "PM",
+      "position": "Project Manager",
+      "avatar": "https://avatar.iran.liara.run/public/boy?username=tuan"
+    },
+    "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+  }
+}
+```
+
+### `GET /api/auth/me`
+- **Headers:** `Authorization: Bearer <accessToken>`
+- **Response 200 OK:**
+```json
+{
+  "success": true,
+  "data": {
+    "id": "usr-pm-001",
+    "email": "pm@worksync.com",
+    "name": "Nguyễn Minh Tuấn",
+    "role": "PM",
+    "language": "VI",
+    "department": { "id": "dept-01", "name": "Kỹ thuật phần mềm", "code": "DEV" }
+  }
+}
+```
+
+### `GET /api/users/assignable`
+- **Mục đích:** Lấy danh sách thành viên trong dự án hoặc phòng ban để giao việc.
+- **Query:** `?projectId=proj-123`
+- **Response 200 OK:**
+```json
+{
+  "success": true,
+  "data": [
+    { "id": "usr-dev-01", "name": "Trần Văn An", "email": "an@worksync.com", "role": "EMPLOYEE", "avatar": "..." },
+    { "id": "usr-qa-02", "name": "Lê Thị Bình", "email": "binh@worksync.com", "role": "EMPLOYEE", "avatar": "..." }
+  ]
+}
+```
 
 ---
 
-## ⏰ 2. Điểm Danh & Chuyên Cần (Smart Attendance)
+## ⏰ 2. Điểm Danh Thông Minh & Quản Trị Chuyên Cần (Smart Attendance)
 
-| Method | Endpoint | Quyền hạn | Mô tả chức năng |
-| :--- | :--- | :---: | :--- |
-| `POST` | `/api/attendance/check-in` | ALL | Điểm danh 1-Click: Thẩm định IP Public + GPS Geofencing 3 chi nhánh FPT. |
-| `POST` | `/api/attendance/check-out` | ALL | Điểm danh ra về: Tính tổng giờ làm thực tế và phát hiện về sớm. |
-| `GET` | `/api/attendance/today` | ALL | Lấy trạng thái chuyên cần hôm nay kèm dải tiến trình live-ticking. |
-| `GET` | `/api/attendance/my-history` | ALL | Lịch sử điểm danh cá nhân kèm Bảng nhiệt 365 ngày (Heatmap). |
-| `POST` | `/api/attendance/wfh-request` | ALL | Tạo đơn làm việc từ xa (WFH). |
-| `POST` | `/api/attendance/leave-request` | ALL | Tạo đơn xin nghỉ phép (tự động trừ quỹ ngày phép trong transaction). |
-| `POST` | `/api/attendance/early-leave-request`| ALL | Tạo đơn đăng ký về sớm có lý do chính đáng trước 17:30. |
-| `POST` | `/api/attendance/overtime-request` | ALL | Tạo đơn làm thêm giờ (OT) chuẩn công thức HRM. |
-| `POST` | `/api/attendance/break-log` | ALL | Ghi nhận thời gian ra ngoài tạm thời và tự động trừ giờ ăn trưa. |
-| `GET` | `/api/attendance/approval-queue` | HR, DEPT_HEAD, PM | Danh sách hàng đợi các đơn từ cần xét duyệt của cấp dưới. |
-| `PATCH` | `/api/attendance/approve-request`| HR, DEPT_HEAD, PM | Duyệt đơn từ (WFH, Phép, Về sớm, OT) và cập nhật bảng công. |
-| `PATCH` | `/api/attendance/reject-request` | HR, DEPT_HEAD, PM | Từ chối đơn từ kèm ghi chú lý do. |
-| `GET` | `/api/attendance/export/excel` | HR, ADMIN | Xuất báo cáo bảng chấm công toàn công ty định dạng `.xlsx`. |
-| `GET` | `/api/attendance/export/pdf` | HR, ADMIN | Xuất báo cáo chuyên cần định dạng chuẩn in ấn `.pdf`. |
+### `POST /api/attendance/check-in`
+- **Mục đích:** Điểm danh 1-Click tích hợp xác thực kép qua Geofencing và IP Wifi.
+- **Request Body:**
+```json
+{
+  "latitude": 15.968600,
+  "longitude": 108.260800,
+  "ipAddress": "118.69.182.45",
+  "note": "Check-in tại FPT Complex Đà Nẵng"
+}
+```
+- **Response 200 OK (Thành công trong vùng hợp lệ):**
+```json
+{
+  "success": true,
+  "data": {
+    "id": "att-record-today",
+    "userId": "usr-123",
+    "date": "2026-10-21T00:00:00.000Z",
+    "checkInTime": "2026-10-21T08:14:22.000Z",
+    "status": "ON_TIME",
+    "officeLocation": "FPT Complex Đà Nẵng",
+    "distanceMeters": 42.5,
+    "ipValid": true
+  }
+}
+```
+
+### `POST /api/attendance/leave-request`
+- **Mục đích:** Nộp đơn xin nghỉ phép (tự động kiểm tra và trừ quỹ phép năm).
+- **Request Body:**
+```json
+{
+  "type": "ANNUAL",
+  "startDate": "2026-11-01",
+  "endDate": "2026-11-02",
+  "dayCount": 2.0,
+  "reason": "Về quê giải quyết việc gia đình"
+}
+```
+- **Response 201 Created:**
+```json
+{
+  "success": true,
+  "data": {
+    "id": "leave-req-001",
+    "status": "PENDING",
+    "remainingLeaveBalance": 10.0
+  }
+}
+```
+
+### `POST /api/attendance/early-leave-request`
+- **Request Body:**
+```json
+{
+  "date": "2026-10-21",
+  "expectedLeaveTime": "2026-10-21T16:00:00.000Z",
+  "reason": "Đi khám bệnh theo lịch hẹn bác sĩ"
+}
+```
+
+### `POST /api/attendance/overtime-request`
+- **Request Body:**
+```json
+{
+  "date": "2026-10-21",
+  "registeredHours": 2.5,
+  "reason": "Hỗ trợ deploy bản cập nhật Sprint 12 lên môi trường Production"
+}
+```
 
 ---
 
-## 🗂️ 3. Quản Trị Dự Án & Sprints (Projects & Sprints)
+## 🗂️ 3. Quản Trị Dự Án & Sprints Jira (Projects & Sprints)
 
-| Method | Endpoint | Quyền hạn | Mô tả chức năng |
-| :--- | :--- | :---: | :--- |
-| `GET` | `/api/projects/mine` | ALL | Danh sách dự án cá nhân & dự án nhóm người dùng tham gia. |
-| `POST` | `/api/projects` | DEPT_HEAD, ADMIN | Khởi tạo dự án nhóm mới (Ràng buộc: PM và Employee không được tạo). |
-| `GET` | `/api/projects/:id` | Project Members | Xem chi tiết dự án, mô hình workflow (`SCRUM`/`KANBAN`/`DAILY`/`SIMPLE`). |
-| `PATCH` | `/api/projects/:id` | PM, DEPT_HEAD, ADMIN | Cập nhật cấu hình và thông tin dự án. |
-| `PATCH` | `/api/projects/:id/swap-pm` | DEPT_HEAD, ADMIN | Hoán đổi Project Manager dự án an toàn trong database transaction. |
-| `POST` | `/api/projects/:id/members` | PM, DEPT_HEAD, ADMIN | Bổ sung thành viên và phân định Project Role. |
-| `DELETE`| `/api/projects/:id/members/:userId` | PM, DEPT_HEAD, ADMIN | Xóa thành viên khỏi dự án nhóm. |
-| `GET` | `/api/sprints/project/:projectId` | Project Members | Danh sách Sprint Agile theo chu kỳ kèm thống kê Story Points. |
-| `POST` | `/api/sprints` | PM, ADMIN | Khởi tạo Sprint mới với chu kỳ và mục tiêu cam kết. |
-| `PATCH` | `/api/sprints/:id/start` | PM, ADMIN | Bắt đầu kích hoạt Sprint đang ở trạng thái chuẩn bị. |
-| `PATCH` | `/api/sprints/:id/complete` | PM, ADMIN | Đóng hoàn thành Sprint (tự động chuyển task dở dang về Backlog). |
-| `GET` | `/api/sprints/:id/burndown` | Project Members | Biểu đồ Burndown Chart năng suất hoàn thành SP của nhóm. |
+### `POST /api/projects`
+- **Quyền hạn:** `DEPARTMENT_HEAD`, `ADMIN`.
+- **Request Body:**
+```json
+{
+  "name": "WorkSync Core Platform",
+  "code": "WS-CORE",
+  "description": "Nền tảng quản lý dự án & điểm danh thông minh",
+  "workflowType": "SCRUM",
+  "pmId": "usr-pm-001",
+  "departmentId": "dept-01",
+  "color": "#2563eb"
+}
+```
+
+### `PATCH /api/projects/:id/swap-pm`
+- **Quyền hạn:** `DEPARTMENT_HEAD`, `ADMIN`.
+- **Request Body:**
+```json
+{
+  "newPmId": "usr-pm-002",
+  "reason": "Điều chuyển nhân sự quản trị sang dự án trọng điểm mới"
+}
+```
+- **Response 200 OK:**
+```json
+{
+  "success": true,
+  "data": {
+    "id": "proj-ws-core",
+    "name": "WorkSync Core Platform",
+    "pm": { "id": "usr-pm-002", "name": "Trần Thị Mai", "email": "mai@worksync.com" }
+  }
+}
+```
+
+### `GET /api/sprints/:id/burndown`
+- **Response 200 OK:**
+```json
+{
+  "success": true,
+  "data": {
+    "sprintId": "sprint-12",
+    "totalStoryPoints": 65,
+    "days": [
+      { "day": "Day 1", "idealRemaining": 65, "actualRemaining": 65 },
+      { "day": "Day 2", "idealRemaining": 58.5, "actualRemaining": 60 },
+      { "day": "Day 3", "idealRemaining": 52, "actualRemaining": 48 }
+    ]
+  }
+}
+```
 
 ---
 
 ## 📋 4. Quản Lý Công Việc & Bảng Kanban (Tasks & Kanban)
 
-| Method | Endpoint | Quyền hạn | Mô tả chức năng |
-| :--- | :--- | :---: | :--- |
-| `GET` | `/api/tasks` | ALL | Danh sách công việc theo `?scope=mine` (cá nhân) hoặc `?scope=project`. |
-| `POST` | `/api/tasks` | ALL | Tạo công việc mới: hỗ trợ gán Assignee, Story Points, Hạn chót, Ưu tiên. |
-| `GET` | `/api/tasks/:id` | Assignee, PM, Members | Xem chi tiết nhiệm vụ chuẩn 2 cột Linear (workflow, timeline, metadata). |
-| `PATCH` | `/api/tasks/:id/board-position` | Assignee, PM, Creator | Kéo thả đổi cột trạng thái và thứ tự sắp xếp trên Kanban. |
-| `PATCH` | `/api/tasks/:id/status` | Assignee, PM, Creator | Chuyển trạng thái nhanh (`TODO`, `IN_PROGRESS`, `IN_REVIEW`, `BLOCKED`, `DONE`). |
-| `PATCH` | `/api/tasks/:id` | Assignee, PM, Creator | Cập nhật nội dung mô tả, tiêu đề, độ ưu tiên hoặc người phụ trách. |
-| `DELETE`| `/api/tasks/:id` | PM, Creator, ADMIN | Xóa mềm công việc (`deletedAt`). |
+### `POST /api/tasks`
+- **Mục đích:** Tạo công việc mới (hỗ trợ phân bổ Assignee bởi PM hoặc tự tạo việc cá nhân).
+- **Request Body:**
+```json
+{
+  "title": "Tối ưu hóa phông chữ tiếng Việt Plus Jakarta Sans",
+  "description": "Thay thế font-display và nhúng Google Fonts chuẩn quốc tế",
+  "projectId": "proj-ws-core",
+  "sprintId": "sprint-12",
+  "assigneeId": "usr-dev-01",
+  "priority": "HIGH",
+  "storyPoints": 5,
+  "timeEstimate": 8.0,
+  "dueDate": "2026-10-25T17:30:00.000Z",
+  "labels": ["FRONTEND", "TYPOGRAPHY", "BAUHAUS"]
+}
+```
+- **Response 201 Created:**
+```json
+{
+  "success": true,
+  "data": {
+    "id": "TASK-1024",
+    "title": "Tối ưu hóa phông chữ tiếng Việt Plus Jakarta Sans",
+    "status": "TODO",
+    "priority": "HIGH",
+    "assignee": { "id": "usr-dev-01", "name": "Trần Văn An" },
+    "creator": { "id": "usr-pm-001", "name": "Nguyễn Minh Tuấn" }
+  }
+}
+```
+
+### `PATCH /api/tasks/:id/board-position`
+- **Mục đích:** Kéo thả cập nhật trạng thái và vị trí cột Kanban trong transaction atomic.
+- **Request Body:**
+```json
+{
+  "status": "IN_PROGRESS",
+  "boardOrder": 1500.5
+}
+```
 
 ---
 
-## ⚡ 5. Trưởng Phòng & Giao Việc Nhanh (Department Head & Quick Tasks)
+## ⚡ 5. Giao Việc Nhanh Trưởng Phòng (Quick Tasks)
 
-| Method | Endpoint | Quyền hạn | Mô tả chức năng |
-| :--- | :--- | :---: | :--- |
-| `GET` | `/api/dept-head/overview` | DEPT_HEAD, ADMIN | Thống kê tổng quan nhân sự, tiến độ dự án và rủi ro phòng ban. |
-| `POST` | `/api/quick-tasks` | DEPT_HEAD, PM, ADMIN | Giao việc khẩn cấp 1-chạm cho nhân viên không cần qua tạo dự án. |
-| `GET` | `/api/quick-tasks` | ALL | Danh sách công việc giao nhanh gửi đi hoặc được nhận. |
-| `PATCH` | `/api/quick-tasks/:id/status`| Assignee, Creator | Cập nhật tiến độ hoàn thành công việc nhanh. |
+### `POST /api/quick-tasks`
+- **Request Body:**
+```json
+{
+  "title": "Xử lý khẩn cấp lỗi CORS kết nối Mobile Gateway",
+  "description": "Khách hàng báo lỗi không đăng nhập được qua IP văn phòng Cầu Giấy",
+  "assigneeId": "usr-dev-01",
+  "priority": "URGENT",
+  "dueDate": "2026-10-21T21:00:00.000Z"
+}
+```
 
 ---
 
 ## 📹 6. Cuộc Họp Trực Tuyến & Biên Bản AI (Meetings & AI)
 
-| Method | Endpoint | Quyền hạn | Mô tả chức năng |
-| :--- | :--- | :---: | :--- |
-| `GET` | `/api/meetings/upcoming` | ALL | Danh sách các cuộc họp sắp diễn ra mà người dùng được mời. |
-| `GET` | `/api/meetings/past` | ALL | Lịch sử các cuộc họp đã kết thúc. |
-| `POST` | `/api/meetings` | PM, DEPT_HEAD, HR, ADMIN | Lên lịch cuộc họp mới (theo dự án, phòng ban hoặc tự do). |
-| `GET` | `/api/meetings/:id` | Attendees | Xem chi tiết phòng họp, danh sách RSVP và tài liệu đính kèm. |
-| `POST` | `/api/meetings/:id/rsvp` | Attendees | Phản hồi lời mời (`ACCEPTED`, `DECLINED`, `PENDING`). |
-| `POST` | `/api/meetings/:id/transcripts` | Attendees | Lưu trữ phân mảnh dòng thoại nhận diện giọng nói tiếng Việt thời gian thực. |
-| `POST` | `/api/meetings/:id/ai-summary/generate`| Host, PM, ADMIN | Kích hoạt Google Gemini 1.5 Flash tạo biên bản tóm tắt, Action Items. |
-| `GET` | `/api/meetings/:id/report` | Attendees | Tải dữ liệu báo cáo chuyên cần và biên bản họp tổng hợp. |
-| `POST` | `/api/meetings/:id/export-doc` | Host, PM, ADMIN | Xuất trực tiếp biên bản họp sang kho tài liệu ClickUp Docs. |
-| `DELETE`| `/api/meetings/:id` | Host, PM, ADMIN | Hủy bỏ cuộc họp (gửi thông báo thu hồi lịch). |
+### `POST /api/meetings/:id/ai-summary/generate`
+- **Mục đích:** Gửi toàn bộ transcript hội thoại lên Google Gemini 1.5 Flash để trích xuất biên bản có cấu trúc.
+- **Response 200 OK:**
+```json
+{
+  "success": true,
+  "data": {
+    "aiSummary": "Cuộc họp Sprint Planning 12 đã thống nhất mục tiêu hoàn thiện module Chấm công và kiểm thử WebRTC...",
+    "actionItems": [
+      {
+        "task": "Nâng cấp giao diện phòng họp theo chuẩn Google Meet",
+        "assigneeId": "usr-dev-01",
+        "dueDate": "2026-10-23"
+      },
+      {
+        "task": "Kiểm thử WebRTC trên môi trường thực tế đa thiết bị",
+        "assigneeId": "usr-qa-02",
+        "dueDate": "2026-10-24"
+      }
+    ],
+    "decisions": [
+      "Thống nhất xuất biên bản họp ra 2 định dạng: Word (.doc) và CSV số liệu chuyên cần",
+      "Giới hạn dung lượng tệp đính kèm trong chat phòng họp ở mức 25MB"
+    ],
+    "risks": [
+      "Tính năng WebRTC cần kiểm thử UAT kỹ lưỡng trên mạng băng thông yếu trước khi bàn giao"
+    ]
+  }
+}
+```
+
+### `POST /api/meetings/:id/export-doc`
+- **Mục đích:** Chuyển đổi biên bản họp AI thành tài liệu chuẩn trong ClickUp Docs.
+- **Response 200 OK:**
+```json
+{
+  "success": true,
+  "data": {
+    "documentId": "doc-meet-min-01",
+    "title": "Biên bản cuộc họp Sprint 12 — 21/10/2026",
+    "scope": "PROJECT",
+    "docType": "MEETING_MINUTES"
+  }
+}
+```
 
 ---
 
-## 📄 7. Quản Trị Tri Thức Doanh Nghiệp (Document Management System)
+## 📄 7. Quản Trị Tri Thức Doanh Nghiệp (ClickUp Docs)
 
-| Method | Endpoint | Quyền hạn | Mô tả chức năng |
-| :--- | :--- | :---: | :--- |
-| `GET` | `/api/documents` | ALL | Danh sách tài liệu (lọc theo dự án, phòng ban, cá nhân hoặc công ty). |
-| `POST` | `/api/documents` | ALL | Tạo tài liệu mới hỗ trợ soạn thảo Tiptap rich-text. |
-| `GET` | `/api/documents/:id` | Authorized Users | Đọc nội dung tài liệu và danh sách tệp đính kèm. |
-| `PATCH` | `/api/documents/:id` | Creator, PM, ADMIN | Chỉnh sửa tài liệu (tự động tạo bản ghi `DocumentVersion`). |
-| `GET` | `/api/documents/:id/versions` | Authorized Users | Xem lịch sử các phiên bản chỉnh sửa của tài liệu. |
-| `POST` | `/api/documents/:id/versions/:ver/restore` | Creator, PM | Khôi phục tài liệu về phiên bản lịch sử chỉ định. |
-| `POST` | `/api/documents/:id/attachments`| Creator, PM | Tải lên tệp đính kèm tài liệu dung lượng tối đa 25MB. |
-| `GET` | `/api/documents/search/fulltext` | ALL | Tìm kiếm toàn văn thông minh theo tiêu đề và nội dung. |
-| `GET` | `/api/documents/company` | ALL | Danh mục tài liệu quy chế, chính sách áp dụng toàn doanh nghiệp. |
+### `POST /api/documents`
+- **Request Body:**
+```json
+{
+  "title": "Quy chế bảo mật thông tin nội bộ & Quản lý thiết bị",
+  "content": "<h2>1. Phạm vi áp dụng</h2><p>Quy chế áp dụng đối với 100% cán bộ nhân viên...</p>",
+  "scope": "COMPANY",
+  "docType": "COMPANY_POLICY",
+  "visibility": "PUBLIC"
+}
+```
+
+### `POST /api/documents/:id/attachments`
+- **Form Data:** `file: <binary_data>` (Giới hạn 25MB: PDF, DOCX, PNG, ZIP...)
+- **Response 201 Created:**
+```json
+{
+  "success": true,
+  "data": {
+    "id": "att-doc-01",
+    "fileName": "kien_truc_he_thong_v2.pdf",
+    "fileSize": 4194304,
+    "storagePath": "/uploads/docs/att-doc-01.pdf"
+  }
+}
+```
 
 ---
 
 ## 📅 8. Lịch Làm Việc Doanh Nghiệp (Work Calendar)
 
-| Method | Endpoint | Quyền hạn | Mô tả chức năng |
-| :--- | :--- | :---: | :--- |
-| `GET` | `/api/calendar/timeline` | ALL | Lấy timeline hợp nhất 6 nguồn dữ liệu: Tasks, Sprints, Meetings, Leave, WFH, OT. |
-| `PATCH` | `/api/calendar/items/:kind/:id/reschedule` | Assignee, Creator, PM | Kéo thả dời lịch làm việc trực tiếp trên giao diện lịch có kiểm tra RBAC. |
-| `GET` | `/api/calendar/export` | ALL | Tải về tệp lịch định dạng chuẩn RFC 5545 iCalendar (`.ics`). |
+### `GET /api/calendar/timeline`
+- **Query:** `?scope=mine&startDate=2026-10-01&endDate=2026-10-31`
+- **Response 200 OK (Hợp nhất 6 nguồn):**
+```json
+{
+  "success": true,
+  "data": {
+    "tasks": [
+      { "id": "t-1", "title": "Deploy API", "start": "2026-10-21T09:00:00Z", "end": "2026-10-21T17:30:00Z", "priority": "HIGH" }
+    ],
+    "sprints": [
+      { "id": "sp-12", "title": "Sprint 12", "start": "2026-10-14", "end": "2026-10-28" }
+    ],
+    "meetings": [
+      { "id": "m-10", "title": "Daily Standup", "start": "2026-10-21T09:30:00Z", "end": "2026-10-21T10:00:00Z" }
+    ],
+    "leaveRequests": [],
+    "wfhRequests": [
+      { "id": "wfh-2", "date": "2026-10-22", "status": "APPROVED" }
+    ],
+    "overtimeRequests": [],
+    "conflicts": [
+      {
+        "type": "meeting_overlap",
+        "severity": "HIGH",
+        "message": "Trùng giờ giữa cuộc họp Daily Standup và Sprint Demo lúc 09:30"
+      }
+    ]
+  }
+}
+```
 
 ---
 
-## 💬 9. Trò Chuyện Trực Tuyến & Thông Báo (Chat & Notifications)
+## 💬 9. Trò Chuyện Trực Tuyến & Tin Nhắn (Real-time Chat)
 
-| Method | Endpoint | Quyền hạn | Mô tả chức năng |
-| :--- | :--- | :---: | :--- |
-| `GET` | `/api/chat/conversations` | ALL | Danh sách các cuộc trò chuyện của người dùng (1-1, dự án, phòng ban). |
-| `POST` | `/api/chat/conversations/direct/:userId` | ALL | Khởi tạo hoặc lấy hội thoại 1-1 trực tiếp với đồng nghiệp. |
-| `POST` | `/api/chat/conversations/project/:projectId` | Project Members | Mở nhóm trò chuyện của dự án. |
-| `POST` | `/api/chat/conversations/department/:deptId` | Department Members | Mở nhóm trò chuyện của phòng ban. |
-| `GET` | `/api/chat/conversations/:id/messages` | Conversation Members | Tải lịch sử tin nhắn kèm reactions và tệp đính kèm. |
-| `POST` | `/api/chat/conversations/:id/messages` | Conversation Members | Gửi tin nhắn văn bản (hỗ trợ trích dẫn reply quote). |
-| `POST` | `/api/chat/conversations/:id/messages/file` | Conversation Members | Gửi tệp đính kèm an toàn lưu trên ổ đĩa nội bộ `/uploads/chat`. |
-| `POST` | `/api/chat/messages/:id/reactions` | Conversation Members | Thả biểu cảm emoji (👍, ❤️, 😂, 🎉, 🚀). |
-| `PATCH` | `/api/chat/conversations/:id/pin` / `mute` | Conversation Members | Ghim hội thoại lên đầu hoặc Bật/Tắt thông báo tin nhắn. |
-| `GET` | `/api/notifications` | ALL | Lấy danh sách thông báo hệ thống thời gian thực. |
-| `PATCH` | `/api/notifications/:id/read` | ALL | Đánh dấu thông báo đã đọc. |
-| `POST` | `/api/notifications/web-push/subscribe` | ALL | Đăng ký nhận thông báo đẩy Web Push native (chuẩn VAPID). |
+### `POST /api/chat/conversations/direct/:targetUserId`
+- **Mục đích:** Bắt đầu hoặc mở cuộc hội thoại 1-1 với đồng nghiệp.
+- **Response 200 OK:**
+```json
+{
+  "success": true,
+  "data": {
+    "id": "conv-direct-001",
+    "type": "DIRECT",
+    "recipient": { "id": "usr-dev-01", "name": "Trần Văn An", "avatar": "..." },
+    "lastMessageAt": "2026-10-21T19:25:00.000Z"
+  }
+}
+```
+
+### `POST /api/chat/conversations/:id/messages`
+- **Request Body:**
+```json
+{
+  "content": "Chào Tuấn, mình đã tối ưu xong phông chữ tiếng Việt cho bảng Kanban rồi nhé!",
+  "replyToId": "msg-prev-009"
+}
+```
+
+### `POST /api/chat/messages/:id/reactions`
+- **Request Body:**
+```json
+{
+  "emoji": "🚀"
+}
+```
 
 ---
 
-## ⚡ 10. Các Kênh WebSocket Thời Gian Thực (WebSocket Gateways)
+## ⚡ 10. Giao Thức WebSocket Thời Gian Thực (Gateways Contract)
 
-### A. Namespace `/chat` (Native Socket.IO)
-- **`join-conversation`**: Người dùng tham gia phòng hội thoại `conv:${id}`.
-- **`send-message`**: Gửi tin nhắn tức thời tới các thành viên trong phòng.
-- **`typing` / `stop-typing`**: Phát tín hiệu đang gõ phím hiển thị 3 chấm động.
-- **`message-reaction`**: Phát tín hiệu thả biểu cảm emoji thời gian thực.
-- **`read-receipt`**: Thông báo người dùng đã đọc tin nhắn.
+### Namespace `/chat` (Socket.IO)
+- **Client gửi:**
+  - `join_conversation`: `{ "conversationId": "conv-001" }`
+  - `send_message`: `{ "conversationId": "conv-001", "content": "Hello" }`
+  - `typing_start` / `typing_stop`: `{ "conversationId": "conv-001" }`
+- **Server phát:**
+  - `new_message`: Tin nhắn mới phát tới room `conv:${id}`.
+  - `user_typing`: `{ "userId": "usr-1", "isTyping": true }`.
+  - `message_reaction_updated`: Cập nhật số lượng emoji thả trên tin nhắn.
 
-### B. Namespace `/meetings` (WebRTC Signaling)
-- **`join-room`**: Tham gia phòng họp, nhận lịch sử thoại và trạng thái ghi âm.
-- **`offer` / `answer` / `ice-candidate`**: Trao đổi tín hiệu kết nối P2P đa client.
-- **`media-state-changed`**: Bật/tắt mic, camera, chia sẻ màn hình.
-- **`live-transcript-chunk`**: Stream từng câu thoại nhận diện giọng nói STT lên máy chủ.
-- **`room-chat-message`**: Trò chuyện và gửi file trong khi đang họp.
-- **`end-meeting-all`**: Host kết thúc cuộc họp ngay lập tức cho tất cả người tham gia.
-
-### C. Namespace `/notifications` (System Alerts)
-- **`notification`**: Phát thông báo tức thời khi được giao việc, nhắc nhở họp hoặc duyệt đơn.
+### Namespace `/meetings` (WebRTC Signaling)
+- **Client gửi:**
+  - `join-room`: `{ "meetingId": "meet-10", "userId": "usr-1" }`
+  - `offer` / `answer` / `ice-candidate`: Chuyển tiếp tín hiệu kết nối P2P WebRTC.
+  - `meeting:transcript-chunk`: `{ "meetingId": "meet-10", "content": "Chúng ta bắt đầu thảo luận..." }`
+  - `meeting:end-for-all`: Yêu cầu kết thúc họp tức thì cho toàn bộ phòng.
+- **Server phát:**
+  - `user-connected` / `user-disconnected`: Cập nhật danh sách người tham dự.
+  - `chat-history`: Nạp 200 tin nhắn chat gần nhất cho người vào sau hoặc F5.
+  - `meeting-ended`: Buộc điều hướng toàn bộ client tới trang Báo cáo chuyên cần.
