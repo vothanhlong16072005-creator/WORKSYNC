@@ -200,6 +200,22 @@ async function main() {
       },
     });
     userMap.set(u.email, record.id);
+
+    // Auto-create personal project for seeded user if not existing
+    const existingPersonal = await prisma.project.findFirst({
+      where: { kind: ProjectKind.PERSONAL, personalOwnerId: record.id },
+    });
+    if (!existingPersonal) {
+      await prisma.project.create({
+        data: {
+          name: 'Việc cá nhân',
+          kind: ProjectKind.PERSONAL,
+          createdById: record.id,
+          personalOwnerId: record.id,
+          color: '#4D7FC2',
+        },
+      });
+    }
   }
 
   const pm1Id = userMap.get('pm@worksync.com')!;

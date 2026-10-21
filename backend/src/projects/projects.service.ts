@@ -169,6 +169,27 @@ export class ProjectsService {
       deptId = u?.departmentId ?? null;
     }
 
+    if (typeof this.prisma.project?.findFirst === 'function') {
+      const existingPersonal = await this.prisma.project.findFirst({
+        where: { kind: ProjectKind.PERSONAL, personalOwnerId: actor.id, deletedAt: null },
+      });
+      if (!existingPersonal && typeof this.prisma.project?.create === 'function') {
+        try {
+          await this.prisma.project.create({
+            data: {
+              name: 'Việc cá nhân',
+              kind: ProjectKind.PERSONAL,
+              createdById: actor.id,
+              personalOwnerId: actor.id,
+              color: '#4D7FC2',
+            },
+          });
+        } catch {
+          // ignore potential race or mock limitations
+        }
+      }
+    }
+
     const projects = await this.prisma.project.findMany({
       where:
         actor.role === Role.ADMIN

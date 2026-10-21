@@ -52,6 +52,10 @@ export const api = {
     status?: string;
     priority?: string;
     labels?: string[];
+    assigneeId?: string;
+    dueDate?: string;
+    storyPoints?: number;
+    timeEstimate?: number;
   }): Promise<BoardTask> {
     const res = await apiClient.post('/tasks', data);
     return BoardTaskSchema.parse(res.data);
