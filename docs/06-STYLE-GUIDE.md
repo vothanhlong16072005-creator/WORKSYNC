@@ -1,340 +1,104 @@
-# 📐 Style Guide — WorkSync
-> Quy ước code cho toàn dự án. AI agents PHẢI đọc file này trước khi code.
+# 📐 Quy Chuẩn Lập Trình & Thiết Kế (Engineering & UI Style Guide) — WorkSync
+> **Phiên bản:** 2.0 (Strict Enterprise Edition) | **Ngày cập nhật:** 21/10/2026  
+> **Áp dụng:** Toàn bộ thành viên phát triển và AI coding agents. Bắt buộc tuân thủ 100%.
 
 ---
 
-## 1. TypeScript
+## 1. Tiêu Chuẩn TypeScript Nghiêm Ngặt (Strict TypeScript)
 
-### Strict Mode — BẮT BUỘC
-```json
-// tsconfig.json
-{
-  "compilerOptions": {
-    "strict": true,
-    "noImplicitAny": true,
-    "noUnusedLocals": true,
-    "noUnusedParameters": true
-  }
-}
-```
-
-### Quy tắc
-- **CẤMM dùng `any`** — dùng `unknown` + type guard hoặc `Record<string, unknown>`
-- **Dùng `interface` cho object types** có thể extend, `type` cho union/intersection
-- **Discriminated unions** thay vì boolean flags
-- **Branded types** cho ID: `type UserId = string & { __brand: 'UserId' }`
-- **Zod schema** cho validation ở cả frontend lẫn backend
+### 1.1. Chính Sách "Zero Any"
+- **Tuyệt đối không dùng kiểu `any`**.
+- Sử dụng `unknown` kết hợp với type guard narrowing hoặc Zod parsing khi nhận dữ liệu từ bên ngoài.
+- Dùng `interface` cho cấu trúc dữ liệu đối tượng có thể mở rộng; dùng `type` cho Discriminated Unions và Mapped Types.
+- Sử dụng Discriminated Unions cho các máy trạng thái (State Machines) thay vì nhiều cờ boolean rời rạc.
 
 ```typescript
-// ✅ ĐÚNG
-interface TaskUpdatePayload {
-  title?: string;
-  status?: TaskStatus;
-  assigneeId?: UserId;
-}
+// ✅ ĐÚNG: Discriminated Union cho trạng thái tải
+type DataState<T> =
+  | { status: 'idle'; data: null; error: null }
+  | { status: 'loading'; data: T | null; error: null }
+  | { status: 'ready'; data: T; error: null }
+  | { status: 'error'; data: T | null; error: string };
 
-// ❌ SAI
-function updateTask(data: any) { ... }
-```
-
----
-
-## 2. Đặt tên (Naming Conventions)
-
-| Thứ | Convention | Ví dụ |
-|-----|-----------|-------|
-| Files (TS/TSX) | kebab-case | `task-card.tsx`, `use-tasks.ts` |
-| Components | PascalCase | `TaskCard`, `KanbanBoard` |
-| Hooks | camelCase + `use` prefix | `useTaskList`, `useAttendance` |
-| Stores (Zustand) | camelCase + `Store` | `useAuthStore`, `useTaskStore` |
-| Constants | UPPER_SNAKE_CASE | `MAX_RETRY`, `DEFAULT_PAGE_SIZE` |
-| Enums | PascalCase (enum) + UPPER value | `TaskStatus.IN_PROGRESS` |
-| DB tables | snake_case + plural | `attendance_records`, `work_logs` |
-| API routes | kebab-case | `/api/v1/attendance/check-in` |
-| NestJS module folder | kebab-case | `task-dependency/` |
-| NestJS class | PascalCase + role | `TasksService`, `TasksController`, `CreateTaskDto` |
-
----
-
-## 3. Backend — NestJS Structure
-
-### Cấu trúc module (BẮTBUỘC)
-```
-modules/tasks/
-├── tasks.module.ts
-├── tasks.controller.ts
-├── tasks.service.ts
-├── dto/
-│   ├── create-task.dto.ts
-│   ├── update-task.dto.ts
-│   └── task-filter.dto.ts
-├── entities/
-│   └── task.entity.ts        # (optional — Prisma đã có type)
-├── tasks.gateway.ts          # (nếu có WebSocket)
-└── tasks.service.spec.ts     # Unit test
-```
-
-### DTO — Bắt buộc class-validator + Swagger
-```typescript
-import { IsString, IsOptional, IsEnum, MinLength } from 'class-validator';
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-
-export class CreateTaskDto {
-  @ApiProperty({ description: 'Tiêu đề task', example: 'Implement JWT auth' })
-  @IsString()
-  @MinLength(3)
-  title: string;
-
-  @ApiPropertyOptional({ enum: Priority })
-  @IsOptional()
-  @IsEnum(Priority)
-  priority?: Priority;
-}
-```
-
-### Response format — BẮT BUỘC
-```typescript
-// Mọi API phải trả theo format chuẩn này
-return {
-  success: true,
-  data: result,
-  meta: { total, page, limit, totalPages }, // Nếu là list
-};
-
-// Lỗi — dùng NestJS exceptions
-throw new NotFoundException('Task không tồn tại');
-throw new ForbiddenException('Không có quyền thực hiện');
-throw new ConflictException('Email đã tồn tại');
-```
-
-### Service pattern
-```typescript
-@Injectable()
-export class TasksService {
-  constructor(private readonly prisma: PrismaService) {}
-
-  async findById(id: string, userId: string): Promise<Task> {
-    const task = await this.prisma.task.findUnique({
-      where: { id, deletedAt: null },
-      include: { assignee: true, comments: true },
-    });
-    if (!task) throw new NotFoundException(`Task ${id} không tìm thấy`);
-    return task;
-  }
+// ❌ SAI: Dùng cờ boolean rời rạc và any
+interface BadState {
+  isLoading: boolean;
+  isError: boolean;
+  data: any;
 }
 ```
 
 ---
 
-## 4. Frontend — React Structure
+## 2. Quy Chuẩn Giao Diện & Trải Nghiệm (Bauhaus Enterprise UI/UX)
 
-### Feature-based structure
-```
-features/tasks/
-├── components/
-│   ├── TaskCard.tsx
-│   ├── TaskDetail.tsx
-│   └── CreateTaskForm.tsx
-├── hooks/
-│   ├── useTaskList.ts
-│   └── useTaskMutation.ts
-├── pages/
-│   ├── TasksPage.tsx
-│   └── TaskDetailPage.tsx
-├── types/
-│   └── task.types.ts
-└── api/
-    └── tasks.api.ts
+### 2.1. Cấm Tuyệt Đối Sử Dụng Emoji Trên Nút Bấm
+- **Quy tắc bắt buộc:** Nghiêm cấm dùng các biểu tượng emoji thô (như 🚀, 📋, ⚡, 🔴, ⏰, 💾) trên nhãn nút bấm của hệ thống.
+- **Thay thế chuẩn:** 100% các nút hành động sử dụng biểu tượng vector từ thư viện **`lucide-react`** với kích thước chuẩn 14px – 18px (`className="w-4 h-4"`).
+
+```tsx
+// ✅ ĐÚNG: Bauhaus Enterprise Button với Lucide SVG icon
+<Button className="h-10 px-4 gap-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-sm">
+  <Plus className="w-4 h-4" />
+  <span>{t('kanban.create_task', 'Tạo công việc')}</span>
+</Button>
+
+// ❌ SAI: Dùng emoji trên nút bấm
+<button className="btn">➕ Tạo công việc mới 🚀</button>
 ```
 
-### TanStack Query — chuẩn
-```typescript
-// hooks/useTaskList.ts
-export function useTaskList(filters: TaskFilters) {
-  return useQuery({
-    queryKey: ['tasks', filters],
-    queryFn: () => tasksApi.getList(filters),
-    staleTime: 1000 * 30, // 30 seconds
-  });
-}
-
-// hooks/useTaskMutation.ts
-export function useUpdateTaskStatus() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: ({ id, status }: { id: string; status: TaskStatus }) =>
-      tasksApi.updateStatus(id, status),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['tasks'] });
-      toast.success('Cập nhật trạng thái thành công');
-    },
-    onError: (error) => {
-      toast.error(getErrorMessage(error));
-    },
-  });
-}
-```
-
-### Component — Rules
-```typescript
-// ✅ ĐÚNG — Props type rõ ràng, không dùng FC
-interface TaskCardProps {
-  task: Task;
-  onStatusChange: (status: TaskStatus) => void;
-  className?: string;
-}
-
-export function TaskCard({ task, onStatusChange, className }: TaskCardProps) {
-  // ...
-}
-
-// ❌ SAI
-export const TaskCard: React.FC<any> = (props) => { ... }
-```
-
-### Zustand store
-```typescript
-// stores/auth.store.ts
-interface AuthState {
-  user: User | null;
-  accessToken: string | null;
-  setUser: (user: User) => void;
-  setToken: (token: string) => void;
-  logout: () => void;
-}
-
-export const useAuthStore = create<AuthState>((set) => ({
-  user: null,
-  accessToken: null,
-  setUser: (user) => set({ user }),
-  setToken: (accessToken) => set({ accessToken }),
-  logout: () => set({ user: null, accessToken: null }),
-}));
-```
+### 2.2. Quy Chuẩn Phông Chữ Tiếng Việt (Typography)
+- Hệ thống nhúng Google Fonts quốc tế: **`Plus Jakarta Sans`** cho tiêu đề và **`Inter`** cho nội dung.
+- Tiêu đề chính sử dụng `font-weight: 700 - 800`, chữ thường tự nhiên (tránh viết hoa toàn bộ `UPPERCASE` nặng nề), khoảng cách chữ âm nhẹ (`tracking-tight` hoặc `-0.025em`).
 
 ---
 
-## 5. CSS / Tailwind
+## 3. Quy Chuẩn Đa Ngôn Ngữ (Internationalization — i18n)
 
-### Quy tắc cứng
-- **CẤM hard-code hex**: `bg-[#3b82f6]` → dùng `bg-blue-500`
-- **CẤM arbitrary pixel**: `p-[13px]` → dùng scale chuẩn
-- **Chỉ dùng spacing**: xs(4px) sm(8px) md(12px) lg(16px) xl(24px) 2xl(32px)
-- **Chỉ dùng 4 button variants**: primary / secondary / outline / ghost
-- **Icons**: lucide-react, size-4 (16px) inline, size-5 (20px) button
-
-### Màu sắc priority (ClickUp style)
-```typescript
-export const PRIORITY_COLORS = {
-  URGENT: 'text-red-600 bg-red-50 border-red-200',
-  HIGH: 'text-orange-600 bg-orange-50 border-orange-200',
-  MEDIUM: 'text-blue-600 bg-blue-50 border-blue-200',
-  LOW: 'text-gray-500 bg-gray-50 border-gray-200',
-} as const;
-```
+1. **Không Hardcode Text Trên Giao Diện**:
+   - Mọi chuỗi hiển thị tới người dùng phải được bọc qua hàm dịch thuật `t('namespace.key', 'Fallback')` từ hook `useTranslation()`.
+   - Mỗi chuỗi mới phải được khai báo đồng thời trong cả hai tệp từ điển:
+     - [frontend/src/i18n/locales/vi.json](file:///d:/FPT%20Trainning/Project-TTDN/Ver2/frontend/src/i18n/locales/vi.json)
+     - [frontend/src/i18n/locales/en.json](file:///d:/FPT%20Trainning/Project-TTDN/Ver2/frontend/src/i18n/locales/en.json)
+2. **Định Dạng Ngày Tháng Theo Locale**:
+   - Truyền `i18n.language` vào các hàm format ngày tháng (`formatDate`, `formatShortDate`, `getDeadlineInfo`) để hiển thị chuẩn `en-US` hoặc `vi-VN`.
 
 ---
 
-## 6. Git & Commit Convention
+## 4. Quy Chuẩn Backend & Cơ Sở Dữ Liệu (NestJS & Prisma)
 
-### Branch naming
-```
-feature/task-kanban-board
-fix/attendance-ip-validation
-chore/update-prisma-schema
-docs/api-contract-update
-```
+### 4.1. Cấu Trúc Mã Nguồn Theo Tính Năng (Feature-Based Architecture)
+- Mỗi module backend nằm trong một thư mục riêng biệt tại `backend/src/<feature>/`, bao gồm:
+  - `<feature>.module.ts`: Khai báo module, imports, providers, controllers.
+  - `<feature>.controller.ts`: Tiếp nhận HTTP requests, kiểm tra quyền Guards, trả về response envelope.
+  - `<feature>.service.ts`: Chứa toàn bộ nghiệp vụ lõi (business logic).
+  - `<feature>.gateway.ts`: Xử lý giao tiếp WebSocket thời gian thực (nếu có).
+  - `dto/`: Data Transfer Objects với validation decorators (`class-validator`).
 
-### Commit message (Conventional Commits)
-```
-feat(tasks): add kanban drag and drop with @dnd-kit
-fix(auth): resolve refresh token expiry edge case
-chore(deps): upgrade prisma to 5.20.0
-docs(api): add meeting endpoints contract
-test(attendance): add unit tests for IP validation logic
-```
+### 4.2. Giao Dịch Cơ Sở Dữ Liệu Nguyên Tử (Database Transactions)
+- Bất kỳ nghiệp vụ nào thực hiện từ 2 thao tác ghi (INSERT/UPDATE/DELETE) trở lên trên CSDL bắt buộc phải được bọc trong `prisma.$transaction`.
+- Ví dụ: Trừ quỹ ngày phép, tạo dự án cá nhân song hành khi đăng ký tài khoản, hoán đổi PM dự án (`swap-pm`), đóng Sprint và hoàn trả backlog.
 
-### PR rules
-- PR title = commit message format
-- PR mô tả: What/Why/How + screenshots nếu có UI
-- Phải pass: lint + typecheck + test trước khi merge
-- Yêu cầu ít nhất 1 reviewer approve
-
----
-
-## 7. Error Handling
-
-### Backend
 ```typescript
-// Custom exceptions
-throw new NotFoundException('Task ${id} không tìm thấy');
-throw new BadRequestException('Trạng thái chuyển không hợp lệ: DONE -> TODO');
-throw new ForbiddenException('Chỉ PM mới có thể approve task');
-
-// KHÔNG throw Error thuần
-throw new Error('Something went wrong'); // ❌
-```
-
-### Frontend
-```typescript
-// Luôn handle error trong useMutation
-onError: (error: AxiosError<ApiError>) => {
-  const message = error.response?.data?.error?.message ?? 'Đã có lỗi xảy ra';
-  toast.error(message);
-}
-
-// Error boundary cho mỗi page
-<ErrorBoundary fallback={<ErrorState onRetry={refetch} />}>
-  <TasksPage />
-</ErrorBoundary>
-```
-
----
-
-## 8. Testing (sau khi code chạy)
-
-### Backend
-```bash
-# Unit test service
-npm run test -- --testPathPattern=tasks.service
-
-# Coverage
-npm run test:cov
-
-# Target coverage: > 70% cho service core (auth, tasks, attendance)
-```
-
-### Frontend
-```bash
-# Component test với React Testing Library
-npm run test
-
-# E2E test (Playwright) — chỉ cho flow quan trọng
-npx playwright test
-```
-
-### Test naming
-```typescript
-describe('AttendanceService', () => {
-  describe('checkIn', () => {
-    it('should return ON_TIME when IP matches and before 9:00', async () => { ... });
-    it('should return LATE when check-in at 9:15', async () => { ... });
-    it('should throw ALREADY_CHECKED_IN when checked in today', async () => { ... });
-  });
+// ✅ ĐÚNG: Giao dịch nguyên tử đảm bảo toàn vẹn dữ liệu
+await this.prisma.$transaction(async (tx) => {
+  await tx.leaveRequest.update({ where: { id }, data: { status: 'APPROVED' } });
+  await tx.attendanceRecord.createMany({ data: recordsToInsert });
 });
 ```
 
+### 4.3. Kiểm Soát Phân Quyền Chặt Chẽ (RBAC Guards)
+- Mọi controller (trừ Auth endpoints công khai) đều phải khai báo `@UseGuards(JwtAuthGuard, RolesGuard)`.
+- Các hành động nhạy cảm phải chỉ định rõ vai trò được phép thông qua decorator `@Roles(Role.ADMIN, Role.DEPARTMENT_HEAD)`.
+
 ---
 
-## 9. Quy tắc BẮT BUỘC (AI phải tuân thủ)
+## 5. Quy Chuẩn Kiểm Thử Tự Động (Automated Testing)
 
-1. **Đọc file này trước** khi tạo bất kỳ file code nào
-2. **Đọc `docs/02-API-CONTRACT.md`** trước khi tạo API mới
-3. **Đọc `docs/03-DATABASE.md`** trước khi tạo migration
-4. **Không commit** `.env`, `node_modules`, `dist`, `*.log`, file debug
-5. **Mỗi PR** phải pass `npm run lint && npm run typecheck`
-6. **Soft delete** — KHÔNG dùng hard DELETE, luôn set `deletedAt`
-7. **Pagination** — Mọi list endpoint phải có `?page&limit` query
-8. **Swagger** — Mọi endpoint phải có `@ApiOperation`, `@ApiResponse`
-9. **DTO** — Mọi body request phải có DTO với class-validator
-10. **Loading state** — Mọi data-fetching component phải có skeleton state
+1. **Quy Tắc "Test-First Verification"**:
+   - Mỗi tính năng hoặc hàm sửa lỗi mới phải đi kèm ít nhất một unit test hoặc integration test tương ứng.
+   - Chạy lệnh kiểm thử toàn diện trước khi commit:
+     - Backend: `npm test` trong thư mục `backend` (yêu cầu 100% test files pass).
+     - Frontend: `npm test` trong thư mục `frontend` (yêu cầu 100% test files pass).
+2. **Kiểm Tra Kiểu Dữ Liệu Khi Đóng Gói**:
+   - Bắt buộc chạy `npm run build` ở frontend (`tsc -b && vite build`) để đảm bảo không có bất kỳ lỗi cú pháp hoặc cảnh báo TypeScript nào.

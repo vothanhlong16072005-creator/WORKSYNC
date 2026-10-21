@@ -1,234 +1,125 @@
-# 🛠️ Tech Stack — WorkSync
-> Quyết định công nghệ và lý do lựa chọn
+# 🛠️ Kiến Trúc Công Nghệ & Hạ Tầng (Tech Stack & Architecture) — WorkSync
+> **Phiên bản:** 2.0 (Enterprise Updated) | **Ngày cập nhật:** 21/10/2026  
+> **Mô hình kiến trúc:** Monorepo (Tách biệt Frontend SPA & Backend Modular REST/WS API).
 
 ---
 
-## Stack tổng quan
+## 1. Bảng Tổng Hợp Công Nghệ Thực Tế (Technology Landscape)
 
-> **Quy ước cập nhật 2026-10-11**: Bảng dưới phản ánh phiên bản thực tế đang chạy trong `package.json` (React 19, NestJS 12, Vite 8, Prisma 5). Bảng gốc bên dưới ghi React 18 / NestJS 10 / Vite 5 không còn chính xác — coi bảng này là source of truth.
-
-| Layer | Technology | Version (đang chạy) | Lý do chọn |
-|-------|-----------|---------|------------|
-| **Frontend Framework** | React + Vite | 19.2 / Vite 8.3 | Nhanh, ecosystem lớn, HMR tức thì |
-| **Frontend Language** | TypeScript | 6.0.x | Type safety, giảm bug runtime |
-| **Styling** | TailwindCSS | 3.4 | Utility-first, consistent spacing/color |
-| **Component Library** | Radix Primitives + CVA | slot/label | Accessible, headless, không lock-in |
-| **State — Client** | Zustand | 5.0 | Nhẹ, simple, không boilerplate, optimistic update tích hợp sẵn |
-| **Forms** | react-hook-form + Zod | 7.89 / 3.25 | Performance, type-safe validation |
-| **Routing** | React Router | 7.x | Client-side routing chuẩn |
-| **Kanban DnD** | @hello-pangea/dnd | 18.x | Drag & drop ổn định cho React 19 strict mode |
-| **Toast** | sonner | 2.0 | Headless, accessible, API gọn |
-| **i18n** | i18next + react-i18next | 26.x / 17.x | Hỗ trợ VI/EN, chuyển ngữ 1-click |
-| **Animations** | framer-motion | 14.x | Micro-interactions, drag feedback |
-| **Icons** | lucide-react | 1.52 | Nét mảnh, phù hợp phong cách Bauhaus |
-| **Lint (FE)** | oxlint (type-aware) | 1.81 | Nhanh hơn ESLint ~50x |
-| **Backend Framework** | NestJS | 12.x | Modular, decorator-based, type-safe |
-| **ORM** | Prisma | 5.22 | Type-safe, migration tốt, schema-first |
-| **Database** | PostgreSQL | 16-alpine (port **5433**) | Reliable, ACID, JSON support |
-| **Cache / Sessions** | Redis | 7-alpine (port **6380**) | Refresh token, cache — chưa gắn vào code |
-| **Auth** | @nestjs/jwt + @nestjs/passport + bcrypt | 12 / 6 | Industry standard |
-| **OAuth** | passport-google-oauth20 | 2.0 | Google login 1-click |
-| **Validation** | class-validator + class-transformer | 0.15 / 0.5 | NestJS DTO validation |
-| **Testing (BE)** | vitest + supertest | 4.1 / 7.0 | Nhanh, ESM-native, tương thích NestJS 12 |
-| **Containerization** | Docker + Docker Compose | - | Dev environment chuẩn hóa |
+| Phân tầng (Layer) | Công nghệ sử dụng | Phiên bản thực tế | Lý do lựa chọn & Ứng dụng |
+| :--- | :--- | :---: | :--- |
+| **Frontend Framework** | **React** + **Vite** | React 19.2 / Vite 8.3 | Hiệu năng render vượt trội, HMR tức thời, kiến trúc Component linh hoạt |
+| **Frontend Language** | **TypeScript** | Strict Mode | Type-safety tuyệt đối, Zero `any`, phát hiện lỗi tại thời điểm biên dịch |
+| **Styling & Design Tokens** | **TailwindCSS** + **Vanilla CSS** | 3.4.x | Token màu HSL tùy biến, chuẩn hóa spacing, tối ưu bundle CSS siêu nhẹ |
+| **State Management** | **Zustand** | 5.0.x | Quản lý state gọn nhẹ, tối ưu re-render, hỗ trợ Optimistic UI rollback khi lỗi |
+| **Drag & Drop Engine** | **@hello-pangea/dnd** | 18.x | Đảm bảo tương thích hoàn hảo React 19 Strict Mode trên bảng Kanban |
+| **Interactive Maps** | **Leaflet** + **React-Leaflet** | 1.9.x | Bản đồ tương tác OpenStreetMap hiển thị vùng Geofence 500m các cơ sở FPT |
+| **Data Visualization** | **Recharts** | 2.x | Biểu đồ Burndown Chart Sprint, biểu đồ cột năng suất 7 ngày, donut chart |
+| **Rich-Text Editor** | **Tiptap** | 2.x | Trình soạn thảo văn bản phong phú cho tài liệu ClickUp Docs và mô tả task |
+| **WebRTC & Signaling** | **simple-peer** + **Socket.IO** | 9.x / 4.8.x | Truyền phát video P2P, âm thanh và chia sẻ màn hình chất lượng cao |
+| **Speech-to-Text (STT)** | **Web Speech API** | Native Browser | Nhận diện giọng nói tiếng Việt trực tiếp, stream chunks thời gian thực |
+| **Đa ngôn ngữ (i18n)** | **i18next** + **react-i18next** | 26.x / 17.x | Bản địa hóa song ngữ Tiếng Việt & Tiếng Anh 100%, chuyển đổi 1-chạm |
+| **Biểu tượng (Icons)** | **Lucide React** | 1.52.x | Hệ thống vector icon sắc nét, đồng bộ chuẩn Bauhaus, thay thế toàn bộ emoji |
+| **Backend Framework** | **NestJS** | 10.x / 12.x | Kiến trúc module doanh nghiệp, Dependency Injection, Controller/Service |
+| **Cơ sở dữ liệu (Database)** | **PostgreSQL** | 16-alpine (port 5433) | ACID an toàn, hỗ trợ JSONB cho Action Items/Decisions, độ tin cậy cao |
+| **ORM & Data Layer** | **Prisma** | 5.22.x | Type-safe schema-first, quản lý migration mượt mà, hỗ trợ `$transaction` |
+| **In-Memory Cache** | **Redis** | 7-alpine (port 6380) | Caching phiên làm việc, lưu trữ room chat history và counter |
+| **Trí tuệ nhân tạo (AI Engine)**| **Google Generative AI** | Gemini 1.5 Flash | Tóm tắt cuộc họp tự động, trích xuất Action Items/Decisions, AI doc summary |
+| **Thời gian thực (Real-time)** | **NestJS Socket.IO Gateway** | 4.8.x | Vận hành độc lập namespace `/chat`, `/meetings`, `/notifications` |
+| **Thông báo đẩy (Web Push)** | **web-push** | 3.6.x | Chuẩn VAPID native đẩy thông báo tới trình duyệt khi người dùng đóng tab |
+| **Xác thực & Bảo mật** | **Passport JWT** + **Google OAuth 2.0**| - | Cơ chế Access Token 15m + Refresh Token HttpOnly Cookie, bcrypt cost 10 |
+| **Kiểm thử tự động** | **Vitest** | 4.1.x | Tốc độ chạy siêu tốc, ESM native: 311 tests Backend + 106 tests Frontend |
+| **Đóng gói & Triển khai** | **Docker** + **Docker Compose** | - | Chuẩn hóa môi trường chạy CSDL PostgreSQL và Redis |
 
 ---
 
-## Monorepo Structure
+## 2. Cấu Trúc Dự Án Thực Tế (Workspace Architecture)
 
 ```
-worksync/
-├── frontend/               # React 18 + Vite 5
-│   ├── src/
-│   │   ├── components/     # Shared UI components
-│   │   ├── features/       # Feature-based modules (auth, tasks, meetings...)
-│   │   ├── hooks/          # Custom React hooks
-│   │   ├── lib/            # Axios instance, utils
-│   │   ├── stores/         # Zustand stores
-│   │   ├── types/          # TypeScript types
-│   │   └── i18n/           # Translations VI/EN/KO
-│   ├── public/
-│   ├── index.html
-│   ├── vite.config.ts
-│   ├── tailwind.config.ts
-│   └── package.json
-│
-├── backend/                # NestJS 10
-│   ├── src/
-│   │   ├── modules/        # Feature modules
-│   │   │   ├── auth/
-│   │   │   ├── users/
-│   │   │   ├── attendance/
-│   │   │   ├── projects/
-│   │   │   ├── tasks/
-│   │   │   ├── meetings/
-│   │   │   ├── documents/
-│   │   │   ├── reports/
-│   │   │   └── notifications/
-│   │   ├── common/         # Guards, decorators, filters, interceptors
-│   │   ├── config/         # Configuration service
-│   │   ├── prisma/         # Prisma service
-│   │   └── main.ts
+Ver2/
+├── backend/                        # Máy chủ API NestJS
 │   ├── prisma/
-│   │   ├── schema.prisma
-│   │   └── migrations/
-│   └── package.json
+│   │   ├── schema.prisma           # 37 models, 26 enums, quan hệ CSDL
+│   │   ├── migrations/             # Lịch sử migrations an toàn
+│   │   └── seed-enterprise-full.ts # Nạp dữ liệu doanh nghiệp mẫu 19 tài khoản
+│   ├── src/
+│   │   ├── attendance/             # Module Chấm công, GPS, WFH, Nghỉ phép, OT
+│   │   ├── auth/                   # Module JWT, Google OAuth, Guards, Decorators
+│   │   ├── calendar/               # Module Lịch làm việc hợp nhất 6 nguồn, ICS export
+│   │   ├── chat/                   # Module Trò chuyện thời gian thực Socket.IO
+│   │   ├── common/                 # Interceptors, Filters, DTOs chung
+│   │   ├── dashboard/              # Thống kê tổng quan & velocity
+│   │   ├── documents/              # Module ClickUp Docs, đính kèm 25MB, versioning
+│   │   ├── meetings/               # WebRTC signaling, Live STT, Gemini 1.5 Flash AI
+│   │   ├── notifications/          # Socket.IO notifications & Web Push VAPID
+│   │   ├── projects/               # Module Dự án nhóm vs Cá nhân, swap-pm
+│   │   ├── quick-tasks/            # Giao việc nhanh 1-chạm Trưởng phòng
+│   │   ├── sprints/                # Module Quản lý Sprint Agile, Burndown Chart
+│   │   ├── tasks/                  # Bảng Kanban, CRUD Task, kéo thả atomic
+│   │   └── users/                  # Quản lý người dùng, phân quyền RBAC
+│   └── test/                       # Unit tests & integration test suites
 │
-├── docs/                   # Documentation (đây)
-├── scripts/                # Utility scripts
-├── docker-compose.yml      # Dev environment
-├── docker-compose.prod.yml # Production
-├── .env.example
-└── README.md
+├── frontend/                       # Ứng dụng SPA React 19 + Vite 8
+│   ├── src/
+│   │   ├── components/             # Reusable UI components (Button, Modal, Input...)
+│   │   ├── features/
+│   │   │   ├── attendance/         # Giao diện check-in GPS, Leaflet, Heatmap, đơn từ
+│   │   │   ├── auth/               # Trang đăng nhập, đăng ký, callback OAuth
+│   │   │   ├── calendar/           # TimelineCanvas, popover, conflict banner
+│   │   │   ├── chat/               # Khung chat 2 cột, bubble, emoji bar, context menu
+│   │   │   ├── dashboard/          # Executive & Department Head dashboard layouts
+│   │   │   ├── documents/          # Danh sách tài liệu, Tiptap editor, viewer
+│   │   │   ├── meetings/           # Phòng họp WebRTC, PiP, Gemini AI summary, reports
+│   │   │   ├── notifications/      # Chuông thông báo, notification popover
+│   │   │   ├── projects/           # Chi tiết dự án, ProjectSprintsView (Jira-style)
+│   │   │   ├── quick-tasks/        # Nút giao việc nhanh, modal ⚡ QuickTask
+│   │   │   └── tasks/              # Trang KanbanPage, Linear Task Detail Drawer
+│   │   ├── i18n/
+│   │   │   └── locales/            # Từ điển song ngữ hoàn chỉnh: vi.json & en.json
+│   │   ├── lib/                    # Axios API client, utils, date formatters
+│   │   ├── stores/                 # Zustand stores (auth, task, project, chat...)
+│   │   └── index.css               # Design tokens Bauhaus, typography Google Fonts
+│   └── index.html                  # Khai báo font Plus Jakarta Sans & Inter
+│
+└── docs/                           # Bộ tài liệu dự án hoàn chỉnh (PRD, API, DB...)
 ```
 
 ---
 
-## Port Mapping
+## 3. Kiến Trúc Luồng Dữ Liệu Thời Gian Thực (Real-Time Architecture)
 
-| Service | Dev Port | Ghi chú |
-|---------|---------|---------|
-| Frontend (Vite) | 3000 | `npm run dev` |
-| Backend (NestJS) | 4000 | `npm run start:dev` |
-| PostgreSQL | 5432 | Docker |
-| Redis | 6379 | Docker |
-| Swagger UI | 4000/api/docs | Auto-generated |
-
----
-
-## Environment Variables
-
-### Backend `.env`
-```env
-# App
-NODE_ENV=development
-PORT=4000
-FRONTEND_URL=http://localhost:3000
-
-# Database
-DATABASE_URL=postgresql://worksync:worksync@localhost:5432/worksync_db
-
-# Redis
-REDIS_URL=redis://localhost:6379
-
-# JWT
-JWT_ACCESS_SECRET=<64+ chars random string>
-JWT_REFRESH_SECRET=<64+ chars random string>
-JWT_ACCESS_EXPIRES_IN=15m
-JWT_REFRESH_EXPIRES_IN=7d
-
-# Google Gemini AI
-GEMINI_API_KEY=<your-gemini-api-key>
-GEMINI_MODEL=gemini-1.5-flash
-
-# Email (Gmail SMTP)
-SMTP_HOST=smtp.gmail.com
-SMTP_PORT=587
-SMTP_USER=worksync@company.com
-SMTP_PASS=<app-password>
-SMTP_FROM="WorkSync <worksync@company.com>"
-
-# Cloudinary
-CLOUDINARY_CLOUD_NAME=<name>
-CLOUDINARY_API_KEY=<key>
-CLOUDINARY_API_SECRET=<secret>
-```
-
-### Frontend `.env`
-```env
-VITE_API_URL=http://localhost:4000/api/v1
-VITE_WS_URL=http://localhost:4000
-VITE_APP_NAME=WorkSync
-VITE_DEFAULT_LANGUAGE=vi
+```mermaid
+sequenceDiagram
+    autonumber
+    actor User as Client (React 19 SPA)
+    participant Gateway as NestJS Gateway (Socket.IO)
+    participant Service as Business Service
+    participant DB as PostgreSQL (Prisma)
+    participant AI as Google Gemini 1.5 Flash
+    
+    %% Luồng Chat
+    User->>Gateway: Gửi tin nhắn chat / file đính kèm
+    Gateway->>Service: Validate payload & lưu DB
+    Service->>DB: INSERT ChatMessage
+    Gateway-->>User: Broadcast new-message tới room conv:${id}
+    
+    %% Luồng Live STT & AI
+    User->>Gateway: Stream câu thoại Live STT tiếng Việt
+    Gateway->>DB: INSERT MeetingTranscriptChunk
+    User->>Gateway: Yêu cầu kết thúc họp & Tóm tắt AI
+    Gateway->>AI: Gửi toàn bộ transcript chunks + danh sách Attendees
+    AI-->>Gateway: Trả về JSON: Summary, Action Items, Decisions, Risks
+    Gateway->>DB: UPDATE MeetingMinute với kết quả AI
+    Gateway-->>User: Gửi sự kiện meeting-ai-completed & điều hướng báo cáo
 ```
 
 ---
 
-## Dependency Versions (Pinned)
+## 4. Giải Pháp Phòng Chống Rủi Ro Kỹ Thuật (Resilience & Security)
 
-### Frontend key deps
-```json
-{
-  "react": "^18.3.0",
-  "typescript": "^5.5.0",
-  "vite": "^5.4.0",
-  "tailwindcss": "^3.4.0",
-  "@tanstack/react-query": "^5.56.0",
-  "zustand": "^4.5.0",
-  "react-hook-form": "^7.53.0",
-  "zod": "^3.23.0",
-  "@tiptap/react": "^2.7.0",
-  "@dnd-kit/core": "^6.1.0",
-  "fullcalendar": "^6.1.0",
-  "recharts": "^2.12.0",
-  "socket.io-client": "^4.7.0",
-  "simple-peer": "^9.11.0",
-  "i18next": "^23.16.0",
-  "react-i18next": "^15.0.0",
-  "jspdf": "^2.5.0",
-  "exceljs": "^4.4.0"
-}
-```
-
-### Backend key deps
-```json
-{
-  "@nestjs/core": "^10.4.0",
-  "typescript": "^5.5.0",
-  "prisma": "^5.20.0",
-  "@prisma/client": "^5.20.0",
-  "socket.io": "^4.7.0",
-  "@nestjs/jwt": "^10.2.0",
-  "passport-jwt": "^4.0.0",
-  "bcrypt": "^5.1.0",
-  "@google/generative-ai": "^0.21.0",
-  "bull": "^4.16.0",
-  "nodemailer": "^6.9.0",
-  "cloudinary": "^2.5.0",
-  "ip-range-check": "^0.2.0",
-  "class-validator": "^0.14.0",
-  "pino": "^9.4.0"
-}
-```
-
----
-
-## Lý do không dùng (Architecture Decisions)
-
-| Alternative | Lý do không chọn |
-|-------------|-----------------|
-| Next.js thay Vite+React | Team quen React thuần, Next.js SSR không cần thiết cho internal tool |
-| Prisma thay TypeORM | Prisma có DX tốt hơn, migration rõ ràng hơn, type-safe hơn |
-| MongoDB thay PostgreSQL | Data có quan hệ phức tạp (task deps, sprint hierarchy), cần ACID |
-| REST thay GraphQL | GraphQL overhead không cần thiết, REST đủ đơn giản và quen |
-| Redux thay Zustand | Redux boilerplate quá nhiều, Zustand đủ cho internal state |
-| Agora/Twilio thay WebRTC | Chi phí cao, WebRTC đủ cho MVP với nhóm nhỏ (<20 người/call) |
-| SQS thay Bull | Bull/Redis đủ cho scale hiện tại, tránh AWS dependency |
-
----
-
-## Trạng thái tích hợp thực tế (2026-10-11)
-
-| Module đã wire vào code | Module còn thiếu (theo PRD) |
-|---|---|
-| ✅ Auth (JWT, Google OAuth, bcrypt) | ⬜ Bull queue (Redis chưa kết nối) |
-| ✅ Users (CRUD + Department) | ⬜ Pino structured logging (đang dùng `console`) |
-| ✅ Projects (TEAM + PERSONAL, scoped access) | ⬜ WebRTC signaling, Socket.IO gateway |
-| ✅ Tasks (scoped queries, board-position PATCH) | ⬜ Tiptap rich-text editor |
-| ✅ Prisma schema đầy đủ 28 bảng theo PRD | ⬜ FullCalendar, Recharts, jsPDF, exceljs |
-| ✅ Sidebar + Header + DashboardLayout + i18n | ⬜ Swagger UI decorators (`@ApiOperation`) — endpoints chưa khai báo |
-| ✅ Kanban UI (Linear modal, priority frames) | ⬜ Notification system (in-app + WebSocket) |
-| ✅ Zod boundary validation ở frontend | ⬜ Dashboard widgets (chỉ có placeholder) |
-| | ⬜ Attendance / Meetings / Documents / Reports modules |
-
-## Quyết định đã điều chỉnh so với PRD ban đầu
-
-| Quyết định | Thay đổi | Lý do |
-|---|---|---|
-| Không dùng TanStack Query | Dùng Zustand + axios trực tiếp cho server state | MVP chỉ có 2 module data chính (projects + tasks), Zustand + optimistic update đủ dùng, tránh thêm 1 lớp cache. Sẽ đánh giá lại khi có 4+ module data. |
-| Không dùng Bull + Redis queue | Job xử lý đồng bộ trong request | Tính năng AI summary chưa triển khai, chưa cần queue. Redis đã chạy trong docker-compose nhưng chưa wire vào code. |
-| Không dùng Pino | Dùng `console.log` mặc định của NestJS | Logging chưa phải bottleneck. Sẽ nâng cấp khi cần structured log. |
-| TypeScript 6 + Vite 8 + NestJS 12 | Thay vì TS 5 / Vite 5 / NestJS 10 | Tận dụng decorator metadata mới, Vite 8 HMR nhanh hơn, React 19 concurrent rendering. |
-| `@hello-pangea/dnd` thay `@dnd-kit/core` | Bản fork ổn định cho React 19 | `@dnd-kit/core` 6.x còn bug với React 19 strict mode, `hello-pangea/dnd` đã fix và có API giống `react-beautiful-dnd`. |
-| `sonner` thay `react-hot-toast` | API gọn, hỗ trợ promise toast, mặc định accessible | Sonner render 1 region duy nhất, dễ style theo Bauhaus tokens. |
-| `Radix Primitives + CVA` thay `shadcn/ui` | Tránh copy-paste shadcn components, kiểm soát 100% code | Phong cách Bauhaus cần custom nhiều, shadcn default quá generic. |
+1. **Phòng Chống Lỗi Race Condition**:
+   - Sử dụng Database Transaction nguyên tử (`prisma.$transaction`) cho mọi chuỗi thao tác: Trừ quỹ ngày phép, tạo dự án cá nhân song hành khi đăng ký, đổi vị trí kéo thả Kanban, và hoán đổi PM dự án (`swap-pm`).
+2. **Cơ Chế Multi-Model Fallback Cho Gemini AI**:
+   - Khi gọi Google Generative AI, nếu model `gemini-1.5-flash` phản hồi lỗi bận máy chủ (503), hệ thống tự động fallback qua `gemini-1.5-flash-8b` hoặc mô hình dự phòng mà không làm gián đoạn trải nghiệm người dùng.
+3. **Phòng Ngừa Lỗ Hổng IDOR (Insecure Direct Object References)**:
+   - Tất cả các endpoint cập nhật dữ liệu (`tasks`, `projects`, `documents`, `attendance`) đều được bọc qua lớp Service kiểm tra tư cách thành viên và quyền sở hữu (RBAC Guard).

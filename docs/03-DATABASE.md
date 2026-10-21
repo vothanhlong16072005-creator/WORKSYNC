@@ -1,515 +1,274 @@
-# 🗄️ Database Schema & ERD — WorkSync
-> Stack: PostgreSQL 16 + Prisma 5
-> **Conventions:** id dùng cuid(), mọi entity có createdAt/updatedAt/deletedAt, soft delete bắt buộc
+# 🗄️ Thiết Kế Cơ Sở Dữ Liệu & Sơ Đồ ERD (Database Schema & ERD) — WorkSync
+> **Hệ quản trị CSDL:** PostgreSQL 16 | **ORM:** Prisma 5  
+> **Quy chuẩn thiết kế:** Khóa chính định dạng `cuid()`, 100% entity có `createdAt`, `updatedAt`, `deletedAt` (xóa mềm - Soft Delete).  
+> **Số lượng thực thể:** **37 Tables / Models** & **26 Enums** vận hành thực tế.
 
 ---
 
-## ERD Tổng quan (Text)
+## 1. Sơ Đồ Thực Thể Quan Hệ Tổng Quan (Entity Relationship Diagram)
 
-```
-Company
-├── Department (nhiều phòng ban)
-│   └── User (nhiều nhân viên)
-│       ├── AttendanceRecord (lịch sử điểm danh)
-│       ├── WfhRequest (đơn WFH)
-│       ├── LeaveRequest (đơn nghỉ phép)
-│       └── Notification (thông báo)
-│
-├── Project (nhiều dự án)
-│   ├── ProjectMember (thành viên dự án - nhiều-nhiều User)
-│   ├── Sprint (nhiều sprint)
-│   │   └── Epic
-│   │       └── Task (có thể có parentTask = sub-task)
-│   │           ├── WorkLog
-│   │           ├── Comment (có reactions)
-│   │           ├── TaskAttachment
-│   │           ├── TaskDependency (nhiều-nhiều Task)
-│   │           └── CustomFieldValue
-│   ├── CustomField (custom fields của project)
-│   ├── Document (ClickUp Docs - nested)
-│   │   └── Document (sub-docs - self-referential)
-│   └── Meeting
-│       ├── MeetingParticipant (nhiều-nhiều User)
-│       ├── MeetingMinutes
-│       └── MeetingAiSummary
-│
-└── DailyReport (báo cáo cuối ngày)
-```
-
----
-
-## Chi tiết từng Table
-
-### 1. users
-```sql
-id            String    @id @default(cuid())
-email         String    @unique
-passwordHash  String
-name          String
-avatar        String?
-role          Role      -- ADMIN | HR | PM | EMPLOYEE
-status        UserStatus -- ACTIVE | INACTIVE | SUSPENDED
-position      String?   -- "Backend Developer", "Designer"...
-language      Language  -- VI | EN | KO (default: VI)
-departmentId  String?
-department    Department @relation
-createdAt     DateTime  @default(now())
-updatedAt     DateTime  @updatedAt
-deletedAt     DateTime?
-```
-
-### 2. departments
-```sql
-id          String    @id @default(cuid())
-name        String    -- "Engineering", "QA", "Design"
-description String?
-managerId   String?   -- HR Manager hoặc người phụ trách
-createdAt   DateTime
-updatedAt   DateTime
-deletedAt   DateTime?
-```
-
-### 3. system_config
-```sql
-id                String   @id @default(cuid())
-companyName       String
-companyLogoUrl    String?
-timezone          String   @default("Asia/Ho_Chi_Minh")
-workStartTime     String   @default("08:00")
-workEndTime       String   @default("17:30")
-checkinStartTime  String   @default("06:00")
-checkinEndTime    String   @default("12:00")
--- IP Wifi whitelist
-allowedIpRanges   String[] -- ["192.168.1.0/24", "10.0.0.0/8"]
--- GPS
-officeLatitude    Float
-officeLongitude   Float
-gpsRadiusMeters   Int      @default(100)
--- WFH auto-approve
-wfhAutoApproveTime String  @default("09:30")
--- Gemini
-geminiApiKey      String?
--- SMTP
-smtpHost          String?
-smtpPort          Int?
-smtpUser          String?
-smtpPass          String?
-updatedAt         DateTime @updatedAt
-```
-
-### 4. attendance_records
-```sql
-id            String          @id @default(cuid())
-userId        String
-user          User            @relation
-date          DateTime        -- ngày điểm danh (date only)
-status        AttendanceStatus -- ON_TIME | LATE | VERY_LATE | WFH | BUSINESS_TRIP | ABSENT_APPROVED | ABSENT_UNAPPROVED
-checkInTime   DateTime?
-checkOutTime  DateTime?
-checkInIp     String?
-checkInLat    Float?
-checkInLng    Float?
-checkInMethod String?         -- "IP" | "GPS" | "MANUAL"
-note          String?
-editedBy      String?         -- HR manual edit userId
-editedAt      DateTime?
-createdAt     DateTime        @default(now())
-
-@@unique([userId, date])
-```
-
-### 5. wfh_requests
-```sql
-id            String        @id @default(cuid())
-userId        String
-user          User          @relation
-date          DateTime
-reason        String
-expectedStart String
-expectedEnd   String
-status        RequestStatus -- PENDING | APPROVED | REJECTED | AUTO_APPROVED
-reviewedBy    String?
-reviewedAt    DateTime?
-rejectionNote String?
-createdAt     DateTime      @default(now())
-updatedAt     DateTime      @updatedAt
-```
-
-### 6. leave_requests
-```sql
-id            String        @id @default(cuid())
-userId        String
-startDate     DateTime
-endDate       DateTime
-leaveType     LeaveType     -- ANNUAL | SICK | UNPAID | COMPENSATORY
-reason        String
-status        RequestStatus
-dayCount      Float         -- số ngày nghỉ (0.5 nếu nửa ngày)
-reviewedBy    String?
-reviewedAt    DateTime?
-createdAt     DateTime      @default(now())
-updatedAt     DateTime      @updatedAt
-```
-
-### 7. projects
-```sql
-id              String        @id @default(cuid())
-name            String
-description     String?
-kind            ProjectKind   @default(TEAM) -- TEAM | PERSONAL (cập nhật 2026-10-10)
-personalOwnerId String?       @unique         -- FK -> User.id, chỉ dùng khi kind = PERSONAL
-personalOwner   User?         @relation("PersonalProjectOwner")
-status          ProjectStatus -- PLANNING | ACTIVE | ON_HOLD | COMPLETED | ARCHIVED
-color           String        @default("#3B82F6")
-icon            String?
-startDate       DateTime?
-endDate         DateTime?
-createdById     String
-createdBy       User          @relation
-createdAt       DateTime      @default(now())
-updatedAt       DateTime      @updatedAt
-deletedAt       DateTime?
-```
-
-> **Quy ước cập nhật 2026-10-10 (ADR-002)**: Mỗi user có đúng **1 personal project** (`kind = PERSONAL`, `personalOwnerId = user.id`). Personal project được tự động provision khi đăng ký (cả email/password và Google OAuth lần đầu) trong cùng transaction. Nếu user cũ chưa có personal project, chạy migration backfill idempotent.
->
-> `ProjectAccessService` kiểm tra `kind = PERSONAL` thì chỉ `personalOwnerId` mới có quyền đọc/ghi; với `TEAM` thì áp dụng `ProjectMember` membership.
-
-### 8. project_members
-```sql
-id          String      @id @default(cuid())
-projectId   String
-userId      String
-projectRole String      -- "PM" | "DEVELOPER" | "DESIGNER" | "TESTER" | "BA" | "DEVOPS"
-joinedAt    DateTime    @default(now())
-
-@@unique([projectId, userId])
-```
-
-### 9. sprints
-```sql
-id          String       @id @default(cuid())
-projectId   String
-project     Project      @relation
-name        String       -- "Sprint 1", "Sprint 2"
-goal        String?
-status      SprintStatus -- PLANNING | ACTIVE | COMPLETED
-startDate   DateTime?
-endDate     DateTime?
-createdAt   DateTime     @default(now())
-updatedAt   DateTime     @updatedAt
-```
-
-### 10. epics
-```sql
-id          String   @id @default(cuid())
-projectId   String
-sprintId    String?
-title       String
-description String?
-color       String?
-startDate   DateTime?
-endDate     DateTime?
-createdAt   DateTime @default(now())
-updatedAt   DateTime @updatedAt
-deletedAt   DateTime?
-```
-
-### 11. tasks
-```sql
-id              String      @id @default(cuid())
-projectId       String
-sprintId        String?
-epicId          String?
-parentTaskId    String?     -- null = task gốc, có giá trị = sub-task
-assigneeId      String?
-createdById     String
-title           String
-description     String?     -- Rich text JSON (ProseMirror/Tiptap format)
-status          TaskStatus  -- TODO | IN_PROGRESS | IN_REVIEW | BLOCKED | DONE
-priority        Priority    -- LOW | MEDIUM | HIGH | URGENT
-storyPoints     Int?
-timeEstimate    Int?        -- minutes
-timeTracked     Int         @default(0) -- minutes (tổng từ work logs)
-position        Int         @default(0) -- thứ tự trong kanban column
-dueDate         DateTime?
-labels          String[]    -- ["backend", "auth", "urgent"]
-deletedAt       DateTime?
-createdAt       DateTime    @default(now())
-updatedAt       DateTime    @updatedAt
-```
-
-### 12. task_dependencies
-```sql
-id            String         @id @default(cuid())
-taskId        String         -- task phụ thuộc vào...
-dependsOnId   String         -- ...task này
-dependencyType DependencyType -- FINISH_TO_START | START_TO_START | FINISH_TO_FINISH
-
-@@unique([taskId, dependsOnId])
-```
-
-### 13. work_logs
-```sql
-id          String   @id @default(cuid())
-taskId      String
-userId      String
-duration    Int      -- minutes
-description String?
-logDate     DateTime @default(now())
-createdAt   DateTime @default(now())
-updatedAt   DateTime @updatedAt
-```
-
-### 14. comments
-```sql
-id          String   @id @default(cuid())
-taskId      String?
-docId       String?
-meetingId   String?
-authorId    String
-content     String   -- Rich text JSON
-mentions    String[] -- userId[]
-isEdited    Boolean  @default(false)
-createdAt   DateTime @default(now())
-updatedAt   DateTime @updatedAt
-deletedAt   DateTime?
-```
-
-### 15. reactions
-```sql
-id        String   @id @default(cuid())
-commentId String
-userId    String
-emoji     String   -- "👍", "🔥", "✅"
-
-@@unique([commentId, userId, emoji])
-```
-
-### 16. custom_fields
-```sql
-id          String          @id @default(cuid())
-projectId   String
-name        String          -- "Khách hàng", "Priority Score"
-fieldType   CustomFieldType -- TEXT | NUMBER | DATE | DROPDOWN | CHECKBOX
-options     String[]        -- Cho DROPDOWN: ["Option A", "Option B"]
-createdAt   DateTime        @default(now())
-```
-
-### 17. custom_field_values
-```sql
-id            String @id @default(cuid())
-taskId        String
-customFieldId String
-value         String -- Lưu dạng string, parse theo fieldType
-updatedAt     DateTime @updatedAt
-
-@@unique([taskId, customFieldId])
-```
-
-### 18. meetings
-```sql
-id          String        @id @default(cuid())
-projectId   String?
-createdById String
-title       String
-description String?
-status      MeetingStatus -- SCHEDULED | ONGOING | ENDED | CANCELLED
-startTime   DateTime
-endTime     DateTime
-roomCode    String        @unique -- "ws-abc123" cho WebRTC room
-agenda      String[]      -- Danh sách agenda items
-recordingUrl String?
-createdAt   DateTime      @default(now())
-updatedAt   DateTime      @updatedAt
-```
-
-### 19. meeting_participants
-```sql
-id         String             @id @default(cuid())
-meetingId  String
-userId     String
-rsvpStatus RsvpStatus         -- PENDING | ACCEPTED | DECLINED
-joinedAt   DateTime?
-leftAt     DateTime?
-
-@@unique([meetingId, userId])
-```
-
-### 20. meeting_minutes
-```sql
-id          String   @id @default(cuid())
-meetingId   String   @unique
-content     String   -- Rich text JSON (biên bản)
-actionItems Json[]   -- [{ title, assigneeId, deadline }]
-decisions   String[]
-updatedById String?
-createdAt   DateTime @default(now())
-updatedAt   DateTime @updatedAt
-```
-
-### 21. meeting_ai_summaries
-```sql
-id           String      @id @default(cuid())
-meetingId    String      @unique
-status       AiJobStatus -- PENDING | PROCESSING | DONE | FAILED
-summaryVi    String?
-summaryEn    String?
-summaryKo    String?
-keyDecisions String[]
-actionItems  Json[]
-risks        String[]
-generatedAt  DateTime?
-createdAt    DateTime    @default(now())
-```
-
-### 22. documents
-```sql
-id           String     @id @default(cuid())
-projectId    String?
-parentDocId  String?    -- Self-referential: null = root doc
-createdById  String
-title        String
-content      Json?      -- ProseMirror/Tiptap JSON content
-visibility   DocVisibility -- PUBLIC | PRIVATE | SHARED
-currentVersion Int      @default(1)
-wordCount    Int        @default(0)
-icon         String?
-createdAt    DateTime   @default(now())
-updatedAt    DateTime   @updatedAt
-deletedAt    DateTime?
-```
-
-### 23. document_versions
-```sql
-id          String   @id @default(cuid())
-docId       String
-version     Int
-content     Json     -- Snapshot nội dung tại version đó
-updatedById String
-createdAt   DateTime @default(now())
-
-@@unique([docId, version])
-```
-
-### 24. document_shares
-```sql
-id         String      @id @default(cuid())
-docId      String
-userId     String
-permission SharePerm   -- VIEW | EDIT
-createdAt  DateTime    @default(now())
-
-@@unique([docId, userId])
-```
-
-### 25. document_ai_summaries
-```sql
-id         String      @id @default(cuid())
-docId      String      @unique
-status     AiJobStatus
-summary    String?
-keyPoints  String[]
-createdAt  DateTime    @default(now())
-```
-
-### 26. daily_reports
-```sql
-id            String   @id @default(cuid())
-userId        String
-date          DateTime
-content       String   -- Nội dung báo cáo (rich text)
-tasksDone     String[] -- taskId[]
-blockers      String?
-plannedTomorrow String?
-aiDrafted     Boolean  @default(false)
-submittedAt   DateTime?
-createdAt     DateTime @default(now())
-updatedAt     DateTime @updatedAt
-
-@@unique([userId, date])
-```
-
-### 27. notifications
-```sql
-id         String           @id @default(cuid())
-userId     String           -- người nhận
-type       NotificationType
-title      String
-message    String
-link       String?          -- deep link vào app
-read       Boolean          @default(false)
-readAt     DateTime?
-metadata   Json?            -- extra data tùy type
-createdAt  DateTime         @default(now())
-```
-
-### 28. audit_logs
-```sql
-id         String   @id @default(cuid())
-userId     String?
-action     String   -- "USER_LOGIN", "TASK_STATUS_CHANGED"
-entityType String?  -- "Task", "User", "Project"
-entityId   String?
-oldValue   Json?
-newValue   Json?
-ipAddress  String?
-userAgent  String?
-createdAt  DateTime @default(now())
+```mermaid
+erDiagram
+    Department ||--o{ User : "contains"
+    User ||--o{ AttendanceRecord : "logs"
+    User ||--o{ WfhRequest : "requests"
+    User ||--o{ LeaveRequest : "requests"
+    User ||--o{ EarlyLeaveRequest : "requests"
+    User ||--o{ OvertimeRequest : "requests"
+    User ||--o{ BreakLog : "records"
+    
+    User ||--o{ ProjectMember : "participates"
+    Project ||--o{ ProjectMember : "has"
+    User ||--o{ Project : "owns (PERSONAL)"
+    User ||--o{ Project : "manages (PM)"
+    
+    Project ||--o{ Sprint : "plans"
+    Project ||--o{ Epic : "contains"
+    Sprint ||--o{ Task : "allocates"
+    Epic ||--o{ Task : "groups"
+    Task ||--o{ Task : "parent/subtask"
+    Task ||--o{ WorkLog : "logs_time"
+    Task ||--o{ Comment : "discussions"
+    Task ||--o{ TaskDependency : "depends_on"
+    
+    User ||--o{ QuickTask : "assigns"
+    User ||--o{ QuickTask : "receives"
+    
+    Meeting ||--o{ MeetingAttendee : "invites"
+    Meeting ||--o{ MeetingMinute : "documents"
+    Meeting ||--o{ MeetingTranscriptChunk : "records_stt"
+    
+    Document ||--o{ DocumentVersion : "versions"
+    Document ||--o{ DocumentAttachment : "files"
+    Document ||--o{ DocumentPermission : "shares"
+    
+    Conversation ||--o{ ConversationMember : "members"
+    Conversation ||--o{ ChatMessage : "messages"
+    ChatMessage ||--o{ ChatMessageReaction : "reactions"
+    
+    User ||--o{ Notification : "receives"
+    User ||--o{ PushSubscription : "web_push"
 ```
 
 ---
 
-## Enums
+## 2. Danh Mục Các Kiểu Dữ Liệu Liệt Kê (System Enums)
 
+| Tên Enum | Các giá trị cho phép | Ý nghĩa nghiệp vụ |
+| :--- | :--- | :--- |
+| **`Role`** | `ADMIN`, `HR`, `PM`, `EMPLOYEE`, `DEPARTMENT_HEAD` | 5 Vai trò phân quyền tài khoản người dùng |
+| **`UserStatus`** | `ACTIVE`, `INACTIVE`, `SUSPENDED` | Trạng thái kích hoạt tài khoản |
+| **`Language`** | `VI`, `EN`, `KO` | Ngôn ngữ giao diện người dùng |
+| **`AttendanceStatus`** | `ON_TIME`, `LATE`, `VERY_LATE`, `WFH`, `BUSINESS_TRIP`, `ABSENT_APPROVED`, `ABSENT_UNAPPROVED`, `EARLY_LEAVE_APPROVED`, `EARLY_LEAVE_UNAPPROVED` | 9 Trạng thái chuyên cần hàng ngày |
+| **`RequestStatus`** | `PENDING`, `APPROVED`, `REJECTED`, `AUTO_APPROVED` | Trạng thái xét duyệt đơn từ |
+| **`BreakType`** | `MANUAL`, `EARLY_LEAVE_OUT` | Phân loại ra ngoài tạm thời |
+| **`LeaveType`** | `ANNUAL`, `SICK`, `UNPAID`, `COMPENSATORY` | Các loại hình nghỉ phép |
+| **`ProjectStatus`** | `PLANNING`, `ACTIVE`, `ON_HOLD`, `COMPLETED`, `ARCHIVED` | Vòng đời dự án |
+| **`ProjectKind`** | `TEAM`, `PERSONAL` | Dự án nhóm phối hợp vs Không gian việc cá nhân |
+| **`ProjectWorkflowType`**| `SCRUM`, `KANBAN`, `DAILY`, `SIMPLE` | 4 Mô hình quản lý tiến độ dự án |
+| **`SprintStatus`** | `PLANNING`, `ACTIVE`, `COMPLETED` | Vòng đời Sprint Agile |
+| **`TaskStatus`** | `TODO`, `IN_PROGRESS`, `IN_REVIEW`, `BLOCKED`, `DONE` | 5 Bước tiến trình công việc Kanban |
+| **`Priority`** | `LOW`, `MEDIUM`, `HIGH`, `URGENT` | 4 Mức độ ưu tiên |
+| **`DependencyType`** | `FINISH_TO_START`, `START_TO_START`, `FINISH_TO_FINISH`| Mối quan hệ phụ thuộc công việc |
+| **`CustomFieldType`** | `TEXT`, `NUMBER`, `DATE`, `DROPDOWN`, `CHECKBOX` | Kiểu trường tùy biến dự án |
+| **`MeetingStatus`** | `SCHEDULED`, `IN_PROGRESS`, `COMPLETED`, `CANCELLED` | Trạng thái cuộc họp |
+| **`MeetingScope`** | `PROJECT`, `DEPARTMENT`, `ONE_ON_ONE` | Phạm vi cuộc họp |
+| **`RSVP`** | `PENDING`, `ACCEPTED`, `DECLINED` | Trạng thái phản hồi lời mời họp |
+| **`AiJobStatus`** | `PENDING`, `PROCESSING`, `DONE`, `FAILED` | Trạng thái xử lý tiến trình Gemini AI |
+| **`DocVisibility`** | `PUBLIC`, `PRIVATE`, `SHARED` | Phạm vi công khai tài liệu |
+| **`SharePerm`** | `VIEW`, `EDIT` | Quyền hạn chia sẻ tài liệu |
+| **`DocumentScope`** | `PERSONAL`, `PROJECT`, `DEPARTMENT`, `COMPANY` | Không gian lưu trữ tài liệu |
+| **`DocumentType`** | `STANDARD`, `TASK_REQUIREMENT`, `TASK_SUBMISSION`, `MEETING_MINUTES`, `COMPANY_POLICY`, `TEMPLATE` | 6 Phân loại văn bản doanh nghiệp |
+| **`NotificationType`** | `MEETING`, `ATTENDANCE_APPROVAL`, `QUICK_TASK`, `MENTION`, `TASK`, `SYSTEM`, `CHAT` | 7 Phân loại thông báo hệ thống |
+| **`ConversationType`** | `DIRECT`, `PROJECT`, `DEPARTMENT` | 3 Loại hình hội thoại trò chuyện |
+| **`ChatMessageType`** | `TEXT`, `FILE`, `SYSTEM` | Phân loại tin nhắn chat |
+
+---
+
+## 3. Cấu Trúc Chi Tiết Các Bảng Dữ Liệu Theo Nhóm Phân Hệ
+
+### 👥 Nhóm 1: Tổ Chức & Người Dùng (Users & Organization)
+
+#### 1. `User` (Bảng người dùng hệ thống)
 ```prisma
-enum Role              { ADMIN HR PM EMPLOYEE }
-enum UserStatus        { ACTIVE INACTIVE SUSPENDED }
-enum Language          { VI EN KO }
-enum AttendanceStatus  { ON_TIME LATE VERY_LATE WFH BUSINESS_TRIP ABSENT_APPROVED ABSENT_UNAPPROVED }
-enum RequestStatus     { PENDING APPROVED REJECTED AUTO_APPROVED }
-enum LeaveType         { ANNUAL SICK UNPAID COMPENSATORY }
-enum ProjectStatus     { PLANNING ACTIVE ON_HOLD COMPLETED ARCHIVED }
-enum ProjectKind       { TEAM PERSONAL }  -- thêm 2026-10-10 (ADR-002)
-enum SprintStatus      { PLANNING ACTIVE COMPLETED }
-enum TaskStatus        { TODO IN_PROGRESS IN_REVIEW BLOCKED DONE }
-enum Priority          { LOW MEDIUM HIGH URGENT }
-enum DependencyType    { FINISH_TO_START START_TO_START FINISH_TO_FINISH }
-enum CustomFieldType   { TEXT NUMBER DATE DROPDOWN CHECKBOX }
-enum MeetingStatus     { SCHEDULED ONGOING ENDED CANCELLED }
-enum RsvpStatus        { PENDING ACCEPTED DECLINED }
-enum AiJobStatus       { PENDING PROCESSING DONE FAILED }
-enum DocVisibility     { PUBLIC PRIVATE SHARED }
-enum SharePerm         { VIEW EDIT }
-enum NotificationType  {
-  TASK_ASSIGNED TASK_STATUS_CHANGED TASK_COMMENTED TASK_DEADLINE_SOON
-  TASK_OVERDUE TASK_BLOCKED TASK_MENTION
-  SPRINT_STARTED SPRINT_ENDED
-  MEETING_INVITED MEETING_STARTING MEETING_AI_READY
-  WFH_REQUEST_PENDING WFH_APPROVED WFH_REJECTED
-  DAILY_REPORT_REMINDER
-  SYSTEM
+model User {
+  id           String      @id @default(cuid())
+  email        String      @unique
+  passwordHash String
+  name         String
+  avatar       String?
+  role         Role        @default(EMPLOYEE)
+  status       UserStatus  @default(ACTIVE)
+  position     String?
+  language     Language    @default(VI)
+  departmentId String?
+  department   Department? @relation(fields: [departmentId], references: [id])
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+  deletedAt    DateTime?
 }
 ```
 
+#### 2. `Department` (Phòng ban trực thuộc doanh nghiệp)
+```prisma
+model Department {
+  id          String    @id @default(cuid())
+  name        String
+  code        String    @unique
+  description String?
+  managerId   String?
+  manager     User?     @relation("DeptManager", fields: [managerId], references: [id])
+  users       User[]
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+}
+```
+
+#### 3. `SystemConfig` (Cấu hình hệ thống toàn cục)
+- Lưu trữ: Tọa độ Geofencing các văn phòng, dải IP Wifi hợp lệ, giờ làm việc chuẩn, thời gian auto-approve WFH.
+
 ---
 
-## Indexes quan trọng
+### ⏰ Nhóm 2: Điểm Danh & Chuyên Cần (Smart Attendance)
 
-```sql
--- Tìm kiếm tasks thường xuyên
-CREATE INDEX idx_tasks_project_status ON tasks(projectId, status) WHERE deletedAt IS NULL;
-CREATE INDEX idx_tasks_assignee ON tasks(assigneeId) WHERE deletedAt IS NULL;
-CREATE INDEX idx_tasks_sprint ON tasks(sprintId) WHERE deletedAt IS NULL;
+#### 4. `AttendanceRecord` (Bản ghi điểm danh hàng ngày)
+- `id`, `userId`, `date`, `checkIn`, `checkOut`, `ipAddress`, `latitude`, `longitude`, `officeLocation` (Đà Nẵng/Hà Nội/TP.HCM), `status` (`AttendanceStatus`), `workHours`, `note`.
 
--- Điểm danh theo ngày
-CREATE INDEX idx_attendance_user_date ON attendance_records(userId, date);
-CREATE INDEX idx_attendance_date ON attendance_records(date);
+#### 5. `WfhRequest` (Đơn đăng ký làm việc từ xa)
+- `id`, `userId`, `startDate`, `endDate`, `reason`, `status` (`RequestStatus`), `approvedById`, `approvedAt`.
 
--- Notifications theo user chưa đọc
-CREATE INDEX idx_notifications_user_unread ON notifications(userId, read) WHERE read = false;
+#### 6. `LeaveRequest` (Đơn xin nghỉ phép & Quỹ ngày phép)
+- `id`, `userId`, `leaveType`, `startDate`, `endDate`, `dayCount`, `reason`, `status`, `approvedById`.
 
--- Documents tree
-CREATE INDEX idx_docs_parent ON documents(parentDocId) WHERE deletedAt IS NULL;
-CREATE INDEX idx_docs_project ON documents(projectId) WHERE deletedAt IS NULL;
+#### 7. `EarlyLeaveRequest` (Đăng ký về sớm trước 17:30)
+- `id`, `userId`, `date`, `leaveTime`, `reason`, `status`, `approvedById`.
+
+#### 8. `OvertimeRequest` (Đăng ký làm thêm giờ - OT)
+- `id`, `userId`, `date`, `registeredHours`, `actualHours`, `reason`, `status`.
+
+#### 9. `BreakLog` (Nhật ký ra ngoài tạm thời)
+- `id`, `attendanceId`, `breakStart`, `breakEnd`, `breakType` (`MANUAL` / `EARLY_LEAVE_OUT`), `durationMinutes`.
+
+---
+
+### 🗂️ Nhóm 3: Dự Án, Sprints & Công Việc (Projects, Sprints, Tasks)
+
+#### 10. `Project` (Dự án nhóm hoặc Không gian cá nhân)
+```prisma
+model Project {
+  id           String              @id @default(cuid())
+  name         String
+  code         String              @unique
+  description  String?
+  kind         ProjectKind         @default(TEAM)      // TEAM hoặc PERSONAL
+  workflowType ProjectWorkflowType @default(KANBAN)    // SCRUM, KANBAN, DAILY, SIMPLE
+  status       ProjectStatus       @default(ACTIVE)
+  color        String?
+  ownerId      String?                                 // Sở hữu đối với PERSONAL
+  pmId         String?                                 // Project Manager đối với TEAM
+  pm           User?               @relation("ProjectPM", fields: [pmId], references: [id])
+  members      ProjectMember[]
+  sprints      Sprint[]
+  tasks        Task[]
+}
 ```
+
+#### 11. `ProjectMember` (Thành viên dự án)
+- `id`, `projectId`, `userId`, `projectRole` (`PM`, `DEV`, `QA`, `BA`), `joinedAt`.
+
+#### 12. `Sprint` (Chu kỳ phát triển Agile)
+- `id`, `projectId`, `name`, `goal`, `startDate`, `endDate`, `status` (`SprintStatus`), `velocity`.
+
+#### 13. `Epic` (Hạng mục công việc lớn)
+- `id`, `projectId`, `title`, `description`, `color`.
+
+#### 14. `Task` (Nhiệm vụ công việc)
+```prisma
+model Task {
+  id           String      @id @default(cuid())
+  title        String
+  description  String?
+  status       TaskStatus  @default(TODO)
+  priority     Priority    @default(MEDIUM)
+  projectId    String
+  sprintId     String?
+  epicId       String?
+  assigneeId   String?     // Người nhận việc được PM chỉ định
+  creatorId    String      // Người tạo task
+  dueDate      DateTime?
+  storyPoints  Int?
+  timeEstimate Float?
+  timeTracked  Float?      @default(0)
+  boardOrder   Float       @default(0)  // Vị trí kéo thả Kanban
+  labels       String[]
+}
+```
+
+#### 15. `TaskDependency` — Ràng buộc phụ thuộc công việc (Finish-to-Start).
+#### 16. `WorkLog` — Nhật ký ghi nhận thời gian thực tế triển khai công việc.
+#### 17. `Comment` & 18. `Reaction` — Trao đổi thảo luận trên task kèm thả emoji.
+#### 19. `CustomField` & 20. `CustomFieldValue` — Trường thông tin bổ sung tùy chỉnh theo dự án.
+#### 21. `QuickTask` — Công việc giao nhanh 1-chạm của Trưởng phòng ban.
+
+---
+
+### 📹 Nhóm 4: Cuộc Họp Trực Tuyến & Biên Bản AI (Meetings)
+
+#### 22. `Meeting` (Phòng họp trực tuyến)
+- `id`, `title`, `description`, `scope` (`PROJECT`/`DEPARTMENT`/`ONE_ON_ONE`), `projectId`, `departmentId`, `hostId`, `startTime`, `endTime`, `status`, `meetingLink`.
+
+#### 23. `MeetingAttendee` (Người tham gia & Phản hồi)
+- `id`, `meetingId`, `userId`, `rsvp` (`ACCEPTED`/`DECLINED`/`PENDING`), `joinedAt`, `leftAt`, `durationMinutes`.
+
+#### 24. `MeetingMinute` (Biên bản cuộc họp & Phân tích Gemini AI)
+- `id`, `meetingId`, `rawTranscript`, `aiSummary`, `actionItems` (JSON), `decisions` (JSON), `keyDiscussions` (JSON), `risks` (JSON), `aiStatus`.
+
+#### 25. `MeetingTranscriptChunk` (Phân mảnh nhận diện giọng nói STT)
+- `id`, `meetingId`, `speakerId`, `speakerName`, `content`, `timestamp`, `chunkIndex` (Loại bỏ race condition khi nói đồng thời).
+
+---
+
+### 📄 Nhóm 5: Không Gian Quản Trị Tri Thức (ClickUp Docs)
+
+#### 26. `Document` (Tài liệu rich-text)
+- `id`, `title`, `content` (HTML/JSON Tiptap), `scope`, `docType` (`TASK_REQUIREMENT`/`TASK_SUBMISSION`/`COMPANY_POLICY`/v.v.), `projectId`, `taskId`, `meetingId`, `authorId`, `version`.
+
+#### 27. `DocumentVersion` (Lịch sử các phiên bản)
+- `id`, `documentId`, `versionNumber`, `title`, `content`, `editedById`, `createdAt`.
+
+#### 28. `DocumentAttachment` (Tệp tin đính kèm tài liệu dung lượng tới 25MB)
+- `id`, `documentId`, `fileName`, `fileSize`, `mimeType`, `storagePath`, `uploaderId`.
+
+#### 29. `DocumentPermission` & 30. `DocumentTemplate` (Quyền chia sẻ & Mẫu văn bản hành chính).
+
+---
+
+### 💬 Nhóm 6: Trò Chuyện Trực Tuyến & Thông Báo (Chat & Notifications)
+
+#### 31. `Conversation` (Hội thoại trò chuyện)
+- `id`, `type` (`DIRECT` / `PROJECT` / `DEPARTMENT`), `projectId`, `departmentId`, `name`, `avatar`, `lastMessageAt`.
+
+#### 32. `ConversationMember` (Thành viên cuộc trò chuyện)
+- `id`, `conversationId`, `userId`, `isPinned`, `isMuted`, `unreadCount`, `lastReadAt`.
+
+#### 33. `ChatMessage` (Tin nhắn văn bản & tệp tin)
+- `id`, `conversationId`, `senderId`, `type` (`TEXT` / `FILE` / `SYSTEM`), `content`, `fileUrl`, `fileName`, `fileSize`, `replyToMessageId`.
+
+#### 34. `ChatMessageReaction` (Cảm xúc emoji trên tin nhắn)
+- `id`, `messageId`, `userId`, `emoji` (👍, ❤️, 😂, 🎉, 🚀).
+
+#### 35. `Notification` & 36. `PushSubscription` — Thông báo nội bộ & Web Push native VAPID.
+#### 37. `DailyReport` — Báo cáo cuối ngày tự động.
+
+---
+
+## 4. Các Chỉ Mục Trọng Điểm Tối Ưu Hóa Hiệu Năng (Key Database Indexes)
+
+Để đảm bảo thời gian phản hồi API P95 <= 120ms trên quy mô lớn, toàn bộ các quan hệ truy vấn thường xuyên đều được lập chỉ mục:
+1. `User`: `@unique([email])`, `@@index([departmentId, role])`.
+2. `AttendanceRecord`: `@@unique([userId, date])`, `@@index([date, status])`.
+3. `Task`: `@@index([projectId, status])`, `@@index([assigneeId, status])`, `@@index([sprintId])`.
+4. `ChatMessage`: `@@index([conversationId, createdAt])`.
+5. `MeetingTranscriptChunk`: `@@index([meetingId, chunkIndex])`.
+6. `Document`: `@@index([scope, docType, projectId])`.
