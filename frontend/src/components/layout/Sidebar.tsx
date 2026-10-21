@@ -16,6 +16,7 @@ import {
   Zap,
   Bell,
   MessageSquare,
+  ShieldCheck,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -59,6 +60,12 @@ export default function Sidebar({ open, setOpen }: SidebarProps) {
       badge: unreadCount > 0 ? unreadCount : undefined,
     },
     { icon: FileText, label: t('nav.documents'), path: '/documents' },
+    {
+      icon: ShieldCheck,
+      label: t('nav.admin_center', 'Trung tâm Quản trị'),
+      path: '/admin',
+      roles: ['ADMIN'],
+    },
     {
       icon: Settings,
       label: t('nav.settings', 'Cài đặt hệ thống'),

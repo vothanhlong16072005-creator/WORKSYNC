@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
-import { ProjectKind, Role } from '@prisma/client';
+import { ProjectKind, Role, ConversationType, ChatMessageType } from '@prisma/client';
 import { CreateProjectDto } from './dto/create-project.dto.js';
 import { UpdateProjectDto } from './dto/update-project.dto.js';
 import { SwapPmDto } from './dto/swap-pm.dto.js';
@@ -88,7 +88,7 @@ export class ProjectsService {
     }
 
     return this.prisma.$transaction(async (tx) => {
-      return tx.project.create({
+      const createdProject = await tx.project.create({
         data: {
           name: dto.name,
           description: dto.description,
@@ -109,6 +109,34 @@ export class ProjectsService {
           members: { include: { user: true } },
         },
       });
+
+      // Tự động tạo nhóm chat cho dự án mới này với toàn bộ thành viên
+      const allMemberIds = Array.from(addedUserIds);
+      if (allMemberIds.length > 0 && typeof (tx as any).conversation?.create === 'function') {
+        await (tx as any).conversation.create({
+          data: {
+            type: ConversationType.PROJECT,
+            name: `Dự án: ${createdProject.name}`,
+            projectId: createdProject.id,
+            createdById: actor.id,
+            members: {
+              create: allMemberIds.map((mId) => ({
+                userId: mId,
+                unreadCount: 0,
+              })),
+            },
+            messages: {
+              create: {
+                senderId: actor.id,
+                type: ChatMessageType.SYSTEM,
+                content: `Nhóm trò chuyện cho dự án "${createdProject.name}" đã được khởi tạo.`,
+              },
+            },
+          },
+        });
+      }
+
+      return createdProject;
     });
   }
 
@@ -121,13 +149,29 @@ export class ProjectsService {
         'Chỉ PM của dự án, Trưởng phòng hoặc Admin mới có quyền thêm thành viên',
       );
     }
-    return this.prisma.projectMember.create({
+    const member = await this.prisma.projectMember.create({
       data: {
         projectId,
         userId: dto.userId,
         projectRole: dto.projectRole ?? 'MEMBER',
       },
     });
+
+    // Đồng bộ thêm thành viên vào nhóm chat dự án (nếu nhóm chat đã tồn tại)
+    if (typeof this.prisma.conversation?.findFirst === 'function') {
+      const conv = await this.prisma.conversation.findFirst({
+        where: { type: ConversationType.PROJECT, projectId, deletedAt: null },
+      });
+      if (conv && typeof this.prisma.conversationMember?.upsert === 'function') {
+        await this.prisma.conversationMember.upsert({
+          where: { conversationId_userId: { conversationId: conv.id, userId: dto.userId } },
+          update: { leftAt: null },
+          create: { conversationId: conv.id, userId: dto.userId, unreadCount: 0 },
+        });
+      }
+    }
+
+    return member;
   }
 
   async removeMember(projectId: string, userId: string, actor: CurrentActor) {
@@ -139,9 +183,23 @@ export class ProjectsService {
         'Chỉ PM của dự án, Trưởng phòng hoặc Admin mới có quyền xóa thành viên',
       );
     }
-    return this.prisma.projectMember.delete({
+    const res = await this.prisma.projectMember.delete({
       where: { projectId_userId: { projectId, userId } },
     });
+
+    // Đồng bộ xóa thành viên khỏi nhóm chat dự án
+    if (typeof this.prisma.conversation?.findFirst === 'function') {
+      const conv = await this.prisma.conversation.findFirst({
+        where: { type: ConversationType.PROJECT, projectId, deletedAt: null },
+      });
+      if (conv && typeof this.prisma.conversationMember?.deleteMany === 'function') {
+        await this.prisma.conversationMember.deleteMany({
+          where: { conversationId: conv.id, userId },
+        });
+      }
+    }
+
+    return res;
   }
 
   async changeMemberRole(projectId: string, userId: string, dto: { projectRole: string }, actor: CurrentActor) {

@@ -1,4 +1,5 @@
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   X,
   Mail,
@@ -9,9 +10,12 @@ import {
   ExternalLink,
   Shield,
   Layers,
+  MessageSquare,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
+import { useAuthStore } from '@/stores/auth.store';
+import { useChatStore } from '@/features/chat/stores/chat.store';
 import type { ProjectMemberItem } from '../types/project.types';
 import type { TaskDetailModalTask } from '@/features/tasks/components/TaskDetailModal';
 
@@ -34,9 +38,26 @@ export const MemberProfileModal: React.FC<MemberProfileModalProps> = ({
 }) => {
   const { i18n } = useTranslation();
   const isEn = i18n.language.startsWith('en');
+  const navigate = useNavigate();
+  const currentUser = useAuthStore((s) => s.user);
+  const startDirectChat = useChatStore((s) => s.startDirectChat);
   const [copied, setCopied] = React.useState(false);
+  const [isStartingChat, setIsStartingChat] = React.useState(false);
 
   if (!isOpen || !member) return null;
+
+  const handleStartChat = async () => {
+    setIsStartingChat(true);
+    try {
+      const convId = await startDirectChat(member.user.id);
+      onClose();
+      navigate(`/chat/${convId}`);
+    } catch {
+      toast.error(isEn ? 'Failed to start conversation' : 'Không thể mở cuộc trò chuyện');
+    } finally {
+      setIsStartingChat(false);
+    }
+  };
 
   const totalTasks = memberTasks.length;
   const doneTasks = memberTasks.filter((t) => t.status === 'DONE').length;
@@ -89,6 +110,22 @@ export const MemberProfileModal: React.FC<MemberProfileModalProps> = ({
             </div>
 
             <div className="flex items-center gap-2">
+              {currentUser?.id !== member.user.id && (
+                <button
+                  type="button"
+                  onClick={handleStartChat}
+                  disabled={isStartingChat}
+                  className="px-3.5 py-1.5 text-xs font-bold rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white transition-colors flex items-center gap-1.5 shadow-sm cursor-pointer disabled:opacity-50"
+                  title={isEn ? 'Start direct chat' : 'Nhắn tin trực tiếp'}
+                >
+                  <MessageSquare className="w-3.5 h-3.5" />
+                  <span>
+                    {isStartingChat
+                      ? (isEn ? 'Opening...' : 'Đang mở...')
+                      : (isEn ? 'Message' : 'Nhắn tin')}
+                  </span>
+                </button>
+              )}
               <button
                 onClick={handleCopyEmail}
                 className="px-3.5 py-1.5 text-xs font-semibold rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors flex items-center gap-1.5 cursor-pointer"

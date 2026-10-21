@@ -243,8 +243,8 @@ export function AttendancePage() {
                 : 'Expedited approval queue, enterprise timesheet & attendance tracking for FPT Complex Da Nang'
               : isAdmin
               ? isVi
-                ? 'Cấu hình tham số ca làm việc, tọa độ GPS Geofence 500m FPT Complex và dải IP mạng nội bộ'
-                : 'Configure shift parameters, 500m GPS Geofence boundary and internal IP subnets'
+                ? 'Cấu hình tham số ca làm việc, tọa độ GPS Geofence 100m FPT Complex và dải IP mạng nội bộ'
+                : 'Configure shift parameters, 100m GPS Geofence boundary and internal IP subnets'
               : isVi
               ? 'Xác thực định vị GPS FPT Complex Đà Nẵng, đo khoảng cách thời gian thực & phân hệ nhân sự'
               : 'FPT Complex Da Nang GPS Geofence validation, real-time routing & enterprise attendance analytics'}

@@ -1,0 +1,194 @@
+// BANG DU LIEU COT LOI WORKSYNC VER2 CHO DBDATADIAGRAM.IO
+
+Table departments {
+  id text [pk]
+  name text [not null]
+  code text [unique, not null]
+  description text
+  created_at timestamp
+  updated_at timestamp
+}
+
+Table users {
+  id text [pk]
+  email text [unique, not null]
+  full_name text [not null]
+  role text [not null, note: 'ADMIN, HR, DEPARTMENT_HEAD, PM, EMPLOYEE']
+  department_id text
+  status text [not null, default: 'ACTIVE']
+  avatar_url text
+  created_at timestamp
+}
+
+Table attendance_records {
+  id text [pk]
+  user_id text [not null]
+  date date [not null]
+  check_in timestamp
+  check_out timestamp
+  status text [not null, note: 'PRESENT, LATE, EARLY_LEAVE, ABSENT']
+  ip_address text
+  latitude float
+  longitude float
+  created_at timestamp
+}
+
+Table wfh_requests {
+  id text [pk]
+  user_id text [not null]
+  start_date date [not null]
+  end_date date [not null]
+  reason text [not null]
+  status text [not null, note: 'PENDING, APPROVED, REJECTED']
+  approved_by_id text
+  approved_at timestamp
+  created_at timestamp
+}
+
+Table leave_requests {
+  id text [pk]
+  user_id text [not null]
+  start_date date [not null]
+  end_date date [not null]
+  reason text [not null]
+  status text [not null, note: 'PENDING, APPROVED, REJECTED']
+  approved_by_id text
+  approved_at timestamp
+  created_at timestamp
+}
+
+Table projects {
+  id text [pk]
+  name text [not null]
+  code text [unique, not null]
+  description text
+  workflow_type text [not null, note: 'SCRUM, KANBAN, DAILY, SIMPLE']
+  status text [not null, note: 'PLANNING, ACTIVE, COMPLETED, ON_HOLD']
+  department_id text
+  pm_id text
+  created_at timestamp
+}
+
+Table project_members {
+  id text [pk]
+  project_id text [not null]
+  user_id text [not null]
+  project_role text [not null, note: 'PM, MEMBER, VIEWER']
+  joined_at timestamp
+}
+
+Table sprints {
+  id text [pk]
+  project_id text [not null]
+  name text [not null]
+  start_date timestamp [not null]
+  end_date timestamp [not null]
+  status text [not null, note: 'PLANNING, ACTIVE, COMPLETED']
+  goal text
+  created_at timestamp
+}
+
+Table tasks {
+  id text [pk]
+  project_id text [not null]
+  sprint_id text
+  title text [not null]
+  description text
+  status text [not null, note: 'TODO, IN_PROGRESS, IN_REVIEW, DONE, BLOCKED']
+  priority text [not null, note: 'LOW, MEDIUM, HIGH, URGENT']
+  assignee_id text
+  creator_id text [not null]
+  story_points int
+  deadline timestamp
+  completed_at timestamp
+  completed_by_id text
+}
+
+Table meetings {
+  id text [pk]
+  title text [not null]
+  start_time timestamp [not null]
+  end_time timestamp [not null]
+  scope_type text [not null, note: 'PROJECT, DEPARTMENT, ONE_ON_ONE']
+  status text [not null, note: 'SCHEDULED, IN_PROGRESS, COMPLETED, CANCELLED']
+  project_id text
+  department_id text
+  created_by_id text [not null]
+}
+
+Table meeting_minutes {
+  id text [pk]
+  meeting_id text [unique, not null]
+  content text [not null]
+  ai_summary text
+  action_items text
+  decisions text
+  created_at timestamp
+}
+
+Table documents {
+  id text [pk]
+  title text [not null]
+  scope text [not null, note: 'PERSONAL, PROJECT, DEPARTMENT, COMPANY']
+  type text [not null, note: 'STANDARD, TASK_REQUIREMENT, TASK_SUBMISSION, MEETING_MINUTES, COMPANY_POLICY']
+  project_id text
+  owner_id text [not null]
+  current_version int [default: 1]
+  ai_summary text
+  created_at timestamp
+}
+
+Table conversations {
+  id text [pk]
+  type text [not null, note: 'DIRECT, PROJECT, DEPARTMENT']
+  project_id text
+  department_id text
+  title text
+  last_message_at timestamp
+  created_at timestamp
+}
+
+Table chat_messages {
+  id text [pk]
+  conversation_id text [not null]
+  sender_id text [not null]
+  content text
+  attachment_url text
+  created_at timestamp
+}
+
+Table notifications {
+  id text [pk]
+  user_id text [not null]
+  actor_id text
+  type text [not null, note: 'MEETING, ATTENDANCE_APPROVAL, TASK, SYSTEM']
+  title text [not null]
+  body text [not null]
+  is_read boolean [default: false]
+  created_at timestamp
+}
+
+// LIEN KET QUAN HE
+
+Ref: users.department_id > departments.id
+Ref: attendance_records.user_id > users.id
+Ref: wfh_requests.user_id > users.id
+Ref: leave_requests.user_id > users.id
+Ref: projects.department_id > departments.id
+Ref: projects.pm_id > users.id
+Ref: project_members.project_id > projects.id
+Ref: project_members.user_id > users.id
+Ref: sprints.project_id > projects.id
+Ref: tasks.project_id > projects.id
+Ref: tasks.sprint_id > sprints.id
+Ref: tasks.assignee_id > users.id
+Ref: meetings.project_id > projects.id
+Ref: meetings.department_id > departments.id
+Ref: meetings.created_by_id > users.id
+Ref: meeting_minutes.meeting_id - meetings.id
+Ref: documents.project_id > projects.id
+Ref: documents.owner_id > users.id
+Ref: conversations.project_id > projects.id
+Ref: chat_messages.conversation_id > conversations.id
+Ref: chat_messages.sender_id > users.id
+Ref: notifications.user_id > users.id

@@ -15,9 +15,11 @@ import { UserAvatar } from '@/components/ui/UserAvatar';
 import { CreateGroupChatModal } from './CreateGroupChatModal';
 import { formatLastActivity } from '../utils/chat-date';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 
 export const ChatSidebar: React.FC = () => {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const [isGroupModalOpen, setIsGroupModalOpen] = useState(false);
 
   const {
@@ -156,7 +158,10 @@ export const ChatSidebar: React.FC = () => {
             return (
               <div
                 key={conv.id}
-                onClick={() => setActiveConversation(conv)}
+                onClick={() => {
+                  setActiveConversation(conv);
+                  navigate(`/chat/${conv.id}`);
+                }}
                 className={`flex items-start gap-3 p-3.5 transition-all cursor-pointer select-none ${
                   isActive
                     ? 'bg-blue-50/80 border-l-4 border-blue-600'

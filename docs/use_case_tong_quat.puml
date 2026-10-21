@@ -1,0 +1,84 @@
+@startuml
+skinparam packageStyle rectangle
+skinparam roundcorner 8
+skinparam shadowing false
+skinparam defaultFontName Arial
+skinparam defaultFontSize 12
+
+actor "Quản trị viên" as Admin
+actor "Quản lý nhân sự" as HR
+actor "Trưởng phòng ban" as DeptHead
+actor "Quản lý dự án" as PM
+actor "Nhân viên" as Employee
+
+Admin -up-|> Employee
+HR -up-|> Employee
+DeptHead -up-|> Employee
+PM -up-|> Employee
+
+rectangle "Hệ thống Quản lý Dự án và Điểm danh WorkSync" {
+  package "Xác thực và Quản trị" {
+    usecase UC_Login as "Đăng nhập và bảo mật phiên"
+    usecase UC_ManageUsers as "Quản lý người dùng và phòng ban"
+    usecase UC_ConfigSystem as "Cấu hình tham số IP, GPS và khóa AI"
+  }
+  
+  package "Điểm danh và Chuyên cần" {
+    usecase UC_CheckIn as "Điểm danh chạm một lần IP và GPS"
+    usecase UC_SubmitLeave as "Nộp đơn làm từ xa hoặc nghỉ phép"
+    usecase UC_ApproveLeave as "Phê duyệt đơn từ chuyên cần"
+    usecase UC_ExportAttendance as "Xuất báo cáo chuyên cần toàn công ty"
+  }
+  
+  package "Quản lý Dự án và Nhiệm vụ" {
+    usecase UC_CreateProject as "Khởi tạo và thiết lập dự án"
+    usecase UC_ManageSprint as "Quản lý chu kỳ Sprint và Backlog"
+    usecase UC_ManageKanban as "Theo dõi và cập nhật bảng Kanban"
+    usecase UC_SubmitDeliverable as "Nộp hồ sơ nghiệm thu công việc"
+  }
+  
+  package "Họp trực tuyến và Trí tuệ nhân tạo" {
+    usecase UC_PreMeeting as "Kiểm tra thiết bị tại phòng chuẩn bị"
+    usecase UC_WebRTCMeeting as "Tổ chức họp trực tuyến WebRTC"
+    usecase UC_AiSummary as "Tóm tắt biên bản họp và sinh nhiệm vụ bằng AI"
+    usecase UC_ExportMinutes as "Xuất biên bản họp Word và CSV"
+  }
+  
+  package "Tài liệu, Lịch biểu và Giao tiếp" {
+    usecase UC_ManageDocs as "Soạn thảo và quản lý phiên bản tài liệu"
+    usecase UC_ViewCalendar as "Điều phối lịch biểu và xử lý xung đột"
+    usecase UC_ChatInternal as "Trò chuyện trực tuyến nội bộ"
+    usecase UC_Notifications as "Nhận thông báo đa kênh thời gian thực"
+  }
+}
+
+Employee --> UC_Login
+Employee --> UC_CheckIn
+Employee --> UC_SubmitLeave
+Employee --> UC_ManageKanban
+Employee --> UC_SubmitDeliverable
+Employee --> UC_PreMeeting
+Employee --> UC_WebRTCMeeting
+Employee --> UC_ManageDocs
+Employee --> UC_ViewCalendar
+Employee --> UC_ChatInternal
+Employee --> UC_Notifications
+
+Admin --> UC_ManageUsers
+Admin --> UC_ConfigSystem
+
+HR --> UC_ApproveLeave
+HR --> UC_ExportAttendance
+
+DeptHead --> UC_CreateProject
+DeptHead --> UC_ApproveLeave
+
+PM --> UC_ManageSprint
+PM --> UC_ManageKanban
+PM --> UC_AiSummary
+PM --> UC_ExportMinutes
+
+UC_WebRTCMeeting ..> UC_PreMeeting : include
+UC_AiSummary ..> UC_WebRTCMeeting : extend
+UC_ExportMinutes ..> UC_WebRTCMeeting : extend
+@enduml

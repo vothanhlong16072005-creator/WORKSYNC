@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Copy,
   Check,
@@ -9,8 +10,11 @@ import {
   MapPin,
   Laptop,
   Loader2,
+  MessageSquare,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { useAuthStore } from '@/stores/auth.store';
+import { useChatStore } from '@/features/chat/stores/chat.store';
 import { ModalShell } from './ModalShell';
 import { deptHeadApi } from '../../api/dept-head.api';
 import type { DeptHeadMemberProfile } from '../../types/dashboard.types';
@@ -32,6 +36,24 @@ export function DeptHeadMemberProfileModal({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [isStartingChat, setIsStartingChat] = useState(false);
+
+  const navigate = useNavigate();
+  const currentUser = useAuthStore((s) => s.user);
+  const startDirectChat = useChatStore((s) => s.startDirectChat);
+
+  const handleStartChat = async (targetId: string) => {
+    setIsStartingChat(true);
+    try {
+      const convId = await startDirectChat(targetId);
+      onClose();
+      navigate(`/chat/${convId}`);
+    } catch {
+      toast.error('Không thể mở cuộc trò chuyện');
+    } finally {
+      setIsStartingChat(false);
+    }
+  };
 
   useEffect(() => {
     if (!isOpen || !memberId) {
@@ -122,10 +144,21 @@ export function DeptHeadMemberProfileModal({
             </button>
 
             <div className="flex items-center gap-2">
+              {currentUser?.id !== data.id && (
+                <button
+                  type="button"
+                  onClick={() => handleStartChat(data.id)}
+                  disabled={isStartingChat}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs transition-colors shadow-xs disabled:opacity-50 cursor-pointer"
+                >
+                  <MessageSquare className="w-3.5 h-3.5" />
+                  <span>{isStartingChat ? 'Đang mở...' : 'Nhắn tin'}</span>
+                </button>
+              )}
               <button
                 type="button"
                 onClick={onClose}
-                className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-200/70 transition-colors"
+                className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-200/70 transition-colors cursor-pointer"
               >
                 Đóng
               </button>
@@ -136,7 +169,7 @@ export function DeptHeadMemberProfileModal({
                     onClose();
                     onAssignTask(data.id);
                   }}
-                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs transition-colors shadow-xs"
+                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs transition-colors shadow-xs cursor-pointer"
                 >
                   <Zap className="w-3.5 h-3.5" />
                   <span>Giao việc ngay</span>

@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import { MemberProfileModal } from '../MemberProfileModal';
 import type { ProjectMemberItem } from '../../types/project.types';
 import type { TaskDetailModalTask } from '@/features/tasks/components/TaskDetailModal';
@@ -58,14 +59,16 @@ describe('MemberProfileModal', () => {
   it('renders member profile, metrics, and assigned tasks accurately', () => {
     const onSelectTask = vi.fn();
     render(
-      <MemberProfileModal
-        isOpen={true}
-        onClose={vi.fn()}
-        member={mockMember}
-        projectName="WorkSync Enterprise"
-        memberTasks={mockTasks}
-        onSelectTask={onSelectTask}
-      />,
+      <MemoryRouter>
+        <MemberProfileModal
+          isOpen={true}
+          onClose={vi.fn()}
+          member={mockMember}
+          projectName="WorkSync Enterprise"
+          memberTasks={mockTasks}
+          onSelectTask={onSelectTask}
+        />
+      </MemoryRouter>,
     );
 
     expect(screen.getByText('Nguyễn Văn Hùng')).toBeInTheDocument();

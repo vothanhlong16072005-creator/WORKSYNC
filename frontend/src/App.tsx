@@ -21,6 +21,8 @@ import { CompanyDocumentsPage } from '@/features/documents/pages/CompanyDocument
 import { PersistentCallManager } from '@/features/meetings/components/PersistentCallManager';
 import { WorkCalendarPage } from '@/features/calendar/pages/WorkCalendarPage';
 import { ChatPage } from '@/features/chat/pages/ChatPage';
+import { PermissionGuard } from '@/components/layout/PermissionGuard';
+import AdminControlCenterPage from '@/features/admin/pages/AdminControlCenterPage';
 
 function App() {
   return (
@@ -77,16 +79,15 @@ function App() {
           <Route path="/chat/:conversationId" element={<ChatPage />} />
           {/* Attendance is open to ALL authenticated roles; tab-level guards run inside the page. */}
           <Route path="/attendance" element={<AttendancePage />} />
-          {/* Future route-level guards:
-            <Route
-              path="/admin"
-              element={
-                <PermissionGuard allowedRoles={['ADMIN']}>
-                  <AdminPage />
-                </PermissionGuard>
-              }
-            />
-          */}
+          {/* M12: Admin Control Center — Trung tâm quản trị toàn năng */}
+          <Route
+            path="/admin"
+            element={
+              <PermissionGuard allowedRoles={['ADMIN']}>
+                <AdminControlCenterPage />
+              </PermissionGuard>
+            }
+          />
         </Route>
 
         {/* Redirect root to dashboard */}

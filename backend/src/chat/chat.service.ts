@@ -8,7 +8,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service.js';
 import { ChatGateway } from './chat.gateway.js';
 import { NotificationsService } from '../notifications/notifications.service.js';
-import { NotificationType, ConversationType, ChatMessageType } from '@prisma/client';
+import { NotificationType, ConversationType, ChatMessageType, ProjectKind } from '@prisma/client';
 import {
   SendMessageDto,
   CreateGroupConversationDto,
@@ -45,9 +45,105 @@ export class ChatService {
   }
 
   /**
+   * Tự động đồng bộ các nhóm chat dự án cho user
+   * Đảm bảo mọi dự án TEAM mà user tham gia đều có nhóm chat tương ứng
+   */
+  async syncUserProjectConversations(userId: string): Promise<void> {
+    if (typeof this.prisma.project?.findMany !== 'function') return;
+
+    try {
+      const userProjects = await this.prisma.project.findMany({
+        where: {
+          deletedAt: null,
+          kind: ProjectKind.TEAM,
+          OR: [
+            { createdById: userId },
+            { pmId: userId },
+            { members: { some: { userId } } },
+          ],
+        },
+        include: {
+          members: { select: { userId: true } },
+        },
+      });
+
+      if (!userProjects || userProjects.length === 0) return;
+
+      const projectIds = userProjects.map((p) => p.id);
+      const existingConvs = await this.prisma.conversation.findMany({
+        where: {
+          type: ConversationType.PROJECT,
+          projectId: { in: projectIds },
+          deletedAt: null,
+        },
+        include: {
+          members: { select: { userId: true } },
+        },
+      });
+
+      const existingConvMap = new Map(existingConvs.map((c) => [c.projectId!, c]));
+
+      for (const project of userProjects) {
+        const allMemberIds = Array.from(
+          new Set([
+            ...project.members.map((m) => m.userId),
+            project.createdById,
+            ...(project.pmId ? [project.pmId] : []),
+          ]),
+        ).filter((id): id is string => Boolean(id));
+
+        const existing = existingConvMap.get(project.id);
+        if (!existing) {
+          if (typeof this.prisma.conversation?.create === 'function') {
+            await this.prisma.conversation.create({
+              data: {
+                type: ConversationType.PROJECT,
+                name: `Dự án: ${project.name}`,
+                projectId: project.id,
+                createdById: project.createdById || userId,
+                members: {
+                  create: allMemberIds.map((mId) => ({
+                    userId: mId,
+                    unreadCount: 0,
+                  })),
+                },
+                messages: {
+                  create: {
+                    senderId: project.createdById || userId,
+                    type: ChatMessageType.SYSTEM,
+                    content: `Nhóm trò chuyện cho dự án "${project.name}" đã được khởi tạo.`,
+                  },
+                },
+              },
+            });
+          }
+        } else {
+          const existingMemberIds = new Set(existing.members.map((m) => m.userId));
+          const missingMemberIds = allMemberIds.filter((id) => !existingMemberIds.has(id));
+          if (missingMemberIds.length > 0 && typeof this.prisma.conversationMember?.createMany === 'function') {
+            await this.prisma.conversationMember.createMany({
+              data: missingMemberIds.map((mId) => ({
+                conversationId: existing.id,
+                userId: mId,
+                unreadCount: 0,
+              })),
+              skipDuplicates: true,
+            });
+          }
+        }
+      }
+    } catch (err) {
+      this.logger.error(`Error syncing project conversations for user ${userId}:`, err);
+    }
+  }
+
+  /**
    * Lấy danh sách cuộc trò chuyện của người dùng kèm thông tin đối phương và trạng thái unread
    */
   async getUserConversations(userId: string, query: ConversationsQueryDto) {
+    // Tự động đồng bộ các nhóm chat của các dự án mà user đang tham gia
+    await this.syncUserProjectConversations(userId);
+
     const memberships = await this.prisma.conversationMember.findMany({
       where: {
         userId,

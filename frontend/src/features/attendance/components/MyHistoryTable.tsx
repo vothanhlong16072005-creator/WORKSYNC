@@ -5,6 +5,7 @@ import {
   Wifi,
   AlertCircle,
 } from 'lucide-react';
+import { ExportButton } from './ExportButton';
 import type { AttendanceRecord, AttendanceStatus } from '../types/attendance.types';
 
 interface MyHistoryTableProps {
@@ -172,6 +173,8 @@ export function MyHistoryTable({ records, isLoading, onFilterChange }: MyHistory
           >
             {isVi ? 'Lọc' : 'Filter'}
           </button>
+
+          <ExportButton fromDate={fromDate} toDate={toDate} />
         </div>
       </div>
 

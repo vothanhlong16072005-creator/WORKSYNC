@@ -1,0 +1,78 @@
+flowchart LR
+    classDef actorStyle fill:#EBF1F5,stroke:#002060,stroke-width:2px,color:#002060,font-weight:bold;
+    classDef ucStyle fill:#FFFFFF,stroke:#4B5563,stroke-width:1px,color:#1F2937,rx:20,ry:20;
+    classDef pkgStyle fill:#F9FAFB,stroke:#9CA3AF,stroke-width:1px,stroke-dasharray: 4 4;
+
+    Admin["Quản trị viên"]:::actorStyle
+    HR["Quản lý nhân sự"]:::actorStyle
+    DeptHead["Trưởng phòng ban"]:::actorStyle
+    PM["Quản lý dự án"]:::actorStyle
+    Emp["Nhân viên"]:::actorStyle
+
+    Admin -.->|Kế thừa quyền| Emp
+    HR -.->|Kế thừa quyền| Emp
+    DeptHead -.->|Kế thừa quyền| Emp
+    PM -.->|Kế thừa quyền| Emp
+
+    subgraph SEC1 ["Phân hệ Xác thực và Quản trị"]
+        UC_Login["Đăng nhập và bảo mật phiên"]:::ucStyle
+        UC_Users["Quản lý người dùng và phòng ban"]:::ucStyle
+        UC_Config["Cấu hình tham số IP, GPS và khóa AI"]:::ucStyle
+    end
+
+    subgraph SEC2 ["Phân hệ Điểm danh và Chuyên cần"]
+        UC_CheckIn["Điểm danh chạm một lần IP và GPS"]:::ucStyle
+        UC_Leave["Nộp đơn làm từ xa hoặc nghỉ phép"]:::ucStyle
+        UC_Approve["Phê duyệt đơn từ chuyên cần"]:::ucStyle
+        UC_ExportAtt["Xuất báo cáo chuyên cần toàn công ty"]:::ucStyle
+    end
+
+    subgraph SEC3 ["Phân hệ Quản lý Dự án và Nhiệm vụ"]
+        UC_Proj["Khởi tạo và thiết lập dự án"]:::ucStyle
+        UC_Sprint["Quản lý chu kỳ Sprint và Backlog"]:::ucStyle
+        UC_Kanban["Theo dõi và cập nhật bảng Kanban"]:::ucStyle
+        UC_Deliverable["Nộp hồ sơ nghiệm thu công việc"]:::ucStyle
+    end
+
+    subgraph SEC4 ["Phân hệ Họp trực tuyến và Trí tuệ nhân tạo"]
+        UC_PreMeet["Kiểm tra thiết bị tại phòng chuẩn bị"]:::ucStyle
+        UC_Meeting["Tổ chức họp trực tuyến WebRTC"]:::ucStyle
+        UC_AiSum["Tóm tắt biên bản họp và sinh việc bằng AI"]:::ucStyle
+        UC_ExportMin["Xuất biên bản họp Word và CSV"]:::ucStyle
+    end
+
+    subgraph SEC5 ["Phân hệ Tài liệu, Lịch biểu và Giao tiếp"]
+        UC_Docs["Soạn thảo và quản lý phiên bản tài liệu"]:::ucStyle
+        UC_Calendar["Điều phối lịch biểu và xử lý xung đột"]:::ucStyle
+        UC_Chat["Trò chuyện trực tuyến nội bộ"]:::ucStyle
+        UC_Noti["Nhận thông báo đa kênh thời gian thực"]:::ucStyle
+    end
+
+    Emp --> UC_Login
+    Emp --> UC_CheckIn
+    Emp --> UC_Leave
+    Emp --> UC_Kanban
+    Emp --> UC_Deliverable
+    Emp --> UC_Meeting
+    Emp --> UC_Docs
+    Emp --> UC_Calendar
+    Emp --> UC_Chat
+    Emp --> UC_Noti
+
+    Admin --> UC_Users
+    Admin --> UC_Config
+
+    HR --> UC_Approve
+    HR --> UC_ExportAtt
+
+    DeptHead --> UC_Proj
+    DeptHead --> UC_Approve
+
+    PM --> UC_Sprint
+    PM --> UC_Kanban
+    PM --> UC_AiSum
+    PM --> UC_ExportMin
+
+    UC_Meeting -.->|include| UC_PreMeet
+    UC_AiSum -.->|extend| UC_Meeting
+    UC_ExportMin -.->|extend| UC_Meeting

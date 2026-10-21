@@ -121,8 +121,8 @@ export class AttendanceController {
   ) {
     // PM/HR/Admin can export other users' data; EMPLOYEE only their own
     const isManager = ['ADMIN', 'HR', 'DEPARTMENT_HEAD', 'PM'].includes(user.role);
-    const targetUserId = isManager && userId ? userId : user.id;
-    const includeUserInfo = isManager && !!userId;
+    const targetUserId = isManager ? (userId || undefined) : user.id;
+    const includeUserInfo = isManager;
 
     const buffer = await this.exportService.generateExcel({
       userId: targetUserId,
@@ -146,8 +146,8 @@ export class AttendanceController {
     @Res() res?: Response,
   ) {
     const isManager = ['ADMIN', 'HR', 'DEPARTMENT_HEAD', 'PM'].includes(user.role);
-    const targetUserId = isManager && userId ? userId : user.id;
-    const includeUserInfo = isManager && !!userId;
+    const targetUserId = isManager ? (userId || undefined) : user.id;
+    const includeUserInfo = isManager;
 
     const buffer = await this.exportService.generatePDF(
       { userId: targetUserId, fromDate, toDate, includeUserInfo },

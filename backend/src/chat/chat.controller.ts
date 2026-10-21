@@ -172,18 +172,6 @@ export class ChatController {
   }
 
   /**
-   * 10. Tải hoặc xem tệp đính kèm
-   */
-  @Get('files/:filename')
-  async downloadFile(
-    @Param('filename') filename: string,
-    @Res() res: Response,
-  ) {
-    const filePath = this.chatService.getFilePath(filename);
-    res.sendFile(filePath);
-  }
-
-  /**
    * 11. Đánh dấu đã đọc
    */
   @Post('conversations/:id/read')

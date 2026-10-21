@@ -66,19 +66,30 @@ export const MessageList: React.FC = () => {
     groupedMessages.push({ date: currentDate, items: currentGroup });
   }
 
+const getFullFileUrl = (url?: string | null) => {
+  if (!url) return '';
+  if (url.startsWith('http://') || url.startsWith('https://')) return url;
+  const backendBase =
+    import.meta.env.VITE_API_URL?.replace(/\/api$/, '') ||
+    import.meta.env.VITE_API_BASE_URL?.replace(/\/api$/, '') ||
+    'http://localhost:4000';
+  return `${backendBase}${url.startsWith('/') ? '' : '/'}${url}`;
+};
+
   const renderMessageContent = (msg: ChatMessage, isOwn: boolean) => {
     if (msg.type === 'FILE' && msg.fileUrl) {
       const isImg = msg.fileMime?.startsWith('image/') || /\.(png|jpe?g|gif|webp|svg)$/i.test(msg.fileName || '');
+      const fullUrl = getFullFileUrl(msg.fileUrl);
 
       if (isImg) {
         return (
           <div className="space-y-1.5">
             <div
-              onClick={() => setPreviewImage(msg.fileUrl!)}
+              onClick={() => setPreviewImage(fullUrl)}
               className="relative max-w-xs rounded-xl overflow-hidden border border-black/10 cursor-pointer group"
             >
               <img
-                src={msg.fileUrl}
+                src={fullUrl}
                 alt={msg.fileName || 'Ảnh'}
                 className="w-full max-h-60 object-cover transition-transform group-hover:scale-105"
                 loading="lazy"
@@ -99,9 +110,10 @@ export const MessageList: React.FC = () => {
       // Other documents / zip / pdf
       return (
         <a
-          href={msg.fileUrl}
+          href={fullUrl}
           target="_blank"
           rel="noopener noreferrer"
+          download={msg.fileName || true}
           className={`flex items-center gap-3 p-2.5 rounded-xl transition-colors ${
             isOwn
               ? 'bg-blue-700/60 hover:bg-blue-700 text-white'

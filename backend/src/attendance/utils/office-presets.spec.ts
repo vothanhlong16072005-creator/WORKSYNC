@@ -19,7 +19,7 @@ describe('office-presets', () => {
         expect(office.lat).toBeLessThan(90);
         expect(office.lng).toBeGreaterThan(-180);
         expect(office.lng).toBeLessThan(180);
-        expect(office.radiusMeters).toBe(500);
+        expect(office.radiusMeters).toBe(100);
         expect(office.buildingSvg).toMatch(/^\/office-buildings\//);
       }
     });

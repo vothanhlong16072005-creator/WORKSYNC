@@ -37,6 +37,7 @@ Thumbs.db
 restore-points/
 .tempmediaStorage/
 *.log
+scratch/
 backend/uploads/*
 !backend/uploads/**/.gitkeep
 
