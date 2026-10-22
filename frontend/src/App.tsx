@@ -49,6 +49,7 @@ function App() {
         <Route path="/register" element={<RegisterPage />} />
         
         {/* Standalone Video Room & Pre-Meeting Setup (Full Screen) */}
+        <Route path="/meetings/:id" element={<PreMeetingPage />} />
         <Route path="/meetings/:id/prepare" element={<PreMeetingPage />} />
         <Route path="/meetings/:id/room" element={<MeetingRoomPage />} />
 

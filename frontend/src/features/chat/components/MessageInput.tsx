@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Paperclip, Smile, X, CornerDownRight } from 'lucide-react';
+import { Send, Paperclip, Smile, X, CornerDownRight, Image as ImageIcon, Loader2 } from 'lucide-react';
 import { useChatStore } from '../stores/chat.store';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
@@ -11,6 +11,7 @@ export const MessageInput: React.FC = () => {
   const [content, setContent] = useState('');
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -62,6 +63,28 @@ export const MessageInput: React.FC = () => {
     }
   };
 
+  const handlePaste = async (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      if (item.type.startsWith('image/')) {
+        e.preventDefault();
+        const file = item.getAsFile();
+        if (file) {
+          if (file.size > 25 * 1024 * 1024) {
+            toast.error('Kích thước ảnh không được vượt quá 25MB');
+            return;
+          }
+          toast.info(t('chat.uploading_pasted_image', 'Đang gửi hình ảnh từ clipboard...'));
+          await sendFileMessage(file);
+          return;
+        }
+      }
+    }
+  };
+
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -73,6 +96,7 @@ export const MessageInput: React.FC = () => {
 
     await sendFileMessage(file);
     if (fileInputRef.current) fileInputRef.current.value = '';
+    if (imageInputRef.current) imageInputRef.current.value = '';
   };
 
   const handleInsertEmoji = (emoji: string) => {
@@ -126,17 +150,36 @@ export const MessageInput: React.FC = () => {
         ref={fileInputRef}
         onChange={handleFileChange}
         className="hidden"
-        accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.zip,.txt"
+        accept=".pdf,.doc,.docx,.xls,.xlsx,.zip,.txt"
+      />
+
+      {/* Hidden Image Input */}
+      <input
+        type="file"
+        ref={imageInputRef}
+        onChange={handleFileChange}
+        className="hidden"
+        accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml"
       />
 
       <div className="flex items-end gap-2">
-        {/* Attachment & Emoji Action buttons */}
+        {/* Attachment, Image & Emoji Action buttons */}
         <div className="flex items-center gap-0.5 pb-1">
+          <button
+            type="button"
+            onClick={() => imageInputRef.current?.click()}
+            disabled={isSending}
+            title={t('chat.attach_image', 'Gửi hình ảnh (PNG, JPG, GIF, WebP)')}
+            className="p-2 rounded-xl text-slate-500 hover:text-blue-600 hover:bg-blue-50 transition-colors cursor-pointer disabled:opacity-50"
+          >
+            <ImageIcon className="w-4 h-4" />
+          </button>
+
           <button
             type="button"
             onClick={() => fileInputRef.current?.click()}
             disabled={isSending}
-            title={t('chat.attach_file', 'Đính kèm tệp tin (Tối đa 25MB)')}
+            title={t('chat.attach_file', 'Đính kèm tài liệu (PDF, Word, Excel, Zip)')}
             className="p-2 rounded-xl text-slate-500 hover:text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer disabled:opacity-50"
           >
             <Paperclip className="w-4 h-4" />
@@ -161,7 +204,8 @@ export const MessageInput: React.FC = () => {
             value={content}
             onChange={handleTextChange}
             onKeyDown={handleKeyDown}
-            placeholder={t('chat.type_message', 'Nhập tin nhắn... (Nhấn Enter để gửi, Shift+Enter xuống dòng)')}
+            onPaste={handlePaste}
+            placeholder={t('chat.type_message', 'Nhập tin nhắn... (Nhấn Enter để gửi, dán ảnh Ctrl+V)')}
             rows={1}
             className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200/90 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:bg-white resize-none transition-all max-h-32 leading-relaxed"
             style={{ minHeight: '44px' }}
@@ -175,9 +219,9 @@ export const MessageInput: React.FC = () => {
             onClick={handleSend}
             disabled={!content.trim() || isSending}
             title={t('chat.send', 'Gửi tin nhắn')}
-            className="p-2.5 rounded-xl bg-blue-600 text-white hover:bg-blue-700 active:scale-95 transition-all shadow-xs disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-blue-600 cursor-pointer"
+            className="p-2.5 rounded-xl bg-blue-600 text-white hover:bg-blue-700 active:scale-95 transition-all shadow-xs disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-blue-600 cursor-pointer flex items-center justify-center min-w-[38px] min-h-[38px]"
           >
-            <Send className="w-4 h-4" />
+            {isSending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
           </button>
         </div>
       </div>

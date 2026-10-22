@@ -5,6 +5,7 @@ import { useAuthStore } from '@/stores/auth.store';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { toast } from 'sonner';
+import { API_BASE_URL } from '@/lib/api-client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -50,7 +51,7 @@ export default function LoginPage() {
     e.preventDefault();
     setIsLoading(true);
     try {
-      const response = await axios.post('http://localhost:4000/api/auth/login', {
+      const response = await axios.post(`${API_BASE_URL}/auth/login`, {
         email: email.trim(),
         password,
       });
@@ -194,7 +195,7 @@ export default function LoginPage() {
                 type="button" 
                 variant="outline" 
                 className="h-12 w-full rounded-none border-2 border-white bg-white font-bold uppercase text-slate-900 shadow-[4px_4px_0px_0px_#fff] transition-all duration-200 hover:bg-slate-100 hover:translate-x-1 hover:translate-y-1 hover:shadow-none active:scale-[0.98]"
-                onClick={() => window.location.href = 'http://localhost:4000/api/auth/google'}
+                onClick={() => window.location.href = `${API_BASE_URL}/auth/google`}
               >
                 <svg className="mr-3 h-5 w-5" aria-hidden="true" focusable="false" data-prefix="fab" data-icon="google" role="img" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 488 512">
                   <path fill="#EA4335" d="M248 8C111 8 0 119 0 256s111 248 248 248c143 0 240-101 240-248 0-16-2-32-5-48H248v92h140c-6 33-25 61-53 80l84 65c49-45 77-111 77-189 0-148-111-248-248-248z" opacity="0"></path>

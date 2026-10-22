@@ -14,6 +14,8 @@ import {
   Users,
   Home,
   Shield,
+  FileText,
+  Plus,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuthStore, type UserRole } from '@/stores/auth.store';
@@ -40,6 +42,9 @@ import { AttendanceCompanyView } from './AttendanceCompanyView';
 import { AttendanceSettingsView } from './AttendanceSettingsView';
 import { EnterpriseFooter } from '@/features/dashboard/components/widgets/EnterpriseFooter';
 import { PermissionGuard } from '@/components/layout/PermissionGuard';
+import { DailyReportModal } from '@/features/daily-reports/components/DailyReportModal';
+import { MyDailyReportsList } from '@/features/daily-reports/components/MyDailyReportsList';
+import { DailyReportTeamView } from '@/features/daily-reports/components/DailyReportTeamView';
 
 type TabKey =
   | 'today'
@@ -47,6 +52,7 @@ type TabKey =
   | 'stats'
   | 'history'
   | 'my-requests'
+  | 'daily-reports'
   | 'team'
   | 'company'
   | 'settings'
@@ -123,6 +129,8 @@ export function AttendancePage() {
   const [isOvertimeModalOpen, setIsOvertimeModalOpen] = useState(false);
   const [isBreakActive, setIsBreakActive] = useState(false);
   const [isBreakLoading, setIsBreakLoading] = useState(false);
+  const [isDailyReportModalOpen, setIsDailyReportModalOpen] = useState(false);
+  const [dailyReportSubTab, setDailyReportSubTab] = useState<'mine' | 'team'>('mine');
 
   const {
     todayRecord,
@@ -277,6 +285,12 @@ export function AttendancePage() {
                   icon={<Users2 className="w-3.5 h-3.5" />}
                   label={isVi ? 'Quân số dự án' : 'Team Roster'}
                 />
+                <TabButton
+                  active={activeTab === 'daily-reports'}
+                  onClick={() => setActiveTab('daily-reports')}
+                  icon={<FileText className="w-3.5 h-3.5" />}
+                  label={isVi ? 'Báo cáo ngày' : 'Daily Reports'}
+                />
                 {/* Bauhaus Separator + Prominently Visible My Attendance Tab */}
                 <div className="h-4 w-px bg-slate-300 mx-1.5 self-center" />
                 <button
@@ -322,6 +336,12 @@ export function AttendancePage() {
                   icon={<Users2 className="w-3.5 h-3.5" />}
                   label={isVi ? 'Quân số dự án' : 'Team Roster'}
                 />
+                <TabButton
+                  active={activeTab === 'daily-reports'}
+                  onClick={() => setActiveTab('daily-reports')}
+                  icon={<FileText className="w-3.5 h-3.5" />}
+                  label={isVi ? 'Báo cáo ngày' : 'Daily Reports'}
+                />
                 {/* Bauhaus Separator + Prominently Visible My Attendance Tab */}
                 <div className="h-4 w-px bg-slate-300 mx-1.5 self-center" />
                 <button
@@ -355,6 +375,12 @@ export function AttendancePage() {
                   icon={<Users2 className="w-3.5 h-3.5" />}
                   label={isVi ? 'Quân số phòng ban' : 'Department Roster'}
                 />
+                <TabButton
+                  active={activeTab === 'daily-reports'}
+                  onClick={() => setActiveTab('daily-reports')}
+                  icon={<FileText className="w-3.5 h-3.5" />}
+                  label={isVi ? 'Báo cáo ngày' : 'Daily Reports'}
+                />
                 {/* Bauhaus Separator + Prominently Visible My Attendance Tab */}
                 <div className="h-4 w-px bg-slate-300 mx-1.5 self-center" />
                 <button
@@ -379,6 +405,12 @@ export function AttendancePage() {
                   onClick={() => setActiveTab('team')}
                   icon={<Users2 className="w-3.5 h-3.5" />}
                   label={isVi ? 'Hiện diện Nhóm dự án' : 'Team Attendance'}
+                />
+                <TabButton
+                  active={activeTab === 'daily-reports'}
+                  onClick={() => setActiveTab('daily-reports')}
+                  icon={<FileText className="w-3.5 h-3.5" />}
+                  label={isVi ? 'Báo cáo ngày' : 'Daily Reports'}
                 />
                 {/* Bauhaus Separator + Prominently Visible My Attendance Tab */}
                 <div className="h-4 w-px bg-slate-300 mx-1.5 self-center" />
@@ -431,6 +463,12 @@ export function AttendancePage() {
                   label={isVi ? 'Đơn của tôi' : 'My Requests'}
                   badge={myWfh.length + myLeaves.length}
                   badgeColor="slate"
+                />
+                <TabButton
+                  active={activeTab === 'daily-reports'}
+                  onClick={() => setActiveTab('daily-reports')}
+                  icon={<FileText className="w-3.5 h-3.5" />}
+                  label={isVi ? 'Báo cáo ngày' : 'Daily Reports'}
                 />
               </>
             )}
@@ -504,7 +542,7 @@ export function AttendancePage() {
       )}
 
       {/* Sub-navigation for Managers/Admins when viewing Personal Mode */}
-      {isManagerOrAdmin && (activeTab === 'today' || activeTab === 'history' || activeTab === 'my-requests' || activeTab === 'heatmap' || activeTab === 'stats') && (
+      {isManagerOrAdmin && (activeTab === 'today' || activeTab === 'history' || activeTab === 'my-requests' || activeTab === 'heatmap' || activeTab === 'stats' || activeTab === 'daily-reports') && (
         <div className="flex flex-wrap items-center justify-between gap-3 p-3 rounded-2xl border border-blue-200/70 bg-blue-50/30">
           <div className="flex items-center gap-2">
             <span className="w-2.5 h-2.5 rounded-full bg-blue-600 animate-pulse" />
@@ -553,6 +591,14 @@ export function AttendancePage() {
             >
               {isVi ? 'Thống kê' : 'Stats'}
             </button>
+            <button
+              onClick={() => setActiveTab('daily-reports')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                activeTab === 'daily-reports' ? 'bg-blue-600 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              {isVi ? 'Báo cáo ngày' : 'Daily Reports'}
+            </button>
           </div>
         </div>
       )}
@@ -564,6 +610,7 @@ export function AttendancePage() {
           <TodayStatusBanner
             onOpenWfhModal={() => setIsWfhModalOpen(true)}
             onOpenLeaveModal={() => setIsLeaveModalOpen(true)}
+            onOpenDailyReportModal={() => setIsDailyReportModalOpen(true)}
           />
 
           {/* 2. Today Timeline (Work Shift Visual Progress & Live Ticking) */}
@@ -575,8 +622,8 @@ export function AttendancePage() {
             status={todayRecord?.status ?? history[0]?.status}
           />
 
-          {/* 3. Quick Action Buttons Row (Early Leave + OT + Break) */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          {/* 3. Quick Action Buttons Row (Early Leave + OT + Break + Daily Report) */}
+          <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
             {/* Early Leave */}
             <button
               onClick={() => setIsEarlyLeaveModalOpen(true)}
@@ -670,6 +717,24 @@ export function AttendancePage() {
                 </p>
               </div>
             </button>
+
+            {/* Daily Report */}
+            <button
+              onClick={() => setIsDailyReportModalOpen(true)}
+              className="flex items-center gap-3 p-4 rounded-2xl border border-indigo-200/80 bg-indigo-50/60 hover:bg-indigo-50 hover:border-indigo-300 hover:shadow-sm transition-all group text-left cursor-pointer"
+            >
+              <div className="w-10 h-10 rounded-xl bg-indigo-100 text-indigo-600 flex items-center justify-center group-hover:scale-110 transition-transform shrink-0">
+                <FileText className="w-5 h-5" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-bold text-slate-900 truncate">
+                  {isVi ? 'Báo cáo ngày' : 'Daily Report'}
+                </p>
+                <p className="text-[11px] text-slate-500 font-medium truncate">
+                  {isVi ? 'Tổng hợp 4 nguồn tự động' : 'Auto 4-source prefilled'}
+                </p>
+              </div>
+            </button>
           </div>
 
           {/* 4. Core Double Column: Left (Leave Balance + Policy) vs Right (Interactive Map) */}
@@ -756,6 +821,51 @@ export function AttendancePage() {
         />
       )}
 
+      {/* Tab: Daily Reports (Báo cáo ngày) */}
+      {activeTab === 'daily-reports' && (
+        <div className="space-y-4">
+          {isManagerOrAdmin && (
+            <div className="flex flex-wrap items-center justify-between gap-3 bg-white p-3 rounded-2xl border border-slate-200/80 shadow-2xs">
+              <div className="flex items-center p-1 bg-slate-100 rounded-xl">
+                <button
+                  onClick={() => setDailyReportSubTab('mine')}
+                  className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    dailyReportSubTab === 'mine'
+                      ? 'bg-white text-blue-600 shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  {isVi ? 'Báo cáo của tôi' : 'My Reports'}
+                </button>
+                <button
+                  onClick={() => setDailyReportSubTab('team')}
+                  className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    dailyReportSubTab === 'team'
+                      ? 'bg-white text-blue-600 shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  {isVi ? 'Ma trận đội ngũ (Tuần)' : 'Team Weekly Matrix'}
+                </button>
+              </div>
+
+              <button
+                onClick={() => setIsDailyReportModalOpen(true)}
+                className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs"
+              >
+                <Plus className="w-3.5 h-3.5" /> {isVi ? 'Viết báo cáo' : 'New Report'}
+              </button>
+            </div>
+          )}
+
+          {(!isManagerOrAdmin || dailyReportSubTab === 'mine') ? (
+            <MyDailyReportsList />
+          ) : (
+            <DailyReportTeamView />
+          )}
+        </div>
+      )}
+
       {/* Tab: Approvals (ADMIN, HR, DEPARTMENT_HEAD only — PM does not approve) */}
       {activeTab === 'approvals' && isApprover && (
         <ApprovalQueueView
@@ -812,6 +922,11 @@ export function AttendancePage() {
       <OvertimeRequestModal
         isOpen={isOvertimeModalOpen}
         onClose={() => setIsOvertimeModalOpen(false)}
+      />
+      <DailyReportModal
+        isOpen={isDailyReportModalOpen}
+        onClose={() => setIsDailyReportModalOpen(false)}
+        onSuccess={() => fetchHistory()}
       />
     </div>
   );

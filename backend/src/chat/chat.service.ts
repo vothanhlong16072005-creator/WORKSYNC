@@ -643,6 +643,16 @@ export class ChatService {
         ? `[Tệp] ${dto.fileName || 'Tệp đính kèm'}`
         : dto.content;
 
+    // Resolve sender's display name defensively
+    let senderName = sender.name;
+    if (!senderName) {
+      const userRecord = await this.prisma.user.findUnique({
+        where: { id: sender.id },
+        select: { name: true },
+      });
+      senderName = userRecord?.name || 'Đồng nghiệp';
+    }
+
     // Cập nhật Conversation
     await this.prisma.conversation.update({
       where: { id: conversationId },
@@ -650,7 +660,7 @@ export class ChatService {
         lastMessageText: previewText,
         lastMessageAt: message.createdAt,
         lastSenderId: sender.id,
-        lastSenderName: sender.name,
+        lastSenderName: senderName,
       },
     });
 
@@ -691,7 +701,7 @@ export class ChatService {
             userId: m.userId,
             type: NotificationType.CHAT,
             category: 'chat.message',
-            title: `Tin nhắn từ ${sender.name}`,
+            title: `Tin nhắn từ ${senderName}`,
             body: previewText.length > 80 ? `${previewText.slice(0, 77)}...` : previewText,
             data: {
               conversationId,

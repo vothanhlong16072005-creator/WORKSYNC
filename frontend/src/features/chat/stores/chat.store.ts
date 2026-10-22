@@ -22,6 +22,7 @@ interface ChatStoreState {
   typingMap: Record<string, { userId: string; userName: string }>;
   replyingTo: ChatMessage | null;
   socket: Socket | null;
+  onlineUserIds: Set<string>;
 
   // Actions
   initSocket: (token: string) => void;
@@ -59,12 +60,15 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
   typingMap: {},
   replyingTo: null,
   socket: null,
+  onlineUserIds: new Set<string>(),
 
   initSocket: (token: string) => {
     if (get().socket) return;
 
     const backendUrl =
-      import.meta.env.VITE_API_URL?.replace(/\/api$/, '') || 'http://localhost:4000';
+      import.meta.env.VITE_WS_URL ||
+      import.meta.env.VITE_API_URL?.replace(/\/api$/, '') ||
+      'http://localhost:4000';
 
     const socket = io(`${backendUrl}/chat`, {
       auth: { token },
@@ -165,10 +169,48 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
       });
     });
 
-    socket.on('presence:update', (data: { userId: string; status: 'ONLINE' | 'OFFLINE' }) => {
-      const { conversations } = get();
-      const isOnline = data.status === 'ONLINE';
+    socket.on('presence:init', (data: { onlineUserIds: string[] }) => {
+      const onlineSet = new Set(data.onlineUserIds || []);
+      const { conversations, activeConversation } = get();
       set({
+        onlineUserIds: onlineSet,
+        conversations: conversations.map((c) => {
+          if (c.type === 'DIRECT' && c.otherUser?.id) {
+            const isOnline = onlineSet.has(c.otherUser.id);
+            return {
+              ...c,
+              isOnline,
+              otherUser: { ...c.otherUser, isOnline },
+            };
+          }
+          return c;
+        }),
+        activeConversation:
+          activeConversation && activeConversation.type === 'DIRECT' && activeConversation.otherUser?.id
+            ? {
+                ...activeConversation,
+                isOnline: onlineSet.has(activeConversation.otherUser.id),
+                otherUser: {
+                  ...activeConversation.otherUser,
+                  isOnline: onlineSet.has(activeConversation.otherUser.id),
+                },
+              }
+            : activeConversation,
+      });
+    });
+
+    socket.on('presence:update', (data: { userId: string; status: 'ONLINE' | 'OFFLINE' }) => {
+      const isOnline = data.status === 'ONLINE';
+      const { conversations, activeConversation, onlineUserIds } = get();
+      const nextSet = new Set(onlineUserIds);
+      if (isOnline) {
+        nextSet.add(data.userId);
+      } else {
+        nextSet.delete(data.userId);
+      }
+
+      set({
+        onlineUserIds: nextSet,
         conversations: conversations.map((c) => {
           if (c.type === 'DIRECT' && c.otherUser?.id === data.userId) {
             return {
@@ -179,6 +221,14 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
           }
           return c;
         }),
+        activeConversation:
+          activeConversation && activeConversation.type === 'DIRECT' && activeConversation.otherUser?.id === data.userId
+            ? {
+                ...activeConversation,
+                isOnline,
+                otherUser: { ...activeConversation.otherUser, isOnline },
+              }
+            : activeConversation,
       });
     });
 
@@ -189,19 +239,30 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
     const { socket } = get();
     if (socket) {
       socket.disconnect();
-      set({ socket: null });
+      set({ socket: null, onlineUserIds: new Set<string>() });
     }
   },
 
   fetchConversations: async () => {
     set({ isLoadingConversations: true });
     try {
-      const { activeFilter, searchQuery } = get();
+      const { activeFilter, searchQuery, onlineUserIds } = get();
       const data = await chatApi.getConversations({
         type: activeFilter,
         search: searchQuery || undefined,
       });
-      set({ conversations: data, isLoadingConversations: false });
+      const mapped = data.map((c) => {
+        if (c.type === 'DIRECT' && c.otherUser?.id) {
+          const isOnline = onlineUserIds.has(c.otherUser.id);
+          return {
+            ...c,
+            isOnline,
+            otherUser: { ...c.otherUser, isOnline },
+          };
+        }
+        return c;
+      });
+      set({ conversations: mapped, isLoadingConversations: false });
     } catch (err: unknown) {
       console.error('Failed to fetch conversations:', err);
       set({ isLoadingConversations: false });
@@ -211,12 +272,22 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
   setActiveConversation: async (conv) => {
     const prevConv = get().activeConversation;
     const socket = get().socket;
+    const { onlineUserIds } = get();
 
     if (prevConv && socket) {
       socket.emit('leave_conversation', { conversationId: prevConv.id });
     }
 
-    set({ activeConversation: conv, messages: [], replyingTo: null });
+    const resolvedConv =
+      conv && conv.type === 'DIRECT' && conv.otherUser?.id
+        ? {
+            ...conv,
+            isOnline: onlineUserIds.has(conv.otherUser.id),
+            otherUser: { ...conv.otherUser, isOnline: onlineUserIds.has(conv.otherUser.id) },
+          }
+        : conv;
+
+    set({ activeConversation: resolvedConv, messages: [], replyingTo: null });
 
     if (conv) {
       if (socket) {

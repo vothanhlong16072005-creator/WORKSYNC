@@ -19,6 +19,7 @@ import type { AttendanceStatus } from '../types/attendance.types';
 interface TodayStatusBannerProps {
   onOpenWfhModal: () => void;
   onOpenLeaveModal: () => void;
+  onOpenDailyReportModal?: () => void;
 }
 
 const STATUS_CONFIG: Record<
@@ -90,7 +91,11 @@ const STATUS_CONFIG: Record<
   },
 };
 
-export function TodayStatusBanner({ onOpenWfhModal, onOpenLeaveModal }: TodayStatusBannerProps) {
+export function TodayStatusBanner({
+  onOpenWfhModal,
+  onOpenLeaveModal,
+  onOpenDailyReportModal,
+}: TodayStatusBannerProps) {
   const { i18n } = useTranslation();
   const isVi = i18n.language.startsWith('vi');
   const [time, setTime] = useState(new Date());
@@ -151,6 +156,7 @@ export function TodayStatusBanner({ onOpenWfhModal, onOpenLeaveModal }: TodaySta
     try {
       await checkOut({});
       toast.success(isVi ? 'Check-out thành công!' : 'Checked out successfully!');
+      onOpenDailyReportModal?.();
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Lỗi tan ca'));
     }
@@ -273,10 +279,21 @@ export function TodayStatusBanner({ onOpenWfhModal, onOpenLeaveModal }: TodaySta
             </div>
           )}
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            {onOpenDailyReportModal && (
+              <button
+                onClick={onOpenDailyReportModal}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:from-blue-700 hover:to-indigo-700 font-bold text-xs shadow-xs transition-all cursor-pointer"
+                title="Báo cáo công việc cuối ngày"
+              >
+                <FileText className="w-4 h-4" />
+                <span>{isVi ? 'Báo cáo ngày' : 'Daily Report'}</span>
+              </button>
+            )}
+
             <button
               onClick={onOpenWfhModal}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 font-bold text-xs transition-colors"
+              className="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 font-bold text-xs transition-colors cursor-pointer"
             >
               <Home className="w-4 h-4 text-blue-600" />
               <span>{isVi ? 'Xin WFH' : 'Request WFH'}</span>
@@ -284,7 +301,7 @@ export function TodayStatusBanner({ onOpenWfhModal, onOpenLeaveModal }: TodaySta
 
             <button
               onClick={onOpenLeaveModal}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 font-bold text-xs transition-colors"
+              className="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 font-bold text-xs transition-colors cursor-pointer"
             >
               <FileText className="w-4 h-4 text-amber-600" />
               <span>{isVi ? 'Nghỉ phép' : 'Leave Request'}</span>

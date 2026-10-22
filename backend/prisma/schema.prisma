@@ -181,6 +181,7 @@ enum NotificationType {
   TASK
   SYSTEM
   CHAT
+  DAILY_REPORT
 }
 
 enum ConversationType {
@@ -844,11 +845,16 @@ model DailyReport {
   blockers        String?
   plannedTomorrow String?
   aiDrafted       Boolean   @default(false)
+  isLocked        Boolean   @default(false)
+  lateSubmission  Boolean   @default(false)
   submittedAt     DateTime?
+  submittedById   String?
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
   @@unique([userId, date])
+  @@index([date])
+  @@index([userId, date])
 }
 
 model Notification {

@@ -16,6 +16,7 @@ import { DocumentsModule } from './documents/documents.module.js';
 import { CalendarModule } from './calendar/calendar.module.js';
 import { ChatModule } from './chat/chat.module.js';
 import { AdminModule } from './admin/admin.module.js';
+import { DailyReportsModule } from './daily-reports/daily-reports.module.js';
 
 @Module({
   imports: [
@@ -34,6 +35,7 @@ import { AdminModule } from './admin/admin.module.js';
     CalendarModule,
     ChatModule,
     AdminModule,
+    DailyReportsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

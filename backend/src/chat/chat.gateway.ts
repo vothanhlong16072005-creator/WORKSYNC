@@ -70,6 +70,8 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
       this.logger.debug(`[ChatSocket] User ${userId} connected socket ${client.id}`);
       this.server.emit('presence:update', { userId, status: 'ONLINE' });
+      // Send initial list of all currently connected users to this client
+      client.emit('presence:init', { onlineUserIds: this.getOnlineUserIds() });
     } catch (err: unknown) {
       const error = err as Error;
       this.logger.debug(`[ChatSocket] ${client.id} auth error: ${error.message}`);
@@ -97,6 +99,11 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   getOnlineUserIds(): string[] {
     return Array.from(this.onlineUsers.keys());
+  }
+
+  @SubscribeMessage('presence:query')
+  handlePresenceQuery(@ConnectedSocket() client: Socket) {
+    client.emit('presence:init', { onlineUserIds: this.getOnlineUserIds() });
   }
 
   @SubscribeMessage('join_conversation')

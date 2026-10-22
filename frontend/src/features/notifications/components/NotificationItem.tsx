@@ -118,8 +118,11 @@ export const NotificationItem: React.FC<NotificationItemProps> = ({
 
     // Handle MEETING notifications
     if (notification.type === 'MEETING') {
+      const meetingId = notification.data?.meetingId;
       if (targetUrl && (targetUrl.startsWith('/meetings') || targetUrl.startsWith('/meeting'))) {
         navigate(targetUrl);
+      } else if (meetingId) {
+        navigate(`/meetings/${meetingId}/prepare`);
       } else {
         navigate('/meetings');
       }
