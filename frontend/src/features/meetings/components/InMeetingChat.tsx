@@ -59,7 +59,7 @@ export const InMeetingChat: React.FC<InMeetingChatProps> = ({
     if (!socket) return;
 
     const handleNewMessage = (msg: ChatMessage) => {
-      setMessages((prev) => [...prev, msg]);
+      setMessages((prev) => (prev.some((m) => m.id === msg.id) ? prev : [...prev, msg]));
       if (isOpen) {
         onRead?.();
       }

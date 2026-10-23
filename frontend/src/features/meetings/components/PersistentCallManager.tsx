@@ -97,6 +97,7 @@ const ActiveCallSession: React.FC<ActiveCallSessionProps> = ({
   const [audioEnabled, setAudioEnabled] = useState(true);
   const [videoEnabled, setVideoEnabled] = useState(true);
   const [isScreenSharing, setIsScreenSharing] = useState(false);
+  const [localScreenStream, setLocalScreenStream] = useState<MediaStream | null>(null);
   const screenStreamRef = useRef<MediaStream | null>(null);
   const toggleScreenShareRef = useRef<() => Promise<void>>(async () => {});
 
@@ -105,6 +106,11 @@ const ActiveCallSession: React.FC<ActiveCallSessionProps> = ({
 
   // Side drawers & Chat state
   const [isChatOpen, setIsChatOpen] = useState(false);
+  const isChatOpenRef = useRef(isChatOpen);
+  useEffect(() => {
+    isChatOpenRef.current = isChatOpen;
+  }, [isChatOpen]);
+
   const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
   const [chatUnread, setChatUnread] = useState(0);
 
@@ -134,7 +140,7 @@ const ActiveCallSession: React.FC<ActiveCallSessionProps> = ({
       avatar: user?.avatar,
     },
     localCamStream: localStream,
-    localScreenStream: screenStreamRef.current,
+    localScreenStream: localScreenStream,
   });
 
   // ICE Candidates Buffer
@@ -508,9 +514,15 @@ const ActiveCallSession: React.FC<ActiveCallSessionProps> = ({
     };
     socket.on('chat-history', handleChatHistory);
 
-    // 9. chat-message unread tracker
-    const handleChatMessage = () => {
-      if (!isChatOpen) {
+    // 9. chat-message tracker & unread counter (FIX BUG-5)
+    const handleChatMessage = (msg: ChatMessage) => {
+      if (msg && msg.id) {
+        setChatHistory((prev) => {
+          if (prev.some((m) => m.id === msg.id)) return prev;
+          return [...prev, msg];
+        });
+      }
+      if (!isChatOpenRef.current) {
         setChatUnread((prev) => prev + 1);
       }
     };
@@ -554,16 +566,7 @@ const ActiveCallSession: React.FC<ActiveCallSessionProps> = ({
     flushPendingCandidates,
     pcsRef,
     peers,
-    isChatOpen,
   ]);
-
-  // Sync local camera stream to local video element
-  useEffect(() => {
-    if (localVideoRef.current && localStream) {
-      localVideoRef.current.srcObject = localStream;
-      localVideoRef.current.play().catch(() => {});
-    }
-  }, [localStream, videoEnabled, isFullView]);
 
   // Audio Toggle
   const toggleAudio = () => {
@@ -595,11 +598,12 @@ const ActiveCallSession: React.FC<ActiveCallSessionProps> = ({
     });
   };
 
-  // Screen Share Toggle with Dual-Track (FIX BUG-3)
+  // Screen Share Toggle with Dual-Track (FIX BUG-3 & BUG-4)
   const toggleScreenShare = useCallback(async () => {
     if (isScreenSharing) {
       screenStreamRef.current?.getTracks().forEach((t) => t.stop());
       screenStreamRef.current = null;
+      setLocalScreenStream(null);
       setIsScreenSharing(false);
       await detachScreenShare();
       socketRef.current?.emit('media-state-changed', {
@@ -620,6 +624,7 @@ const ActiveCallSession: React.FC<ActiveCallSessionProps> = ({
       if (!screenTrack) return;
 
       screenStreamRef.current = screenStream;
+      setLocalScreenStream(screenStream);
       setIsScreenSharing(true);
 
       screenTrack.onended = () => {
@@ -670,26 +675,46 @@ const ActiveCallSession: React.FC<ActiveCallSessionProps> = ({
   const peerList = Array.from(peers.values()).filter((p) => p.userId && p.userId !== user?.id);
   const totalInRoom = peerList.length + 1;
 
-  // Stream Resolution: Presenter vs Camera (FIX BUG-4)
+  // Stream Resolution: Presenter vs Camera (FIX BUG-3 & BUG-4)
   const remotePresenter = peerList.find((p) => p.screenStream && p.isScreenSharing);
-  const localIsPresenting = isScreenSharing && Boolean(screenStreamRef.current);
+  const localIsPresenting = isScreenSharing && Boolean(screenStreamRef.current || localScreenStream);
   const isPresentingMode = localIsPresenting || Boolean(remotePresenter);
 
   const presenterStream = localIsPresenting
-    ? screenStreamRef.current
+    ? (localScreenStream ?? screenStreamRef.current)
     : remotePresenter?.screenStream ?? null;
 
   const presenterName = localIsPresenting
     ? `${user?.name || 'Tôi'} (${t('meeting_room.you', 'Bạn')})`
     : remotePresenter?.name ?? '';
 
-  // Synchronize Presenter Video Element
-  useEffect(() => {
-    if (presenterVideoRef.current && presenterStream) {
-      presenterVideoRef.current.srcObject = presenterStream;
-      presenterVideoRef.current.play().catch(() => {});
-    }
-  }, [presenterStream]);
+  // Callback ref for local video (ensures immediate binding when mounted in grid or spotlight thumbnail)
+  const setLocalVideoRef = useCallback(
+    (node: HTMLVideoElement | null) => {
+      localVideoRef.current = node;
+      if (node && localStream) {
+        if (node.srcObject !== localStream) {
+          node.srcObject = localStream;
+        }
+        node.play().catch(() => {});
+      }
+    },
+    [localStream],
+  );
+
+  // Callback ref for presenter video (ensures immediate binding on restore from minimize or mode switch)
+  const setPresenterVideoRef = useCallback(
+    (node: HTMLVideoElement | null) => {
+      presenterVideoRef.current = node;
+      if (node && presenterStream) {
+        if (node.srcObject !== presenterStream) {
+          node.srcObject = presenterStream;
+        }
+        node.play().catch(() => {});
+      }
+    },
+    [presenterStream],
+  );
 
   // Mini Widget Stream & Video
   const miniDisplayStream = presenterStream ?? localStream;
@@ -697,9 +722,43 @@ const ActiveCallSession: React.FC<ActiveCallSessionProps> = ({
     Boolean(miniDisplayStream) &&
     (videoEnabled || isScreenSharing || Boolean(remotePresenter?.screenStream));
 
+  const setMiniVideoRef = useCallback(
+    (node: HTMLVideoElement | null) => {
+      miniVideoRef.current = node;
+      if (node && miniDisplayStream) {
+        if (node.srcObject !== miniDisplayStream) {
+          node.srcObject = miniDisplayStream;
+        }
+        node.play().catch(() => {});
+      }
+    },
+    [miniDisplayStream],
+  );
+
+  // Reactive synchronizers for elements already mounted in DOM
+  useEffect(() => {
+    if (localVideoRef.current && localStream) {
+      if (localVideoRef.current.srcObject !== localStream) {
+        localVideoRef.current.srcObject = localStream;
+      }
+      localVideoRef.current.play().catch(() => {});
+    }
+  }, [localStream, videoEnabled, isFullView]);
+
+  useEffect(() => {
+    if (presenterVideoRef.current && presenterStream) {
+      if (presenterVideoRef.current.srcObject !== presenterStream) {
+        presenterVideoRef.current.srcObject = presenterStream;
+      }
+      presenterVideoRef.current.play().catch(() => {});
+    }
+  }, [presenterStream, isFullView]);
+
   useEffect(() => {
     if (miniVideoRef.current && miniDisplayStream) {
-      miniVideoRef.current.srcObject = miniDisplayStream;
+      if (miniVideoRef.current.srcObject !== miniDisplayStream) {
+        miniVideoRef.current.srcObject = miniDisplayStream;
+      }
       miniVideoRef.current.play().catch(() => {});
     }
   }, [miniDisplayStream, isFullView]);
@@ -729,7 +788,7 @@ const ActiveCallSession: React.FC<ActiveCallSessionProps> = ({
         <div className="relative w-full h-44 bg-slate-900 flex items-center justify-center overflow-hidden">
           {miniShowVideo && miniDisplayStream ? (
             <video
-              ref={miniVideoRef}
+              ref={setMiniVideoRef}
               autoPlay
               muted={!remotePresenter}
               playsInline
@@ -855,23 +914,27 @@ const ActiveCallSession: React.FC<ActiveCallSessionProps> = ({
         </div>
       </div>
 
-      {/* Main Body: Video Grid Area */}
-      <div className="flex-1 flex overflow-hidden relative p-4 gap-4">
+      {/* Main Body: Video Grid / Theater Area (FIX BUG-1, BUG-2, BUG-3) */}
+      <div
+        className={`flex-1 flex overflow-hidden relative ${
+          isPresentingMode ? 'p-2 sm:p-3 bg-slate-950 gap-3' : 'p-4 gap-4 bg-slate-50'
+        }`}
+      >
         {/* Video Content Container */}
         <div className="flex-1 flex flex-col h-full overflow-hidden">
-          {/* A) SCREEN SHARE SPOTLIGHT MODE (FIX BUG-3 & BUG-4) */}
+          {/* A) SCREEN SHARE THEATER MODE (Full Screen Presentation Layout) */}
           {isPresentingMode && presenterStream ? (
-            <div className="flex-1 flex flex-col lg:flex-row gap-4 h-full overflow-hidden">
+            <div className="flex-1 flex flex-col lg:flex-row gap-3 h-full w-full overflow-hidden">
               {/* Main Presenter Spotlight Tile */}
-              <div className="flex-1 h-full min-h-[380px] bg-slate-950 rounded-2xl overflow-hidden border-2 border-blue-500 shadow-md flex items-center justify-center relative">
+              <div className="flex-1 h-full w-full min-h-0 bg-black rounded-2xl overflow-hidden border border-slate-800 shadow-2xl flex items-center justify-center relative">
                 <video
-                  ref={presenterVideoRef}
+                  ref={setPresenterVideoRef}
                   autoPlay
                   muted={localIsPresenting}
                   playsInline
-                  className="w-full h-full object-contain bg-slate-950"
+                  className="w-full h-full object-contain bg-black"
                 />
-                <div className="absolute bottom-3 left-3 flex items-center gap-2 bg-black/70 backdrop-blur-md px-3 py-1.5 rounded-xl text-xs font-semibold text-white">
+                <div className="absolute bottom-3 left-3 flex items-center gap-2 bg-slate-900/80 backdrop-blur-md px-3 py-1.5 rounded-xl text-xs font-semibold text-white border border-slate-700/60 shadow-lg">
                   <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
                   <span>
                     {localIsPresenting
@@ -884,29 +947,29 @@ const ActiveCallSession: React.FC<ActiveCallSessionProps> = ({
               </div>
 
               {/* Side Camera Thumbnails Strip (Dual-Track Camera Tiles) */}
-              <div className="w-full lg:w-56 flex lg:flex-col gap-3 overflow-y-auto shrink-0">
+              <div className="w-full lg:w-60 flex lg:flex-col gap-2.5 overflow-y-auto shrink-0 pb-1">
                 {/* Local Camera Tile (Thumbnail) */}
-                <div className="relative w-44 lg:w-full aspect-video bg-white rounded-xl overflow-hidden border border-slate-200 shadow-xs flex items-center justify-center shrink-0">
+                <div className="relative w-44 lg:w-full aspect-video bg-slate-900 rounded-xl overflow-hidden border border-slate-800 shadow-sm flex items-center justify-center shrink-0">
                   <video
-                    ref={localVideoRef}
+                    ref={setLocalVideoRef}
                     autoPlay
                     muted
                     playsInline
-                    className={`w-full h-full object-contain bg-slate-900 ${
+                    className={`w-full h-full object-contain bg-slate-950 ${
                       videoEnabled ? 'block' : 'hidden'
                     }`}
                   />
                   {!videoEnabled && (
                     <div className="flex flex-col items-center justify-center p-2 text-center">
-                      <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs font-bold">
+                      <div className="w-8 h-8 rounded-full bg-slate-800 text-blue-400 border border-slate-700 flex items-center justify-center text-xs font-bold">
                         {user?.name?.charAt(0) || 'U'}
                       </div>
-                      <span className="text-[10px] font-semibold text-slate-700 mt-1 truncate max-w-[100px]">
+                      <span className="text-[10px] font-semibold text-slate-300 mt-1 truncate max-w-[120px]">
                         {user?.name} ({t('meeting_room.you', 'Bạn')})
                       </span>
                     </div>
                   )}
-                  <div className="absolute bottom-1.5 left-1.5 bg-black/60 px-1.5 py-0.5 rounded text-[10px] text-white">
+                  <div className="absolute bottom-1.5 left-1.5 bg-black/70 backdrop-blur-xs px-2 py-0.5 rounded text-[10px] text-white font-medium border border-white/10">
                     {user?.name?.split(' ')[0]} ({t('meeting_room.you', 'Bạn')})
                   </div>
                 </div>
@@ -915,7 +978,7 @@ const ActiveCallSession: React.FC<ActiveCallSessionProps> = ({
                 {peerList.map((p) => (
                   <div
                     key={p.socketId}
-                    className="relative w-44 lg:w-full aspect-video bg-white rounded-xl overflow-hidden border border-slate-200 shadow-xs flex items-center justify-center shrink-0"
+                    className="relative w-44 lg:w-full aspect-video bg-slate-900 rounded-xl overflow-hidden border border-slate-800 shadow-sm flex items-center justify-center shrink-0"
                   >
                     <RemoteVideoTile
                       peer={p}
@@ -942,7 +1005,7 @@ const ActiveCallSession: React.FC<ActiveCallSessionProps> = ({
               {/* Local User Tile */}
               <div className="relative w-full aspect-video max-h-[480px] bg-white rounded-2xl overflow-hidden border border-slate-200 shadow-sm flex items-center justify-center group">
                 <video
-                  ref={localVideoRef}
+                  ref={setLocalVideoRef}
                   autoPlay
                   muted
                   playsInline
@@ -1247,9 +1310,24 @@ const RemoteVideoTile: React.FC<{
   const { t } = useTranslation();
   const isVideoShowing = Boolean(stream && peer.videoEnabled);
 
+  const setVideoNode = useCallback(
+    (node: HTMLVideoElement | null) => {
+      videoRef.current = node;
+      if (node && stream) {
+        if (node.srcObject !== stream) {
+          node.srcObject = stream;
+        }
+        node.play().catch(() => {});
+      }
+    },
+    [stream],
+  );
+
   useEffect(() => {
     if (videoRef.current && stream) {
-      videoRef.current.srcObject = stream;
+      if (videoRef.current.srcObject !== stream) {
+        videoRef.current.srcObject = stream;
+      }
       videoRef.current.play().catch(() => {});
     }
   }, [stream]);
@@ -1258,7 +1336,9 @@ const RemoteVideoTile: React.FC<{
     if (!stream) return;
     const handleTrackUpdate = () => {
       if (videoRef.current && stream) {
-        videoRef.current.srcObject = stream;
+        if (videoRef.current.srcObject !== stream) {
+          videoRef.current.srcObject = stream;
+        }
         videoRef.current.play().catch(() => {});
       }
     };
@@ -1281,7 +1361,7 @@ const RemoteVideoTile: React.FC<{
       } shadow-sm flex items-center justify-center group`}
     >
       <video
-        ref={videoRef}
+        ref={setVideoNode}
         autoPlay
         playsInline
         className={`w-full h-full object-contain bg-slate-900 ${
