@@ -22,7 +22,7 @@
     "test:cov": "vitest run --coverage",
     "test:debug": "vitest --inspect-brk --no-file-parallelism",
     "test:e2e": "vitest run --config ./vitest.config.e2e.ts",
-    "seed:all": "node --experimental-strip-types prisma/seed-enterprise-full.ts && node --experimental-strip-types prisma/seed-meetings.ts && node --experimental-strip-types prisma/seed-calendar.ts && node --experimental-strip-types prisma/seed-chat.ts",
+    "seed:all": "node --experimental-strip-types prisma/seed-enterprise-full.ts && node --experimental-strip-types prisma/seed-documents.ts && node --experimental-strip-types prisma/seed-meetings.ts && node --experimental-strip-types prisma/seed-calendar.ts && node --experimental-strip-types prisma/seed-chat.ts && node --experimental-strip-types prisma/seed-notifications.ts && node --experimental-strip-types prisma/sync-all-project-chats.ts",
     "seed:enterprise": "node --experimental-strip-types prisma/seed-enterprise-full.ts",
     "seed:meetings": "node --experimental-strip-types prisma/seed-meetings.ts",
     "seed:calendar": "node --experimental-strip-types prisma/seed-calendar.ts",

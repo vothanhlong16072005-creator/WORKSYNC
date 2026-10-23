@@ -15,13 +15,55 @@ import * as bcrypt from 'bcrypt';
 
 const prisma = new PrismaClient();
 
+function getLocalDateOnly(d: Date): Date {
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return new Date(`${year}-${month}-${day}T00:00:00.000Z`);
+}
+
 async function main() {
   console.log('🚀 [SEED] Bắt đầu khởi tạo dữ liệu doanh nghiệp chuẩn 100% Real...');
 
   const passwordHash = await bcrypt.hash('Password123!', 10);
 
+  // 0. Khởi tạo Cấu hình hệ thống (SystemConfig) - FIX LỖI SYSTEM CONFIG NOT INITIALIZED
+  console.log('⚙️ [0/8] Khởi tạo Cấu hình hệ thống (SystemConfig)...');
+  await prisma.systemConfig.upsert({
+    where: { id: 'default-system-config' },
+    update: {
+      companyName: 'FPT Complex Đà Nẵng',
+      companyLogoUrl: '/logo.png',
+      timezone: 'Asia/Ho_Chi_Minh',
+      workStartTime: '08:30',
+      workEndTime: '17:30',
+      checkinStartTime: '06:00',
+      checkinEndTime: '23:59',
+      allowedIpRanges: ['127.0.0.1', '::1', '192.168.0.0/16', '10.0.0.0/8', '172.16.0.0/12', '118.69.0.0/16', '0.0.0.0/0'],
+      officeLatitude: 15.968600,
+      officeLongitude: 108.260800,
+      gpsRadiusMeters: 5000,
+      wfhAutoApproveTime: '09:30',
+    },
+    create: {
+      id: 'default-system-config',
+      companyName: 'FPT Complex Đà Nẵng',
+      companyLogoUrl: '/logo.png',
+      timezone: 'Asia/Ho_Chi_Minh',
+      workStartTime: '08:30',
+      workEndTime: '17:30',
+      checkinStartTime: '06:00',
+      checkinEndTime: '23:59',
+      allowedIpRanges: ['127.0.0.1', '::1', '192.168.0.0/16', '10.0.0.0/8', '172.16.0.0/12', '118.69.0.0/16', '0.0.0.0/0'],
+      officeLatitude: 15.968600,
+      officeLongitude: 108.260800,
+      gpsRadiusMeters: 5000,
+      wfhAutoApproveTime: '09:30',
+    },
+  });
+
   // 1. Khởi tạo 5 Phòng ban (Departments)
-  console.log('🏢 [1/6] Tạo danh mục Phòng ban doanh nghiệp...');
+  console.log('🏢 [1/8] Tạo danh mục Phòng ban doanh nghiệp...');
   const departments = [
     {
       id: 'dept-eng',
@@ -59,11 +101,11 @@ async function main() {
   }
 
   // 2. Khởi tạo & Cập nhật Nhân sự Thực tế (Users with Real Names & Avatars)
-  console.log('👤 [2/6] Tạo hồ sơ nhân sự thực tế với tên người và ảnh đại diện...');
+  console.log('👤 [2/8] Tạo hồ sơ nhân sự thực tế với tên người và ảnh đại diện...');
   const users = [
     {
       email: 'admin@worksync.com',
-      name: 'Võ Thanh Long',
+      name: 'Võ Thanh Long (Admin / CTO)',
       role: Role.ADMIN,
       position: 'Chief Technology Officer (CTO)',
       departmentId: 'dept-eng',
@@ -78,8 +120,16 @@ async function main() {
       avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150',
     },
     {
+      email: 'head.eng@worksync.com',
+      name: 'Trần Minh Quân (Trưởng phòng)',
+      role: Role.DEPARTMENT_HEAD,
+      position: 'Trưởng phòng Kỹ thuật Phần mềm (Department Head)',
+      departmentId: 'dept-eng',
+      avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150',
+    },
+    {
       email: 'pm@worksync.com',
-      name: 'Nguyễn Minh Tuấn',
+      name: 'Nguyễn Minh Tuấn (PM)',
       role: Role.PM,
       position: 'Senior Project Manager / Agile Coach',
       departmentId: 'dept-prod',
@@ -87,7 +137,7 @@ async function main() {
     },
     {
       email: 'pm2@worksync.com',
-      name: 'Trần Thị Thu Hà',
+      name: 'Trần Thị Thu Hà (PM)',
       role: Role.PM,
       position: 'Technical Project Lead',
       departmentId: 'dept-prod',
@@ -95,7 +145,7 @@ async function main() {
     },
     {
       email: 'hr@worksync.com',
-      name: 'Lê Thị Hồng Nhung',
+      name: 'Lê Thị Hồng Nhung (HR)',
       role: Role.HR,
       position: 'Head of People & Culture Operations',
       departmentId: 'dept-hr',
@@ -103,7 +153,7 @@ async function main() {
     },
     {
       email: 'hr2@worksync.com',
-      name: 'Phạm Hoàng Nam',
+      name: 'Phạm Hoàng Nam (HR)',
       role: Role.HR,
       position: 'Senior HR Specialist / Talent Acquisition',
       departmentId: 'dept-hr',
@@ -111,7 +161,7 @@ async function main() {
     },
     {
       email: 'vothanhlong1704@gmail.com',
-      name: 'Long Võ',
+      name: 'Long Võ (Lead Dev)',
       role: Role.EMPLOYEE,
       position: 'Lead Frontend Engineer',
       departmentId: 'dept-eng',
@@ -226,18 +276,20 @@ async function main() {
     }
   }
 
+  const adminId = userMap.get('admin@worksync.com')!;
+  const headId = userMap.get('head@gmail.com')!;
   const pm1Id = userMap.get('pm@worksync.com')!;
   const pm2Id = userMap.get('pm2@worksync.com')!;
+  const hrId = userMap.get('hr@worksync.com')!;
   const devLongId = userMap.get('vothanhlong1704@gmail.com')!;
   const devNamId = userMap.get('nam.hoang@worksync.com')!;
   const devBaoId = userMap.get('bao.dang@worksync.com')!;
   const desLinhId = userMap.get('linh.vu@worksync.com')!;
   const qaNganId = userMap.get('ngan.trinh@worksync.com')!;
   const devDatId = userMap.get('dat.nguyen@worksync.com')!;
-  const adminId = userMap.get('admin@worksync.com')!;
 
-  // 3. Khởi tạo Dự án Doanh nghiệp (Team Projects)
-  console.log('📁 [3/6] Tạo dự án thực tế gán chủ nhiệm cho từng PM...');
+  // 3. Khởi tạo 5 Dự án Doanh nghiệp phong phú cho tất cả các Role demo
+  console.log('📁 [3/8] Tạo danh mục dự án thực tế cho từng PM & Trưởng phòng...');
 
   // Dự án 1: WorkSync Enterprise Platform v3.1 (PM: Nguyễn Minh Tuấn)
   const projPlatform = await prisma.project.upsert({
@@ -302,55 +354,70 @@ async function main() {
     },
   });
 
-  // Cập nhật Project Members
-  const platformMembers = [
-    { userId: pm1Id, role: 'PM' },
-    { userId: devLongId, role: 'LEAD_DEV' },
-    { userId: devNamId, role: 'BACKEND_DEV' },
-    { userId: devBaoId, role: 'DEVOPS' },
-    { userId: desLinhId, role: 'DESIGNER' },
-    { userId: qaNganId, role: 'QA' },
-  ];
+  // Dự án 4: Hạ tầng Cloud & Bảo mật FPT DC-01 (PM: Trần Minh Quân - Trưởng phòng)
+  const projInfra = await prisma.project.upsert({
+    where: { id: 'proj-infra-devops' },
+    update: {
+      name: 'Cloud Infrastructure & DevOps CI/CD (FPT DC-01)',
+      description: 'Kiến trúc cụm AWS EKS, giám sát Prometheus/Grafana và an toàn thông tin ISO-27001',
+      createdById: headId,
+      status: ProjectStatus.ACTIVE,
+      color: '#F59E0B',
+    },
+    create: {
+      id: 'proj-infra-devops',
+      name: 'Cloud Infrastructure & DevOps CI/CD (FPT DC-01)',
+      description: 'Kiến trúc cụm AWS EKS, giám sát Prometheus/Grafana và an toàn thông tin ISO-27001',
+      kind: ProjectKind.TEAM,
+      createdById: headId,
+      status: ProjectStatus.ACTIVE,
+      color: '#F59E0B',
+    },
+  });
 
-  for (const m of platformMembers) {
-    await prisma.projectMember.upsert({
-      where: { projectId_userId: { projectId: projPlatform.id, userId: m.userId } },
-      update: { projectRole: m.role },
-      create: { projectId: projPlatform.id, userId: m.userId, projectRole: m.role },
-    });
-  }
+  // Dự án 5: Chương trình Đào tạo & Văn hóa FPT 2026 (PM: Lê Thị Hồng Nhung - HR Lead)
+  const projHr = await prisma.project.upsert({
+    where: { id: 'proj-hr-culture' },
+    update: {
+      name: 'Chương trình Phát triển Nhân tài & Văn hóa FPT 2026',
+      description: 'Khung năng lực nhân sự số, chính sách phúc lợi và chương trình gắn kết nhân viên',
+      createdById: hrId,
+      status: ProjectStatus.ACTIVE,
+      color: '#EC4899',
+    },
+    create: {
+      id: 'proj-hr-culture',
+      name: 'Chương trình Phát triển Nhân tài & Văn hóa FPT 2026',
+      description: 'Khung năng lực nhân sự số, chính sách phúc lợi và chương trình gắn kết nhân viên',
+      kind: ProjectKind.TEAM,
+      createdById: hrId,
+      status: ProjectStatus.ACTIVE,
+      color: '#EC4899',
+    },
+  });
 
-  const mobileMembers = [
-    { userId: pm2Id, role: 'PM' },
-    { userId: devDatId, role: 'MOBILE_DEV' },
-    { userId: devLongId, role: 'FRONTEND_DEV' },
-    { userId: qaNganId, role: 'QA' },
-  ];
+  // Gán thành viên đầy đủ cho tất cả dự án để mọi tài khoản demo đều thấy dự án phong phú
+  const allProjects = [projPlatform, projMobile, projAi, projInfra, projHr];
+  const coreDemoUsers = [adminId, headId, pm1Id, hrId, devLongId, devNamId, devBaoId, desLinhId, qaNganId, devDatId];
 
-  for (const m of mobileMembers) {
-    await prisma.projectMember.upsert({
-      where: { projectId_userId: { projectId: projMobile.id, userId: m.userId } },
-      update: { projectRole: m.role },
-      create: { projectId: projMobile.id, userId: m.userId, projectRole: m.role },
-    });
-  }
+  for (const proj of allProjects) {
+    for (const uid of coreDemoUsers) {
+      let role = 'MEMBER';
+      if (proj.createdById === uid) role = 'PM';
+      else if (uid === adminId) role = 'SPONSOR';
+      else if (uid === headId) role = 'HEAD_DEPT';
+      else if (uid === devLongId) role = 'LEAD_DEV';
 
-  const aiMembers = [
-    { userId: pm1Id, role: 'PM' },
-    { userId: adminId, role: 'AI_ARCHITECT' },
-    { userId: devNamId, role: 'BACKEND_DEV' },
-  ];
-
-  for (const m of aiMembers) {
-    await prisma.projectMember.upsert({
-      where: { projectId_userId: { projectId: projAi.id, userId: m.userId } },
-      update: { projectRole: m.role },
-      create: { projectId: projAi.id, userId: m.userId, projectRole: m.role },
-    });
+      await prisma.projectMember.upsert({
+        where: { projectId_userId: { projectId: proj.id, userId: uid } },
+        update: { projectRole: role },
+        create: { projectId: proj.id, userId: uid, projectRole: role },
+      });
+    }
   }
 
   // 4. Khởi tạo Sprints thực tế
-  console.log('🏃 [4/6] Khởi tạo các Sprint đang chạy và kế hoạch...');
+  console.log('🏃 [4/8] Khởi tạo các Sprint đang chạy và kế hoạch...');
   const now = new Date();
   const sprintStart = new Date(now.getTime() - 8 * 24 * 3600 * 1000); // 8 ngày trước
   const sprintEnd = new Date(now.getTime() + 6 * 24 * 3600 * 1000);   // còn 6 ngày
@@ -358,41 +425,65 @@ async function main() {
   const sprint14 = await prisma.sprint.upsert({
     where: { id: 'sprint-platform-14' },
     update: {
-      name: 'Sprint 14 — Phân quyền & Bảng điều khiển Đa vai trò',
-      status: SprintStatus.ACTIVE,
+      name: 'Sprint 14: Platform v3.1 Stabilization & WebRTC Theater Mode',
+      goal: 'Tối ưu trải nghiệm họp trực tuyến, đồng bộ Presence và hoàn tất báo cáo Sprint',
       startDate: sprintStart,
       endDate: sprintEnd,
+      status: SprintStatus.ACTIVE,
     },
     create: {
       id: 'sprint-platform-14',
       projectId: projPlatform.id,
-      name: 'Sprint 14 — Phân quyền & Bảng điều khiển Đa vai trò',
-      status: SprintStatus.ACTIVE,
+      name: 'Sprint 14: Platform v3.1 Stabilization & WebRTC Theater Mode',
+      goal: 'Tối ưu trải nghiệm họp trực tuyến, đồng bộ Presence và hoàn tất báo cáo Sprint',
       startDate: sprintStart,
       endDate: sprintEnd,
+      status: SprintStatus.ACTIVE,
     },
   });
 
   const sprintMobile1 = await prisma.sprint.upsert({
-    where: { id: 'sprint-mob-01' },
+    where: { id: 'sprint-mobile-01' },
     update: {
-      name: 'Sprint 1 — MVP Điểm danh GPS & Mobile Push',
-      status: SprintStatus.ACTIVE,
+      name: 'Sprint 1: Geofence GPS & Native Check-in',
+      goal: 'Tích hợp bản đồ GPS FPT Complex và tính năng check-in một chạm',
       startDate: sprintStart,
       endDate: sprintEnd,
+      status: SprintStatus.ACTIVE,
     },
     create: {
-      id: 'sprint-mob-01',
+      id: 'sprint-mobile-01',
       projectId: projMobile.id,
-      name: 'Sprint 1 — MVP Điểm danh GPS & Mobile Push',
-      status: SprintStatus.ACTIVE,
+      name: 'Sprint 1: Geofence GPS & Native Check-in',
+      goal: 'Tích hợp bản đồ GPS FPT Complex và tính năng check-in một chạm',
       startDate: sprintStart,
       endDate: sprintEnd,
+      status: SprintStatus.ACTIVE,
     },
   });
 
-  // 5. Khởi tạo Tasks Chi tiết có Story Points & Assignee thực tế
-  console.log('📝 [5/6] Tạo danh mục Tasks chuyên sâu có Assignee và Deadline...');
+  const sprintInfra1 = await prisma.sprint.upsert({
+    where: { id: 'sprint-infra-01' },
+    update: {
+      name: 'Sprint Infra: AWS EKS & Multi-AZ Disaster Recovery',
+      goal: 'Triển khai cụm Kubernetes đa vùng và thiết lập cảnh báo tự động',
+      startDate: sprintStart,
+      endDate: sprintEnd,
+      status: SprintStatus.ACTIVE,
+    },
+    create: {
+      id: 'sprint-infra-01',
+      projectId: projInfra.id,
+      name: 'Sprint Infra: AWS EKS & Multi-AZ Disaster Recovery',
+      goal: 'Triển khai cụm Kubernetes đa vùng và thiết lập cảnh báo tự động',
+      startDate: sprintStart,
+      endDate: sprintEnd,
+      status: SprintStatus.ACTIVE,
+    },
+  });
+
+  // 5. Khởi tạo Tasks phong phú cho các Sprint
+  console.log('📝 [5/8] Tạo danh mục công việc chuyên sâu có Assignee, Priority và Deadline...');
   const tasks = [
     {
       id: 'TASK-101',
@@ -400,14 +491,15 @@ async function main() {
       sprintId: sprint14.id,
       createdById: pm1Id,
       assigneeId: devLongId,
-      title: 'Tối ưu hóa Bảng điều khiển Quản lý dự án PM với biểu đồ Burndown',
-      status: TaskStatus.IN_PROGRESS,
+      title: 'Tối ưu hóa giao diện Theater Mode cuộc họp WebRTC chuẩn Google Meet',
+      description: 'Mở rộng khung trình chiếu toàn màn hình, thanh thumbnail camera gọn gàng.',
+      status: TaskStatus.DONE,
       priority: Priority.URGENT,
       storyPoints: 5,
       timeEstimate: 16,
-      timeTracked: 10,
+      timeTracked: 16,
       position: 1000,
-      dueDate: new Date(now.getTime() + 2 * 24 * 3600 * 1000),
+      dueDate: new Date(now.getTime() - 1 * 24 * 3600 * 1000),
     },
     {
       id: 'TASK-102',
@@ -415,104 +507,92 @@ async function main() {
       sprintId: sprint14.id,
       createdById: pm1Id,
       assigneeId: devNamId,
-      title: 'Sửa lỗi bảo mật IDOR trên endpoint tác vụ dự án',
+      title: 'Xây dựng WebSocket Gateway realtime cho Presence & Điểm danh',
+      description: 'Phát sự kiện presence:init và đồng bộ chấm xanh trực tuyến tức thời.',
       status: TaskStatus.DONE,
-      priority: Priority.URGENT,
-      storyPoints: 5,
-      timeEstimate: 12,
-      timeTracked: 12,
+      priority: Priority.HIGH,
+      storyPoints: 8,
+      timeEstimate: 20,
+      timeTracked: 20,
       position: 2000,
-      dueDate: new Date(now.getTime() - 1 * 24 * 3600 * 1000),
+      dueDate: new Date(now.getTime() - 2 * 24 * 3600 * 1000),
     },
     {
       id: 'TASK-103',
       projectId: projPlatform.id,
       sprintId: sprint14.id,
       createdById: pm1Id,
-      assigneeId: desLinhId,
-      title: 'Thiết kế bộ icon và Design Token Bauhaus chuẩn Enterprise',
+      assigneeId: devLongId,
+      title: 'Khắc phục lỗi mất tin nhắn chat trong cuộc họp khi đóng thanh drawer',
+      description: 'Lưu trữ tin nhắn vào chatHistory ngay khi nhận được qua socket.',
       status: TaskStatus.DONE,
-      priority: Priority.MEDIUM,
+      priority: Priority.HIGH,
       storyPoints: 3,
       timeEstimate: 8,
       timeTracked: 8,
       position: 3000,
-      dueDate: new Date(now.getTime() - 2 * 24 * 3600 * 1000),
+      dueDate: new Date(now.getTime() - 1 * 24 * 3600 * 1000),
     },
     {
       id: 'TASK-104',
       projectId: projPlatform.id,
       sprintId: sprint14.id,
       createdById: pm1Id,
-      assigneeId: devBaoId,
-      title: 'Kiểm thử tải kết nối WebRTC Video Call trên mạng 4G',
-      status: TaskStatus.BLOCKED,
-      priority: Priority.URGENT,
-      storyPoints: 8,
-      timeEstimate: 20,
+      assigneeId: devLongId,
+      title: 'Hỗ trợ dán ảnh trực tiếp từ Clipboard (Ctrl+V) vào ô chat',
+      description: 'Tự động bắt sự kiện onPaste và gửi tệp ảnh đính kèm tức thời.',
+      status: TaskStatus.DONE,
+      priority: Priority.MEDIUM,
+      storyPoints: 2,
+      timeEstimate: 4,
       timeTracked: 4,
       position: 4000,
-      dueDate: new Date(now.getTime() + 1 * 24 * 3600 * 1000),
+      dueDate: new Date(now.getTime() - 3 * 24 * 3600 * 1000),
     },
     {
       id: 'TASK-105',
       projectId: projPlatform.id,
       sprintId: sprint14.id,
       createdById: pm1Id,
-      assigneeId: qaNganId,
-      title: 'Viết bộ kiểm thử tự động E2E cho quy trình Phê duyệt đơn WFH/Nghỉ phép',
-      status: TaskStatus.IN_REVIEW,
+      assigneeId: desLinhId,
+      title: 'Kiểm toán hệ thống Design System Bauhaus & chuẩn tương phản WCAG AA',
+      status: TaskStatus.IN_PROGRESS,
       priority: Priority.HIGH,
       storyPoints: 5,
-      timeEstimate: 14,
-      timeTracked: 12,
+      timeEstimate: 16,
+      timeTracked: 10,
       position: 5000,
-      dueDate: new Date(now.getTime() + 3 * 24 * 3600 * 1000),
+      dueDate: new Date(now.getTime() + 2 * 24 * 3600 * 1000),
     },
     {
       id: 'TASK-106',
       projectId: projPlatform.id,
       sprintId: sprint14.id,
       createdById: pm1Id,
-      assigneeId: devNamId,
-      title: 'Tích hợp Gateway thanh toán VNPay & Stripe Checkout',
-      status: TaskStatus.TODO,
-      priority: Priority.HIGH,
-      storyPoints: 8,
-      timeEstimate: 24,
-      timeTracked: 0,
+      assigneeId: qaNganId,
+      title: 'Viết kịch bản kiểm thử tự động E2E cho quy trình Phê duyệt chấm công',
+      status: TaskStatus.IN_PROGRESS,
+      priority: Priority.MEDIUM,
+      storyPoints: 5,
+      timeEstimate: 12,
+      timeTracked: 6,
       position: 6000,
-      dueDate: new Date(now.getTime() + 5 * 24 * 3600 * 1000),
+      dueDate: new Date(now.getTime() + 3 * 24 * 3600 * 1000),
     },
     {
       id: 'TASK-107',
       projectId: projPlatform.id,
       sprintId: sprint14.id,
       createdById: pm1Id,
-      assigneeId: devLongId,
-      title: 'Đồng bộ hóa trạng thái Online/Offline của thành viên nhóm qua WebSocket',
+      assigneeId: devNamId,
+      title: 'Tích hợp Gemini 1.5 Flash tạo biên bản tóm tắt cuộc họp tự động',
       status: TaskStatus.TODO,
-      priority: Priority.MEDIUM,
-      storyPoints: 3,
-      timeEstimate: 8,
+      priority: Priority.HIGH,
+      storyPoints: 8,
+      timeEstimate: 24,
       timeTracked: 0,
       position: 7000,
       dueDate: new Date(now.getTime() + 4 * 24 * 3600 * 1000),
-    },
-    {
-      id: 'TASK-108',
-      projectId: projPlatform.id,
-      sprintId: sprint14.id,
-      createdById: pm1Id,
-      assigneeId: devBaoId,
-      title: 'Cấu hình SSL & Load Balancer Nginx cho Cụm FPT DC-01',
-      status: TaskStatus.DONE,
-      priority: Priority.HIGH,
-      storyPoints: 5,
-      timeEstimate: 10,
-      timeTracked: 10,
-      position: 8000,
-      dueDate: new Date(now.getTime() - 3 * 24 * 3600 * 1000),
     },
     // Tasks for Mobile
     {
@@ -530,20 +610,21 @@ async function main() {
       position: 1000,
       dueDate: new Date(now.getTime() + 2 * 24 * 3600 * 1000),
     },
+    // Tasks for Infra
     {
-      id: 'TASK-202',
-      projectId: projMobile.id,
-      sprintId: sprintMobile1.id,
-      createdById: pm2Id,
-      assigneeId: devDatId,
-      title: 'Thông báo đẩy FCM khi đơn xin nghỉ phép được HR phê duyệt',
-      status: TaskStatus.TODO,
+      id: 'TASK-301',
+      projectId: projInfra.id,
+      sprintId: sprintInfra1.id,
+      createdById: headId,
+      assigneeId: devBaoId,
+      title: 'Cấu hình SSL & Load Balancer Nginx cho Cụm FPT DC-01',
+      status: TaskStatus.DONE,
       priority: Priority.HIGH,
-      storyPoints: 3,
-      timeEstimate: 8,
-      timeTracked: 0,
-      position: 2000,
-      dueDate: new Date(now.getTime() + 4 * 24 * 3600 * 1000),
+      storyPoints: 5,
+      timeEstimate: 10,
+      timeTracked: 10,
+      position: 1000,
+      dueDate: new Date(now.getTime() - 2 * 24 * 3600 * 1000),
     },
   ];
 
@@ -566,62 +647,167 @@ async function main() {
     });
   }
 
-  // 6. Khởi tạo AttendanceRecords thực tế cho hôm nay
-  console.log('⏰ [6/6] Tạo dữ liệu chấm công thực tế cho ngày hôm nay...');
-  const todayDate = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
+  // 6. Khởi tạo Lịch sử điểm danh 120 ngày (~6 tháng) cho tất cả tài khoản chính để Heatmap & Stats đầy đủ
+  console.log('⏰ [6/8] Khởi tạo lịch sử điểm danh 6 tháng (120 ngày) cho các tài khoản demo...');
+  const keyAttendanceUsers = [devLongId, adminId, headId, pm1Id, hrId, devNamId, devBaoId];
+  const startDate = new Date(now.getTime() - 120 * 24 * 3600 * 1000); // 120 ngày trước
+  const yesterday = new Date(now.getTime() - 1 * 24 * 3600 * 1000);
 
-  // 12 người điểm danh (10 đúng giờ, 2 đi muộn)
-  const allUserIds = Array.from(userMap.values());
-  for (let i = 0; i < allUserIds.length; i++) {
-    const uid = allUserIds[i];
-    let status: AttendanceStatus = AttendanceStatus.ON_TIME;
-    let checkInMin = 12 + (i % 15);
-    let checkInHour = 8;
+  const cur = new Date(startDate);
+  let seededDays = 0;
 
-    if (i === 1) {
-      // 1 người đi muộn
-      status = AttendanceStatus.LATE;
-      checkInHour = 8;
-      checkInMin = 48;
-    } else if (i === 4) {
-      // 1 người đi muộn 22p
-      status = AttendanceStatus.LATE;
-      checkInHour = 8;
-      checkInMin = 52;
-    } else if (i === 8) {
-      // WFH
-      status = AttendanceStatus.WFH;
-    } else if (i === 10) {
-      // Nghỉ phép
-      status = AttendanceStatus.ABSENT_APPROVED;
+  while (cur <= yesterday) {
+    const dayOfWeek = cur.getDay(); // 0: CN, 6: T7
+    if (dayOfWeek !== 0 && dayOfWeek !== 6) {
+      const dateOnly = getLocalDateOnly(cur);
+      const y = cur.getFullYear();
+      const m = cur.getMonth();
+      const d = cur.getDate();
+
+      for (let uIdx = 0; uIdx < keyAttendanceUsers.length; uIdx++) {
+        const uid = keyAttendanceUsers[uIdx];
+        // Pseudo-random deterministic ratio
+        const seedVal = (d * 13 + m * 7 + uIdx * 17) % 100;
+        let status: AttendanceStatus = AttendanceStatus.ON_TIME;
+        let inHour = 8;
+        let inMin = 10 + (seedVal % 18);
+        let outHour = 17;
+        let outMin = 32 + (seedVal % 25);
+        let note = 'Check-in đúng giờ FPT Complex Đà Nẵng';
+        let method = 'GEOFENCE_GPS';
+
+        if (seedVal > 92) {
+          // 8% LATE
+          status = AttendanceStatus.LATE;
+          inHour = 8;
+          inMin = 36 + (seedVal % 18);
+          note = 'Đi muộn do ùn tắc giao thông cầu Trần Thị Lý';
+        } else if (seedVal > 86) {
+          // 6% WFH
+          status = AttendanceStatus.WFH;
+          method = 'REMOTE_APP';
+          note = 'Làm việc từ xa theo đơn WFH đã phê duyệt';
+        } else if (seedVal > 83) {
+          // 3% Nghỉ phép
+          status = AttendanceStatus.ABSENT_APPROVED;
+          note = 'Nghỉ phép năm có đơn được HR phê duyệt';
+        }
+
+        const checkInTime = status !== AttendanceStatus.ABSENT_APPROVED
+          ? new Date(Date.UTC(y, m, d, inHour - 7, inMin))
+          : null;
+        const checkOutTime = status !== AttendanceStatus.ABSENT_APPROVED
+          ? new Date(Date.UTC(y, m, d, outHour - 7, outMin))
+          : null;
+
+        await prisma.attendanceRecord.upsert({
+          where: { userId_date: { userId: uid, date: dateOnly } },
+          update: {
+            status,
+            checkInTime,
+            checkOutTime,
+            checkInMethod: method,
+            checkInLat: 15.9686,
+            checkInLng: 108.2608,
+            note,
+          },
+          create: {
+            userId: uid,
+            date: dateOnly,
+            status,
+            checkInTime,
+            checkOutTime,
+            checkInMethod: method,
+            checkInLat: 15.9686,
+            checkInLng: 108.2608,
+            note,
+          },
+        });
+      }
+      seededDays++;
     }
+    cur.setDate(cur.getDate() + 1);
+  }
+  console.log(`  → Đã nạp ${seededDays} ngày làm việc lịch sử cho ${keyAttendanceUsers.length} tài khoản.`);
 
-    const checkInTime = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate(), checkInHour - 7, checkInMin));
+  // Bản ghi HÔM NAY: Cho phép admin@worksync.com và vothanhlong1704@gmail.com tự bấm điểm danh test
+  // nam.hoang và bao.dang đã điểm danh trước để dashboard có dữ liệu thực tế
+  const todayOnly = getLocalDateOnly(now);
+  await prisma.attendanceRecord.upsert({
+    where: { userId_date: { userId: devNamId, date: todayOnly } },
+    update: {
+      status: AttendanceStatus.ON_TIME,
+      checkInTime: new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate(), 8 - 7, 18)),
+      checkInMethod: 'GEOFENCE_GPS',
+      checkInLat: 15.9686,
+      checkInLng: 108.2608,
+      note: 'Check-in đúng giờ FPT Complex',
+    },
+    create: {
+      userId: devNamId,
+      date: todayOnly,
+      status: AttendanceStatus.ON_TIME,
+      checkInTime: new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate(), 8 - 7, 18)),
+      checkInMethod: 'GEOFENCE_GPS',
+      checkInLat: 15.9686,
+      checkInLng: 108.2608,
+      note: 'Check-in đúng giờ FPT Complex',
+    },
+  });
 
-    await prisma.attendanceRecord.upsert({
-      where: { userId_date: { userId: uid, date: todayDate } },
-      update: {
-        status,
-        checkInTime: status !== AttendanceStatus.ABSENT_APPROVED ? checkInTime : null,
-        checkInMethod: status === AttendanceStatus.WFH ? 'REMOTE_APP' : 'GEOFENCE_GPS',
-        checkInLat: 15.9686,
-        checkInLng: 108.2608,
-        note: status === AttendanceStatus.LATE ? 'Gặp ùn tắc giao thông trên cầu Trần Thị Lý' : 'Check-in đúng giờ FPT Complex',
-      },
-      create: {
-        userId: uid,
-        date: todayDate,
-        status,
-        checkInTime: status !== AttendanceStatus.ABSENT_APPROVED ? checkInTime : null,
-        checkInMethod: status === AttendanceStatus.WFH ? 'REMOTE_APP' : 'GEOFENCE_GPS',
-        checkInLat: 15.9686,
-        checkInLng: 108.2608,
-        note: status === AttendanceStatus.LATE ? 'Gặp ùn tắc giao thông trên cầu Trần Thị Lý' : 'Check-in đúng giờ FPT Complex',
+  // 7. Tạo Đơn chờ duyệt (Approval Queue) cho Trưởng phòng & HR demo tính năng Phê duyệt
+  console.log('📋 [7/8] Tạo đơn xin WFH, nghỉ phép, làm thêm giờ đang chờ duyệt (Pending)...');
+  const tomorrow = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate() + 1));
+  const dayAfter = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate() + 2));
+
+  // WFH Pending
+  const existingWfh = await prisma.wfhRequest.findFirst({ where: { userId: devNamId, date: tomorrow } });
+  if (!existingWfh) {
+    await prisma.wfhRequest.create({
+      data: {
+        userId: devNamId,
+        date: tomorrow,
+        expectedStart: '08:30',
+        expectedEnd: '17:30',
+        reason: 'Khu vực nhà bị cắt điện lưới buổi sáng, xin WFH để đảm bảo hoàn thành API NestJS đúng hạn.',
+        status: RequestStatus.PENDING,
       },
     });
   }
 
-  console.log('🎉 [DONE] Toàn bộ dữ liệu doanh nghiệp 100% Real đã được nạp thành công!');
+  // Leave Pending
+  const existingLeave = await prisma.leaveRequest.findFirst({ where: { userId: qaNganId, startDate: tomorrow } });
+  if (!existingLeave) {
+    await prisma.leaveRequest.create({
+      data: {
+        userId: qaNganId,
+        startDate: tomorrow,
+        endDate: dayAfter,
+        leaveType: LeaveType.ANNUAL,
+        dayCount: 2,
+        reason: 'Xin nghỉ phép 2 ngày đưa người thân đi khám sức khỏe định kỳ tại Bệnh viện Đa khoa Đà Nẵng.',
+        status: RequestStatus.PENDING,
+      },
+    });
+  }
+
+  // Overtime Pending
+  const existingOt = await prisma.overtimeRequest.findFirst({ where: { userId: devDatId, date: tomorrow } });
+  if (!existingOt) {
+    await prisma.overtimeRequest.create({
+      data: {
+        userId: devDatId,
+        date: tomorrow,
+        registeredStart: new Date(tomorrow.getTime() + 17.5 * 3600 * 1000),
+        registeredEnd: new Date(tomorrow.getTime() + 20.5 * 3600 * 1000),
+        registeredHours: 3.0,
+        reason: 'Test hồi quy tự động (Regression Test) cho phiên bản WorkSync Mobile App v1.2.',
+        status: RequestStatus.PENDING,
+      },
+    });
+  }
+
+  console.log('🎉 [8/8] Toàn bộ dữ liệu doanh nghiệp 100% Real đã được nạp thành công!');
 }
 
 main()

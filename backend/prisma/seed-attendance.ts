@@ -311,92 +311,120 @@ async function main() {
     
     // User 1
     const u1 = otherUsers[0];
-    await prisma.wfhRequest.create({
-      data: {
-        userId: u1.id,
-        date: new Date(2026, 9, 16),
-        expectedStart: '08:30',
-        expectedEnd: '17:30',
-        reason: 'Chăm sóc con nhỏ bị sốt tại nhà',
-        status: RequestStatus.PENDING,
-      },
-    });
-
-    await prisma.leaveRequest.create({
-      data: {
-        userId: u1.id,
-        startDate: new Date(2026, 9, 21),
-        endDate: new Date(2026, 9, 22),
-        leaveType: LeaveType.ANNUAL,
-        dayCount: 2,
-        reason: 'Về quê đám cưới người thân',
-        status: RequestStatus.PENDING,
-      },
-    });
-
-    await prisma.earlyLeaveRequest.create({
-      data: {
-        userId: u1.id,
-        date: new Date(2026, 9, 15),
-        expectedLeaveTime: new Date(2026, 9, 15, 16, 15),
-        reason: 'Đi họp phụ huynh đầu năm học cho con',
-        status: RequestStatus.PENDING,
-      },
-    });
-
-    // User 2
-    if (otherUsers.length > 1) {
-      const u2 = otherUsers[1];
+    const d1 = new Date(2026, 9, 16);
+    const existingWfh1 = await prisma.wfhRequest.findFirst({ where: { userId: u1.id, date: d1 } });
+    if (!existingWfh1) {
       await prisma.wfhRequest.create({
         data: {
-          userId: u2.id,
-          date: new Date(2026, 9, 17),
+          userId: u1.id,
+          date: d1,
           expectedStart: '08:30',
           expectedEnd: '17:30',
-          reason: 'Nghiên cứu tài liệu và test hiệu năng mạng độc lập',
-          status: RequestStatus.PENDING,
-        },
-      });
-
-      await prisma.overtimeRequest.create({
-        data: {
-          userId: u2.id,
-          date: new Date(2026, 9, 15),
-          registeredStart: new Date(2026, 9, 15, 17, 30),
-          registeredEnd: new Date(2026, 9, 15, 20, 30),
-          registeredHours: 3.0,
-          reason: 'Test hồi quy (Regression Test) cho Sprint 4',
+          reason: 'Chăm sóc con nhỏ bị sốt tại nhà',
           status: RequestStatus.PENDING,
         },
       });
     }
 
+    const dLeave1Start = new Date(2026, 9, 21);
+    const existingLeave1 = await prisma.leaveRequest.findFirst({ where: { userId: u1.id, startDate: dLeave1Start } });
+    if (!existingLeave1) {
+      await prisma.leaveRequest.create({
+        data: {
+          userId: u1.id,
+          startDate: dLeave1Start,
+          endDate: new Date(2026, 9, 22),
+          leaveType: LeaveType.ANNUAL,
+          dayCount: 2,
+          reason: 'Về quê đám cưới người thân',
+          status: RequestStatus.PENDING,
+        },
+      });
+    }
+
+    const dEarly1 = new Date(2026, 9, 15);
+    const existingEarly1 = await prisma.earlyLeaveRequest.findFirst({ where: { userId: u1.id, date: dEarly1 } });
+    if (!existingEarly1) {
+      await prisma.earlyLeaveRequest.create({
+        data: {
+          userId: u1.id,
+          date: dEarly1,
+          expectedLeaveTime: new Date(2026, 9, 15, 16, 15),
+          reason: 'Đi họp phụ huynh đầu năm học cho con',
+          status: RequestStatus.PENDING,
+        },
+      });
+    }
+
+    // User 2
+    if (otherUsers.length > 1) {
+      const u2 = otherUsers[1];
+      const dWfh2 = new Date(2026, 9, 17);
+      const existingWfh2 = await prisma.wfhRequest.findFirst({ where: { userId: u2.id, date: dWfh2 } });
+      if (!existingWfh2) {
+        await prisma.wfhRequest.create({
+          data: {
+            userId: u2.id,
+            date: dWfh2,
+            expectedStart: '08:30',
+            expectedEnd: '17:30',
+            reason: 'Nghiên cứu tài liệu và test hiệu năng mạng độc lập',
+            status: RequestStatus.PENDING,
+          },
+        });
+      }
+
+      const dOt2 = new Date(2026, 9, 15);
+      const existingOt2 = await prisma.overtimeRequest.findFirst({ where: { userId: u2.id, date: dOt2 } });
+      if (!existingOt2) {
+        await prisma.overtimeRequest.create({
+          data: {
+            userId: u2.id,
+            date: dOt2,
+            registeredStart: new Date(2026, 9, 15, 17, 30),
+            registeredEnd: new Date(2026, 9, 15, 20, 30),
+            registeredHours: 3.0,
+            reason: 'Test hồi quy (Regression Test) cho Sprint 4',
+            status: RequestStatus.PENDING,
+          },
+        });
+      }
+    }
+
     // User 3
     if (otherUsers.length > 2) {
       const u3 = otherUsers[2];
-      await prisma.leaveRequest.create({
-        data: {
-          userId: u3.id,
-          startDate: new Date(2026, 9, 28),
-          endDate: new Date(2026, 9, 28),
-          leaveType: LeaveType.ANNUAL,
-          dayCount: 1,
-          reason: 'Gia đình có lễ giỗ',
-          status: RequestStatus.PENDING,
-        },
-      });
+      const dLeave3 = new Date(2026, 9, 28);
+      const existingLeave3 = await prisma.leaveRequest.findFirst({ where: { userId: u3.id, startDate: dLeave3 } });
+      if (!existingLeave3) {
+        await prisma.leaveRequest.create({
+          data: {
+            userId: u3.id,
+            startDate: dLeave3,
+            endDate: dLeave3,
+            leaveType: LeaveType.ANNUAL,
+            dayCount: 1,
+            reason: 'Gia đình có lễ giỗ',
+            status: RequestStatus.PENDING,
+          },
+        });
+      }
 
-      await prisma.overtimeRequest.create({
-        data: {
-          userId: u3.id,
-          date: new Date(2026, 9, 16),
-          registeredStart: new Date(2026, 9, 16, 17, 30),
-          registeredEnd: new Date(2026, 9, 16, 20, 0),
-          registeredHours: 2.5,
-          reason: 'Chuẩn bị môi trường UAT cho khách hàng nghiệm thu',
-          status: RequestStatus.PENDING,
-        },
-      });
+      const dOt3 = new Date(2026, 9, 16);
+      const existingOt3 = await prisma.overtimeRequest.findFirst({ where: { userId: u3.id, date: dOt3 } });
+      if (!existingOt3) {
+        await prisma.overtimeRequest.create({
+          data: {
+            userId: u3.id,
+            date: dOt3,
+            registeredStart: new Date(2026, 9, 16, 17, 30),
+            registeredEnd: new Date(2026, 9, 16, 20, 0),
+            registeredHours: 2.5,
+            reason: 'Chuẩn bị môi trường UAT cho khách hàng nghiệm thu',
+            status: RequestStatus.PENDING,
+          },
+        });
+      }
     }
   }
 
