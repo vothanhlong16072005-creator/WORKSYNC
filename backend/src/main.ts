@@ -9,12 +9,11 @@ async function bootstrap() {
     whitelist: true,
     transform: true,
   }));
-  const allowedOrigins = process.env.CORS_ORIGIN
-    ? process.env.CORS_ORIGIN.split(',').map((s) => s.trim())
-    : true;
-
   app.enableCors({
-    origin: allowedOrigins,
+    origin: (_origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
+      // Phản chiếu origin của request để tương thích với credentials: true
+      callback(null, true);
+    },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'X-Requested-With'],
