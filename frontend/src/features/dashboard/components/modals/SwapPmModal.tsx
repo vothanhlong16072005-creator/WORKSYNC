@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { UserCheck, ShieldAlert, CheckCircle2, Search, Loader2 } from 'lucide-react';
 import { ModalShell } from './ModalShell';
 import { deptHeadApi } from '../../api/dept-head.api';
 import { getErrorMessage } from '@/features/attendance/utils/error-handler';
+import { apiClient } from '@/lib/api-client';
 
 export interface SwapPmCandidate {
   id: string;
@@ -22,7 +23,7 @@ interface SwapPmModalProps {
   projectName: string;
   currentPmName: string;
   currentPmId?: string;
-  candidates: SwapPmCandidate[];
+  candidates?: SwapPmCandidate[];
 }
 
 export function SwapPmModal({
@@ -35,13 +36,29 @@ export function SwapPmModal({
   currentPmId,
   candidates,
 }: SwapPmModalProps) {
+  const [candidateList, setCandidateList] = useState<SwapPmCandidate[]>(candidates || []);
   const [selectedPmId, setSelectedPmId] = useState<string>('');
   const [reason, setReason] = useState<string>('');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const availableCandidates = candidates.filter(
+  useEffect(() => {
+    if (candidates && candidates.length > 0) {
+      setCandidateList(candidates);
+    } else if (isOpen) {
+      apiClient
+        .get<SwapPmCandidate[]>('/users/assignable')
+        .then((res) => {
+          if (Array.isArray(res.data)) {
+            setCandidateList(res.data);
+          }
+        })
+        .catch(() => {});
+    }
+  }, [isOpen, candidates]);
+
+  const availableCandidates = candidateList.filter(
     (c) => c.id !== currentPmId && c.name.toLowerCase().includes(searchQuery.toLowerCase()),
   );
 
@@ -115,7 +132,7 @@ export function SwapPmModal({
             <div className="text-sm font-black text-slate-900 mt-0.5">{currentPmName}</div>
           </div>
           <span className="px-2 py-0.5 rounded-md bg-amber-200/80 text-amber-800 text-[10px] font-bold">
-            Sẽ chuyển về vai trò Member
+            Sẽ rời khỏi dự án & nhóm chat
           </span>
         </div>
 
@@ -211,8 +228,7 @@ export function SwapPmModal({
           <ShieldAlert className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" />
           <div className="text-[11px] leading-relaxed">
             <span className="font-bold">Lưu ý quản trị:</span> Sau khi xác nhận, PM mới sẽ sở hữu
-            toàn bộ quyền phê duyệt, quản lý task và sprint của dự án. PM cũ sẽ giữ tư cách thành
-            viên dự án thông thường.
+            toàn bộ quyền điều hành dự án. PM cũ sẽ bị xóa khỏi danh sách thành viên dự án và kênh chat.
           </div>
         </div>
 

@@ -10,6 +10,7 @@ import {
   AttendanceStatus,
   RequestStatus,
   LeaveType,
+  ProjectWorkflowType,
 } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 
@@ -132,7 +133,7 @@ async function main() {
       name: 'Nguyễn Minh Tuấn (PM)',
       role: Role.PM,
       position: 'Senior Project Manager / Agile Coach',
-      departmentId: 'dept-prod',
+      departmentId: 'dept-eng',
       avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150',
     },
     {
@@ -140,7 +141,7 @@ async function main() {
       name: 'Trần Thị Thu Hà (PM)',
       role: Role.PM,
       position: 'Technical Project Lead',
-      departmentId: 'dept-prod',
+      departmentId: 'dept-eng',
       avatar: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150',
     },
     {
@@ -291,13 +292,16 @@ async function main() {
   // 3. Khởi tạo 5 Dự án Doanh nghiệp phong phú cho tất cả các Role demo
   console.log('📁 [3/8] Tạo danh mục dự án thực tế cho từng PM & Trưởng phòng...');
 
-  // Dự án 1: WorkSync Enterprise Platform v3.1 (PM: Nguyễn Minh Tuấn)
+  // Dự án 1: WorkSync Enterprise Platform v3.1 (PM: Nguyễn Minh Tuấn) -> SCRUM
   const projPlatform = await prisma.project.upsert({
     where: { id: 'proj-platform-v3' },
     update: {
       name: 'WorkSync Enterprise Platform v3.1',
       description: 'Nền tảng quản trị công việc, tiến độ sprint và nhân sự doanh nghiệp',
       createdById: pm1Id,
+      pmId: pm1Id,
+      departmentId: 'dept-eng',
+      workflowType: ProjectWorkflowType.SCRUM,
       status: ProjectStatus.ACTIVE,
       color: '#2563EB',
     },
@@ -307,18 +311,24 @@ async function main() {
       description: 'Nền tảng quản trị công việc, tiến độ sprint và nhân sự doanh nghiệp',
       kind: ProjectKind.TEAM,
       createdById: pm1Id,
+      pmId: pm1Id,
+      departmentId: 'dept-eng',
+      workflowType: ProjectWorkflowType.SCRUM,
       status: ProjectStatus.ACTIVE,
       color: '#2563EB',
     },
   });
 
-  // Dự án 2: WorkSync Mobile App (PM: Trần Thị Thu Hà)
+  // Dự án 2: WorkSync Mobile App (PM: Trần Thị Thu Hà) -> SCRUM
   const projMobile = await prisma.project.upsert({
     where: { id: 'proj-mobile-app' },
     update: {
       name: 'WorkSync Mobile App (iOS & Android)',
       description: 'Ứng dụng di động điểm danh Geofence GPS và phê duyệt nhanh ca kíp',
       createdById: pm2Id,
+      pmId: pm2Id,
+      departmentId: 'dept-eng',
+      workflowType: ProjectWorkflowType.SCRUM,
       status: ProjectStatus.ACTIVE,
       color: '#10B981',
     },
@@ -328,18 +338,24 @@ async function main() {
       description: 'Ứng dụng di động điểm danh Geofence GPS và phê duyệt nhanh ca kíp',
       kind: ProjectKind.TEAM,
       createdById: pm2Id,
+      pmId: pm2Id,
+      departmentId: 'dept-eng',
+      workflowType: ProjectWorkflowType.SCRUM,
       status: ProjectStatus.ACTIVE,
       color: '#10B981',
     },
   });
 
-  // Dự án 3: AI Speech & WebRTC Meeting (PM: Nguyễn Minh Tuấn)
+  // Dự án 3: AI Speech & WebRTC Meeting (PM: Nguyễn Minh Tuấn) -> SCRUM
   const projAi = await prisma.project.upsert({
     where: { id: 'proj-ai-meeting' },
     update: {
       name: 'AI Meeting & Speech Intelligence',
       description: 'Hệ thống họp trực tuyến WebRTC và biên bản họp tự động bằng AI Gemini',
       createdById: pm1Id,
+      pmId: pm1Id,
+      departmentId: 'dept-eng',
+      workflowType: ProjectWorkflowType.SCRUM,
       status: ProjectStatus.ACTIVE,
       color: '#8B5CF6',
     },
@@ -349,18 +365,24 @@ async function main() {
       description: 'Hệ thống họp trực tuyến WebRTC và biên bản họp tự động bằng AI Gemini',
       kind: ProjectKind.TEAM,
       createdById: pm1Id,
+      pmId: pm1Id,
+      departmentId: 'dept-eng',
+      workflowType: ProjectWorkflowType.SCRUM,
       status: ProjectStatus.ACTIVE,
       color: '#8B5CF6',
     },
   });
 
-  // Dự án 4: Hạ tầng Cloud & Bảo mật FPT DC-01 (PM: Trần Minh Quân - Trưởng phòng)
+  // Dự án 4: Hạ tầng Cloud & Bảo mật FPT DC-01 (PM: Trần Minh Quân - Trưởng phòng) -> KANBAN
   const projInfra = await prisma.project.upsert({
     where: { id: 'proj-infra-devops' },
     update: {
       name: 'Cloud Infrastructure & DevOps CI/CD (FPT DC-01)',
       description: 'Kiến trúc cụm AWS EKS, giám sát Prometheus/Grafana và an toàn thông tin ISO-27001',
       createdById: headId,
+      pmId: headId,
+      departmentId: 'dept-eng',
+      workflowType: ProjectWorkflowType.KANBAN,
       status: ProjectStatus.ACTIVE,
       color: '#F59E0B',
     },
@@ -370,18 +392,24 @@ async function main() {
       description: 'Kiến trúc cụm AWS EKS, giám sát Prometheus/Grafana và an toàn thông tin ISO-27001',
       kind: ProjectKind.TEAM,
       createdById: headId,
+      pmId: headId,
+      departmentId: 'dept-eng',
+      workflowType: ProjectWorkflowType.KANBAN,
       status: ProjectStatus.ACTIVE,
       color: '#F59E0B',
     },
   });
 
-  // Dự án 5: Chương trình Đào tạo & Văn hóa FPT 2026 (PM: Lê Thị Hồng Nhung - HR Lead)
+  // Dự án 5: Chương trình Đào tạo & Văn hóa FPT 2026 (PM: Lê Thị Hồng Nhung - HR Lead) -> KANBAN
   const projHr = await prisma.project.upsert({
     where: { id: 'proj-hr-culture' },
     update: {
       name: 'Chương trình Phát triển Nhân tài & Văn hóa FPT 2026',
       description: 'Khung năng lực nhân sự số, chính sách phúc lợi và chương trình gắn kết nhân viên',
       createdById: hrId,
+      pmId: hrId,
+      departmentId: 'dept-hr',
+      workflowType: ProjectWorkflowType.KANBAN,
       status: ProjectStatus.ACTIVE,
       color: '#EC4899',
     },
@@ -391,6 +419,9 @@ async function main() {
       description: 'Khung năng lực nhân sự số, chính sách phúc lợi và chương trình gắn kết nhân viên',
       kind: ProjectKind.TEAM,
       createdById: hrId,
+      pmId: hrId,
+      departmentId: 'dept-hr',
+      workflowType: ProjectWorkflowType.KANBAN,
       status: ProjectStatus.ACTIVE,
       color: '#EC4899',
     },
@@ -415,6 +446,13 @@ async function main() {
       });
     }
   }
+
+  // Gán pm2Id làm PM cho dự án Mobile App
+  await prisma.projectMember.upsert({
+    where: { projectId_userId: { projectId: projMobile.id, userId: pm2Id } },
+    update: { projectRole: 'PM' },
+    create: { projectId: projMobile.id, userId: pm2Id, projectRole: 'PM' },
+  });
 
   // 4. Khởi tạo Sprints thực tế
   console.log('🏃 [4/8] Khởi tạo các Sprint đang chạy và kế hoạch...');

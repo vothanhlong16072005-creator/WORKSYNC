@@ -508,38 +508,66 @@ export class ProjectsService {
         });
         actorDeptId = u?.departmentId;
       }
-      if (actorDeptId && newPmUser.departmentId !== actorDeptId) {
-        throw new BadRequestException('PM mới phải thuộc cùng phòng ban với Trưởng phòng');
+      if (actorDeptId && newPmUser.departmentId && newPmUser.departmentId !== actorDeptId && newPmUser.role !== Role.PM) {
+        throw new BadRequestException('PM mới phải thuộc cùng phòng ban với Trưởng phòng hoặc có vai trò PM');
       }
     }
 
     const oldPmId = project.pmId;
 
     return this.prisma.$transaction(async (tx) => {
-      // 1. Update project.pmId
+      // 1. Update project.pmId and transfer creator if old PM was creator
       const updated = await tx.project.update({
         where: { id: projectId },
-        data: { pmId: dto.newPmId },
+        data: {
+          pmId: dto.newPmId,
+          ...(project.createdById === oldPmId ? { createdById: dto.newPmId } : {}),
+        },
         include: {
           pm: { select: { id: true, name: true, email: true, avatar: true } },
         },
       });
 
-      // 2. Update old PM's ProjectMember role -> MEMBER
+      // 2. Remove old PM from ProjectMember & Project Chat (so old PM no longer sees this project)
       if (oldPmId) {
-        await tx.projectMember.upsert({
-          where: { projectId_userId: { projectId, userId: oldPmId } },
-          create: { projectId, userId: oldPmId, projectRole: 'MEMBER' },
-          update: { projectRole: 'MEMBER' },
-        });
+        if (typeof tx.projectMember?.deleteMany === 'function') {
+          await tx.projectMember.deleteMany({
+            where: { projectId, userId: oldPmId },
+          });
+        }
+
+        if (typeof tx.conversation?.findFirst === 'function') {
+          const conv = await tx.conversation.findFirst({
+            where: { type: ConversationType.PROJECT, projectId, deletedAt: null },
+          });
+          if (conv && typeof tx.conversationMember?.deleteMany === 'function') {
+            await tx.conversationMember.deleteMany({
+              where: { conversationId: conv.id, userId: oldPmId },
+            });
+          }
+        }
       }
 
-      // 3. Update new PM's ProjectMember role -> PM
+      // 3. Add new PM to ProjectMember as PM
       await tx.projectMember.upsert({
         where: { projectId_userId: { projectId, userId: dto.newPmId } },
         create: { projectId, userId: dto.newPmId, projectRole: 'PM' },
         update: { projectRole: 'PM' },
       });
+
+      // 4. Add new PM to Project Chat
+      if (typeof tx.conversation?.findFirst === 'function') {
+        const conv = await tx.conversation.findFirst({
+          where: { type: ConversationType.PROJECT, projectId, deletedAt: null },
+        });
+        if (conv && typeof tx.conversationMember?.upsert === 'function') {
+          await tx.conversationMember.upsert({
+            where: { conversationId_userId: { conversationId: conv.id, userId: dto.newPmId } },
+            create: { conversationId: conv.id, userId: dto.newPmId, unreadCount: 0 },
+            update: {},
+          });
+        }
+      }
 
       return updated;
     });

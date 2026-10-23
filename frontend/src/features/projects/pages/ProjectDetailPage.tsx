@@ -16,6 +16,7 @@ import {
   AlertTriangle,
   TableProperties,
   FileText,
+  UserCog,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useAuthStore } from '@/stores/auth.store';
@@ -25,8 +26,9 @@ import { projectApi } from '../api/project.api';
 import { documentApi } from '@/features/documents/api/document.api';
 import type { DocumentItem } from '@/features/documents/types/document.types';
 import { DocumentCard } from '@/features/documents/components/DocumentCard';
-import type { ProjectItem, ProjectMemberItem } from '../types/project.types';
+import type { ProjectItem, ProjectMemberItem, ProjectWorkflowType } from '../types/project.types';
 import { WorkflowTypeBadge } from '../components/WorkflowTypeBadge';
+import { SwapPmModal } from '@/features/dashboard/components/modals/SwapPmModal';
 import { CreateSprintModal } from '@/features/sprints/components/CreateSprintModal';
 import { StartSprintDialog } from '@/features/sprints/components/StartSprintDialog';
 import { CompleteSprintDialog } from '@/features/sprints/components/CompleteSprintDialog';
@@ -96,7 +98,9 @@ export const ProjectDetailPage: React.FC = () => {
   const [editName, setEditName] = useState('');
   const [editDesc, setEditDesc] = useState('');
   const [editColor, setEditColor] = useState('#3B82F6');
+  const [editWorkflowType, setEditWorkflowType] = useState<ProjectWorkflowType>('KANBAN');
   const [isSavingSettings, setIsSavingSettings] = useState(false);
+  const [isSwapPmOpen, setIsSwapPmOpen] = useState(false);
 
   const fetchProjectData = async () => {
     if (!id) return;
@@ -108,6 +112,7 @@ export const ProjectDetailPage: React.FC = () => {
       setEditName(data.name);
       setEditDesc(data.description || '');
       setEditColor(data.color || '#3B82F6');
+      setEditWorkflowType(data.workflowType || 'KANBAN');
 
       // Fetch sprints for project
       fetchSprintsByProject(id);
@@ -299,11 +304,12 @@ export const ProjectDetailPage: React.FC = () => {
         name: editName,
         description: editDesc,
         color: editColor,
+        workflowType: editWorkflowType,
       });
       fetchProjectData();
-      alert(isEn ? 'Project settings updated successfully!' : 'Cập nhật cài đặt dự án thành công!');
+      toast.success(isEn ? 'Project settings updated successfully!' : 'Cập nhật cài đặt dự án thành công!');
     } catch (err: unknown) {
-      alert('Error: ' + (err instanceof Error ? err.message : 'Cannot save'));
+      toast.error('Error: ' + (err instanceof Error ? err.message : 'Cannot save'));
     } finally {
       setIsSavingSettings(false);
     }
@@ -426,8 +432,8 @@ export const ProjectDetailPage: React.FC = () => {
               )}
             </div>
 
-            {/* PM Card Snapshot */}
-            <div className="flex items-center gap-3 p-3.5 bg-slate-50 rounded-2xl border border-slate-200/80">
+            {/* PM Card Snapshot & Swap Button */}
+            <div className="flex flex-wrap items-center gap-3 p-3.5 bg-slate-50 rounded-2xl border border-slate-200/80">
               {pmUser?.avatar ? (
                 <img
                   src={pmUser.avatar}
@@ -447,6 +453,18 @@ export const ProjectDetailPage: React.FC = () => {
                   {pmUser?.name || t('projects.unassigned_pm', 'Chưa chỉ định')}
                 </span>
               </div>
+
+              {(isDeptHead || isAdmin) && (
+                <button
+                  type="button"
+                  onClick={() => setIsSwapPmOpen(true)}
+                  className="ml-auto inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-xl bg-amber-500 hover:bg-amber-600 text-white shadow-xs transition-colors cursor-pointer"
+                  title="Thay đổi hoặc bàn giao quyền Project Manager"
+                >
+                  <UserCog className="w-3.5 h-3.5" />
+                  <span>{isEn ? 'Swap PM' : 'Đổi PM'}</span>
+                </button>
+              )}
             </div>
           </div>
 
@@ -1038,15 +1056,28 @@ export const ProjectDetailPage: React.FC = () => {
                 </p>
               </div>
 
-              {canManageProject && (
-                <button
-                  onClick={() => setIsAddMemberOpen(true)}
-                  className="px-4 py-2 text-xs font-bold rounded-xl bg-blue-600 hover:bg-blue-700 text-white shadow-xs active:scale-98 transition-all flex items-center gap-2"
-                >
-                  <UserPlus className="w-4 h-4" />
-                  <span>{isEn ? 'Add Member' : 'Thêm Thành Viên'}</span>
-                </button>
-              )}
+              <div className="flex items-center gap-2">
+                {(isDeptHead || isAdmin) && (
+                  <button
+                    onClick={() => setIsSwapPmOpen(true)}
+                    className="px-4 py-2 text-xs font-bold rounded-xl bg-amber-500 hover:bg-amber-600 text-white shadow-xs active:scale-98 transition-all flex items-center gap-2 cursor-pointer"
+                    title="Bàn giao hoặc chỉ định PM mới cho dự án"
+                  >
+                    <UserCog className="w-4 h-4" />
+                    <span>{isEn ? 'Swap PM' : 'Đổi PM Dự Án'}</span>
+                  </button>
+                )}
+
+                {canManageProject && (
+                  <button
+                    onClick={() => setIsAddMemberOpen(true)}
+                    className="px-4 py-2 text-xs font-bold rounded-xl bg-blue-600 hover:bg-blue-700 text-white shadow-xs active:scale-98 transition-all flex items-center gap-2 cursor-pointer"
+                  >
+                    <UserPlus className="w-4 h-4" />
+                    <span>{isEn ? 'Add Member' : 'Thêm Thành Viên'}</span>
+                  </button>
+                )}
+              </div>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -1086,10 +1117,11 @@ export const ProjectDetailPage: React.FC = () => {
                           e.stopPropagation();
                           setMemberToRemove(m);
                         }}
-                        title={isEn ? 'Remove member' : 'Xóa thành viên'}
-                        className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-colors cursor-pointer"
+                        title={isEn ? 'Remove member' : 'Xóa thành viên khỏi dự án'}
+                        className="px-2.5 py-1.5 text-xs font-bold text-rose-600 hover:text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-xl transition-all flex items-center gap-1.5 cursor-pointer shrink-0 shadow-2xs"
                       >
-                        <Trash2 className="w-4 h-4" />
+                        <Trash2 className="w-3.5 h-3.5 text-rose-600" />
+                        <span>{isEn ? 'Remove' : 'Xóa'}</span>
                       </button>
                     )}
                 </div>
@@ -1136,6 +1168,99 @@ export const ProjectDetailPage: React.FC = () => {
                   onChange={(e) => setEditDesc(e.target.value)}
                   className="w-full px-3.5 py-2.5 text-sm bg-slate-50/70 border border-slate-200 rounded-xl focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all text-slate-900"
                 />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
+                  {isEn ? 'Project Methodology / Workflow' : 'Mô Hình Quản Lý Công Việc'}
+                </label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div
+                    onClick={() => setEditWorkflowType('SCRUM')}
+                    className={`p-3.5 rounded-2xl border cursor-pointer transition-all ${
+                      editWorkflowType === 'SCRUM'
+                        ? 'bg-blue-50/80 border-blue-500 shadow-xs ring-1 ring-blue-500'
+                        : 'bg-white border-slate-200 hover:border-slate-300'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-xs font-bold text-blue-900">Agile Scrum (Sprint)</span>
+                      <span className="px-2 py-0.5 text-[10px] font-bold rounded bg-blue-100 text-blue-700">
+                        SPRINT
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-500">
+                      Có quản lý chu kỳ Sprint, backlog công việc và biểu đồ Burndown Chart.
+                    </p>
+                  </div>
+
+                  <div
+                    onClick={() => setEditWorkflowType('KANBAN')}
+                    className={`p-3.5 rounded-2xl border cursor-pointer transition-all ${
+                      editWorkflowType === 'KANBAN'
+                        ? 'bg-emerald-50/80 border-emerald-500 shadow-xs ring-1 ring-emerald-500'
+                        : 'bg-white border-slate-200 hover:border-slate-300'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-xs font-bold text-emerald-900">Kanban Board</span>
+                      <span className="px-2 py-0.5 text-[10px] font-bold rounded bg-emerald-100 text-emerald-700">
+                        KANBAN
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-500">
+                      Bảng kéo thả trực quan liên tục không giới hạn chu kỳ thời gian.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* PM Management Section in Settings */}
+              <div className="p-4 rounded-2xl bg-amber-50/50 border border-amber-200 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h5 className="text-xs font-bold text-amber-900 uppercase tracking-wider">
+                      {isEn ? 'Project Manager Assignment' : 'Chủ Nhiệm Dự Án (Project Manager)'}
+                    </h5>
+                    <p className="text-[11px] text-amber-700 mt-0.5">
+                      {isEn
+                        ? 'Only Department Heads or Admins can reassign the Project Manager.'
+                        : 'Chỉ Trưởng phòng hoặc Admin mới có quyền bàn giao và thay đổi PM dự án.'}
+                    </p>
+                  </div>
+                  {(isDeptHead || isAdmin) && (
+                    <button
+                      type="button"
+                      onClick={() => setIsSwapPmOpen(true)}
+                      className="px-3 py-1.5 text-xs font-bold rounded-xl bg-amber-600 hover:bg-amber-700 text-white shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <UserCog className="w-3.5 h-3.5" />
+                      <span>{isEn ? 'Swap PM' : 'Đổi PM Dự Án'}</span>
+                    </button>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-3 p-3 bg-white rounded-xl border border-amber-200/80">
+                  {pmUser?.avatar ? (
+                    <img
+                      src={pmUser.avatar}
+                      alt={pmUser.name}
+                      className="w-9 h-9 rounded-full object-cover border border-slate-200"
+                    />
+                  ) : (
+                    <div className="w-9 h-9 rounded-full bg-amber-100 text-amber-800 font-bold text-xs flex items-center justify-center">
+                      {pmUser?.name?.charAt(0) || 'P'}
+                    </div>
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <div className="text-xs font-bold text-slate-900 truncate">
+                      {pmUser?.name || 'Chưa chỉ định PM'}
+                    </div>
+                    <div className="text-[10px] text-slate-500 truncate">
+                      {pmUser?.email || 'N/A'} • PM Chính Thức
+                    </div>
+                  </div>
+                </div>
               </div>
 
               <div>
@@ -1343,6 +1468,22 @@ export const ProjectDetailPage: React.FC = () => {
         availableMembers={availableReplacementMembers}
         onConfirm={handleConfirmRemoveMember}
       />
+
+      {/* Swap PM Modal */}
+      {project && (
+        <SwapPmModal
+          isOpen={isSwapPmOpen}
+          onClose={() => setIsSwapPmOpen(false)}
+          onSuccess={() => {
+            fetchProjectData();
+            toast.success(isEn ? 'PM swapped successfully!' : 'Đã thay đổi PM dự án thành công!');
+          }}
+          projectId={project.id}
+          projectName={project.name}
+          currentPmName={pmUser?.name || 'Chưa chỉ định'}
+          currentPmId={project.pmId || pmUser?.id}
+        />
+      )}
 
       {/* Member Quick Profile Popup */}
       <MemberProfileModal

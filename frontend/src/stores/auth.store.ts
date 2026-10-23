@@ -9,6 +9,8 @@ export interface User {
   name: string;
   role: UserRole | string;
   avatar?: string;
+  position?: string;
+  language?: string;
   departmentId?: string | null;
 }
 
@@ -16,6 +18,7 @@ interface AuthState {
   user: User | null;
   accessToken: string | null;
   setAuth: (user: User, accessToken: string) => void;
+  updateUser: (partial: Partial<User>) => void;
   logout: () => void;
   /**
    * Check whether current user has the exact required role.
@@ -35,6 +38,10 @@ export const useAuthStore = create<AuthState>()(
       user: null,
       accessToken: null,
       setAuth: (user, accessToken) => set({ user, accessToken }),
+      updateUser: (partial) =>
+        set((state) => ({
+          user: state.user ? { ...state.user, ...partial } : null,
+        })),
       logout: () => {
         set({ user: null, accessToken: null });
         localStorage.removeItem('worksync-auth');

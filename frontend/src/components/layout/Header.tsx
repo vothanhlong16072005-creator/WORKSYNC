@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next';
 import { changeLanguage } from '@/i18n/i18n';
 import { QuickTaskButton } from '@/features/quick-tasks/components/QuickTaskButton';
 import { NotificationBell } from '@/features/notifications/components/NotificationBell';
+import { UserProfileModal } from './UserProfileModal';
 
 interface HeaderProps {
   sidebarOpen: boolean;
@@ -18,6 +19,7 @@ export default function Header({ sidebarOpen, setSidebarOpen }: HeaderProps) {
   const { i18n } = useTranslation();
   const currentLang = i18n.language || 'vi';
   const [avatarError, setAvatarError] = useState(false);
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
 
   useEffect(() => {
     setAvatarError(false);
@@ -81,28 +83,46 @@ export default function Header({ sidebarOpen, setSidebarOpen }: HeaderProps) {
         <QuickTaskButton />
         
         <div className="flex items-center gap-4 border-l-2 border-slate-200 pl-6">
-          <div className="flex flex-col items-end hidden md:flex">
-            <span className="text-sm font-bold text-slate-900">{user?.name || 'Võ Thanh Long'}</span>
-            <span className="text-[10px] font-bold text-accent uppercase tracking-widest bg-slate-900 px-2 py-0.5">{user?.role || 'ADMIN'}</span>
-          </div>
-          {user?.avatar && !avatarError ? (
-            <img
-              src={user.avatar}
-              alt={user.name || 'User'}
-              referrerPolicy="no-referrer"
-              onError={() => setAvatarError(true)}
-              className="h-10 w-10 object-cover border-2 border-slate-900 shadow-[2px_2px_0px_0px_rgba(15,23,42,1)]"
-            />
-          ) : (
-            <div className="h-10 w-10 bg-blue-600 border-2 border-slate-900 shadow-[2px_2px_0px_0px_rgba(15,23,42,1)] flex items-center justify-center text-white font-black text-sm">
-              {user?.name?.charAt(0) || 'U'}
+          <button
+            type="button"
+            onClick={() => setIsProfileOpen(true)}
+            title={currentLang.startsWith('en') ? 'Click to edit profile & avatar' : 'Bấm để chỉnh sửa hồ sơ & avatar'}
+            className="flex items-center gap-3 group text-left cursor-pointer hover:opacity-85 transition-opacity"
+          >
+            <div className="flex flex-col items-end hidden md:flex">
+              <span className="text-sm font-bold text-slate-900 group-hover:text-blue-600 transition-colors">
+                {user?.name || 'Võ Thanh Long'}
+              </span>
+              <span className="text-[10px] font-bold text-accent uppercase tracking-widest bg-slate-900 px-2 py-0.5">
+                {user?.role || 'ADMIN'}
+              </span>
             </div>
-          )}
+            {user?.avatar && !avatarError ? (
+              <img
+                src={user.avatar}
+                alt={user.name || 'User'}
+                referrerPolicy="no-referrer"
+                onError={() => setAvatarError(true)}
+                className="h-10 w-10 object-cover border-2 border-slate-900 shadow-[2px_2px_0px_0px_rgba(15,23,42,1)] group-hover:border-blue-600 transition-colors"
+              />
+            ) : (
+              <div className="h-10 w-10 bg-blue-600 border-2 border-slate-900 shadow-[2px_2px_0px_0px_rgba(15,23,42,1)] flex items-center justify-center text-white font-black text-sm group-hover:border-blue-600 transition-colors">
+                {user?.name?.charAt(0) || 'U'}
+              </div>
+            )}
+          </button>
+
           <Button variant="ghost" size="icon" onClick={logout} title="Logout" className="hover:bg-destructive hover:text-white rounded-none transition-colors ml-2">
             <LogOut className="h-5 w-5" />
           </Button>
         </div>
       </div>
+
+      {/* User Profile Edit Modal */}
+      <UserProfileModal
+        isOpen={isProfileOpen}
+        onClose={() => setIsProfileOpen(false)}
+      />
     </header>
   );
 }

@@ -262,6 +262,14 @@ describe('ProjectsService.swapPm', () => {
         update: vi.fn().mockResolvedValue({ ...project, pmId: 'new-pm' }),
       },
       projectMember: {
+        deleteMany: vi.fn().mockResolvedValue({ count: 1 }),
+        upsert: vi.fn().mockResolvedValue({}),
+      },
+      conversation: {
+        findFirst: vi.fn().mockResolvedValue(null),
+      },
+      conversationMember: {
+        deleteMany: vi.fn().mockResolvedValue({ count: 1 }),
         upsert: vi.fn().mockResolvedValue({}),
       },
     };
@@ -291,10 +299,8 @@ describe('ProjectsService.swapPm', () => {
       data: { pmId: 'new-pm' },
       include: expect.any(Object),
     });
-    expect(tx.projectMember.upsert).toHaveBeenCalledWith({
-      where: { projectId_userId: { projectId: 'p-1', userId: 'old-pm' } },
-      create: { projectId: 'p-1', userId: 'old-pm', projectRole: 'MEMBER' },
-      update: { projectRole: 'MEMBER' },
+    expect(tx.projectMember.deleteMany).toHaveBeenCalledWith({
+      where: { projectId: 'p-1', userId: 'old-pm' },
     });
     expect(tx.projectMember.upsert).toHaveBeenCalledWith({
       where: { projectId_userId: { projectId: 'p-1', userId: 'new-pm' } },

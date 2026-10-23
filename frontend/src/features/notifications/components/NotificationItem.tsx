@@ -1,5 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import {
   Video,
   CheckCircle2,
@@ -18,66 +19,71 @@ interface NotificationItemProps {
   compact?: boolean;
 }
 
-function getCategoryConfig(type: NotificationType) {
+function cleanEmoji(text: string): string {
+  if (!text) return '';
+  return text.replace(/^[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{1FA00}-\u{1FAFF}\u{FE00}-\u{FE0F}]\s*/u, '').trim();
+}
+
+function getCategoryConfig(type: NotificationType, isEn: boolean) {
   switch (type) {
     case 'MEETING':
       return {
         icon: Video,
-        bg: 'bg-blue-100 text-blue-700 border-blue-300',
+        bg: 'bg-blue-50 text-blue-700 border-blue-200/60',
         borderColor: 'border-l-blue-600',
-        badge: 'Họp trực tuyến',
+        badge: isEn ? 'Online Meeting' : 'Họp trực tuyến',
       };
     case 'ATTENDANCE_APPROVAL':
       return {
         icon: CheckCircle2,
-        bg: 'bg-emerald-100 text-emerald-700 border-emerald-300',
+        bg: 'bg-emerald-50 text-emerald-700 border-emerald-200/60',
         borderColor: 'border-l-emerald-600',
-        badge: 'Chấm công & Đơn',
+        badge: isEn ? 'Attendance & Leave' : 'Chấm công & Đơn',
       };
     case 'QUICK_TASK':
       return {
         icon: Zap,
-        bg: 'bg-amber-100 text-amber-700 border-amber-300',
+        bg: 'bg-amber-50 text-amber-700 border-amber-200/60',
         borderColor: 'border-l-amber-600',
-        badge: 'Việc nhanh',
+        badge: isEn ? 'Quick Task' : 'Việc nhanh',
       };
     case 'MENTION':
       return {
         icon: AtSign,
-        bg: 'bg-purple-100 text-purple-700 border-purple-300',
+        bg: 'bg-purple-50 text-purple-700 border-purple-200/60',
         borderColor: 'border-l-purple-600',
-        badge: 'Nhắc tên',
+        badge: isEn ? 'Mention' : 'Nhắc tên',
       };
     case 'TASK':
       return {
         icon: ClipboardList,
-        bg: 'bg-indigo-100 text-indigo-700 border-indigo-300',
+        bg: 'bg-indigo-50 text-indigo-700 border-indigo-200/60',
         borderColor: 'border-l-indigo-600',
-        badge: 'Công việc',
+        badge: isEn ? 'Project Task' : 'Công việc',
       };
     default:
       return {
         icon: Bell,
-        bg: 'bg-slate-100 text-slate-700 border-slate-300',
+        bg: 'bg-slate-50 text-slate-700 border-slate-200/60',
         borderColor: 'border-l-slate-600',
-        badge: 'Hệ thống',
+        badge: isEn ? 'System' : 'Hệ thống',
       };
   }
 }
 
-function formatRelativeTime(dateStr: string): string {
+function formatRelativeTime(dateStr: string, isEn: boolean): string {
   const date = new Date(dateStr);
   const now = new Date();
   const diffSec = Math.floor((now.getTime() - date.getTime()) / 1000);
 
-  if (diffSec < 60) return 'Vừa xong';
+  if (diffSec < 60) return isEn ? 'Just now' : 'Vừa xong';
   const diffMin = Math.floor(diffSec / 60);
-  if (diffMin < 60) return `${diffMin} phút trước`;
+  if (diffMin < 60) return isEn ? `${diffMin}m ago` : `${diffMin} phút trước`;
   const diffHour = Math.floor(diffMin / 60);
-  if (diffHour < 24) return `${diffHour} giờ trước`;
+  if (diffHour < 24) return isEn ? `${diffHour}h ago` : `${diffHour} giờ trước`;
   const diffDay = Math.floor(diffHour / 24);
-  if (diffDay < 7) return `${diffDay} ngày trước`;
-  return date.toLocaleDateString('vi-VN', { month: 'numeric', day: 'numeric' });
+  if (diffDay < 7) return isEn ? `${diffDay}d ago` : `${diffDay} ngày trước`;
+  return date.toLocaleDateString(isEn ? 'en-US' : 'vi-VN', { month: 'short', day: 'numeric' });
 }
 
 export const NotificationItem: React.FC<NotificationItemProps> = ({
@@ -86,8 +92,10 @@ export const NotificationItem: React.FC<NotificationItemProps> = ({
   compact = false,
 }) => {
   const navigate = useNavigate();
+  const { i18n } = useTranslation();
+  const isEn = i18n.language.startsWith('en');
   const { markAsRead, deleteNotification } = useNotificationsStore();
-  const config = getCategoryConfig(notification.type);
+  const config = getCategoryConfig(notification.type, isEn);
   const Icon = config.icon;
 
   const handleClick = () => {
@@ -193,7 +201,7 @@ export const NotificationItem: React.FC<NotificationItemProps> = ({
             {config.badge}
           </span>
           <span className="text-[11px] font-medium text-slate-400">
-            {formatRelativeTime(notification.createdAt)}
+            {formatRelativeTime(notification.createdAt, isEn)}
           </span>
         </div>
 
@@ -202,7 +210,7 @@ export const NotificationItem: React.FC<NotificationItemProps> = ({
             notification.isRead ? 'font-semibold text-slate-700 group-hover:text-blue-600' : 'font-bold text-slate-900 group-hover:text-blue-600'
           }`}
         >
-          {notification.title}
+          {cleanEmoji(notification.title)}
         </h4>
 
         {notification.body && (
