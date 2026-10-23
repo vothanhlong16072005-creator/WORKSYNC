@@ -29,7 +29,8 @@ export class AuthController {
   @UseGuards(AuthGuard('google'))
   async googleAuthRedirect(@Req() req: any, @Res() res: any) {
     const data = req.user;
-    // Chuyển hướng về Frontend kèm Token
-    res.redirect(`http://localhost:5173/login?token=${data.accessToken}&user=${encodeURIComponent(JSON.stringify(data.user))}`);
+    // Chuyển hướng về Frontend kèm Token (hỗ trợ cả Vercel lẫn localhost)
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+    res.redirect(`${frontendUrl.replace(/\/$/, '')}/login?token=${data.accessToken}&user=${encodeURIComponent(JSON.stringify(data.user))}`);
   }
 }
