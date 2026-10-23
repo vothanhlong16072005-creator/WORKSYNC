@@ -67,11 +67,35 @@ export class AdminController {
 
   @Post('departments')
   async createDepartment(
-    @Body() body: { name: string; code: string; description?: string; managerId?: string },
+    @Body()
+    body: {
+      name: string;
+      code?: string;
+      description?: string;
+      managerId?: string;
+      memberIds?: string[];
+    },
   ) {
     return {
       success: true,
       data: await this.adminService.createDepartment(body),
+    };
+  }
+
+  @Patch('departments/:id')
+  async updateDepartment(
+    @Param('id') id: string,
+    @Body()
+    body: {
+      name?: string;
+      description?: string;
+      managerId?: string;
+      memberIds?: string[];
+    },
+  ) {
+    return {
+      success: true,
+      data: await this.adminService.updateDepartment(id, body),
     };
   }
 

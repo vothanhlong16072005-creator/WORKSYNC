@@ -175,6 +175,8 @@ export class CalendarService {
 
       if (scope === 'mine') {
         sprintWhere.project = {
+          kind: 'TEAM',
+          deletedAt: null,
           OR: [
             { pmId: actor.id },
             { createdById: actor.id },
@@ -182,7 +184,16 @@ export class CalendarService {
           ],
         };
       } else if (scope === 'department' && deptId) {
-        sprintWhere.project = { departmentId: deptId };
+        sprintWhere.project = {
+          kind: 'TEAM',
+          deletedAt: null,
+          departmentId: deptId,
+        };
+      } else {
+        sprintWhere.project = {
+          kind: 'TEAM',
+          deletedAt: null,
+        };
       }
 
       const sprints = await this.prisma.sprint.findMany({
@@ -432,15 +443,22 @@ export class CalendarService {
       }
     }
 
+    // Deduplicate items by kind + id
+    const uniqueItemsMap = new Map<string, TimelineItem>();
+    for (const it of items) {
+      uniqueItemsMap.set(`${it.kind}-${it.id}`, it);
+    }
+    const deduplicatedItems = Array.from(uniqueItemsMap.values());
+
     // ---------------------------------------------------------
     // 8. Detect Conflicts
     // ---------------------------------------------------------
-    const conflicts = await this.detectConflicts(items);
+    const conflicts = await this.detectConflicts(deduplicatedItems);
 
     return {
       range: { from: query.from, to: query.to },
       scope: scope as any,
-      items,
+      items: deduplicatedItems,
       conflicts,
     };
   }
@@ -476,10 +494,17 @@ export class CalendarService {
       }
 
       // Check 1: meeting_overlap
+      const seenConflictKeys = new Set<string>();
       for (let i = 0; i < meetingItems.length; i++) {
         for (let j = i + 1; j < meetingItems.length; j++) {
           const m1 = meetingItems[i];
           const m2 = meetingItems[j];
+
+          // Skip cancelled meetings
+          if (m1.status === 'CANCELLED' || m2.status === 'CANCELLED') continue;
+
+          // Skip duplicate meetings with identical titles (redundant data copies)
+          if (m1.title.trim().toLowerCase() === m2.title.trim().toLowerCase()) continue;
 
           const start1 = new Date(m1.startAt).getTime();
           const end1 = new Date(m1.endAt).getTime();
@@ -493,13 +518,18 @@ export class CalendarService {
 
             const commonAttendees = atts1.filter((a1) => atts2.some((a2) => a2.id === a1.id));
             for (const common of commonAttendees) {
-              conflicts.push({
-                userId: common.id,
-                userName: common.name,
-                type: 'meeting_overlap',
-                message: `${common.name} có 2 cuộc họp trùng giờ ("${m1.title}" và "${m2.title}")`,
-                involvedItemIds: [m1.id, m2.id],
-              });
+              const pairKey = [m1.id, m2.id].sort().join('_');
+              const key = `overlap_${common.id}_${pairKey}`;
+              if (!seenConflictKeys.has(key)) {
+                seenConflictKeys.add(key);
+                conflicts.push({
+                  userId: common.id,
+                  userName: common.name,
+                  type: 'meeting_overlap',
+                  message: `${common.name} có 2 cuộc họp trùng giờ ("${m1.title}" và "${m2.title}")`,
+                  involvedItemIds: [m1.id, m2.id],
+                });
+              }
             }
           }
         }

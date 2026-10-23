@@ -241,7 +241,6 @@ export class AdminService {
         department: {
           select: {
             id: true,
-            code: true,
             name: true,
           },
         },
@@ -297,7 +296,6 @@ export class AdminService {
           select: {
             id: true,
             name: true,
-            code: true,
             status: true,
             workflowType: true,
           },
@@ -327,28 +325,104 @@ export class AdminService {
 
     return departments.map((d) => ({
       ...d,
+      code: d.id,
       manager: d.managerId ? managerMap.get(d.managerId) : null,
     }));
   }
 
-  async createDepartment(data: { name: string; code?: string; description?: string; managerId?: string }) {
+  async createDepartment(data: {
+    name: string;
+    code?: string;
+    description?: string;
+    managerId?: string;
+    memberIds?: string[];
+  }) {
     const existing = await this.prisma.department.findFirst({ where: { name: data.name } });
     if (existing) throw new BadRequestException(`Phòng ban "${data.name}" đã tồn tại`);
 
-    return this.prisma.department.create({
+    const dept = await this.prisma.department.create({
       data: {
         name: data.name,
         description: data.description,
-        managerId: data.managerId,
+        managerId: data.managerId || null,
       },
     });
+
+    // If managerId specified, assign user to this department & update role to DEPARTMENT_HEAD if employee
+    if (data.managerId) {
+      const mgr = await this.prisma.user.findUnique({ where: { id: data.managerId } });
+      if (mgr) {
+        await this.prisma.user.update({
+          where: { id: data.managerId },
+          data: {
+            departmentId: dept.id,
+            role: mgr.role === Role.EMPLOYEE ? Role.DEPARTMENT_HEAD : mgr.role,
+          },
+        });
+      }
+    }
+
+    // If initial members specified, assign them to this department
+    if (data.memberIds && data.memberIds.length > 0) {
+      await this.prisma.user.updateMany({
+        where: { id: { in: data.memberIds } },
+        data: { departmentId: dept.id },
+      });
+    }
+
+    return dept;
+  }
+
+  async updateDepartment(
+    id: string,
+    data: {
+      name?: string;
+      description?: string;
+      managerId?: string;
+      memberIds?: string[];
+    },
+  ) {
+    const dept = await this.prisma.department.findUnique({ where: { id } });
+    if (!dept) throw new NotFoundException('Phòng ban không tồn tại');
+
+    const updateData: any = {};
+    if (data.name !== undefined) updateData.name = data.name;
+    if (data.description !== undefined) updateData.description = data.description;
+    if (data.managerId !== undefined) updateData.managerId = data.managerId || null;
+
+    const updated = await this.prisma.department.update({
+      where: { id },
+      data: updateData,
+    });
+
+    if (data.managerId) {
+      const mgr = await this.prisma.user.findUnique({ where: { id: data.managerId } });
+      if (mgr) {
+        await this.prisma.user.update({
+          where: { id: data.managerId },
+          data: {
+            departmentId: dept.id,
+            role: mgr.role === Role.EMPLOYEE ? Role.DEPARTMENT_HEAD : mgr.role,
+          },
+        });
+      }
+    }
+
+    if (data.memberIds && data.memberIds.length > 0) {
+      await this.prisma.user.updateMany({
+        where: { id: { in: data.memberIds } },
+        data: { departmentId: dept.id },
+      });
+    }
+
+    return updated;
   }
 
   async getAllProjects() {
     const projects = await this.prisma.project.findMany({
       where: { deletedAt: null, kind: 'TEAM' },
       include: {
-        manager: {
+        pm: {
           select: { id: true, name: true, email: true, avatar: true },
         },
         department: {
@@ -378,7 +452,8 @@ export class AdminService {
         status: p.status,
         workflowType: p.workflowType,
         color: p.color,
-        manager: p.manager,
+        manager: p.pm,
+        pm: p.pm,
         department: p.department,
         memberCount: p._count.members,
         sprintCount: p._count.sprints,
@@ -403,10 +478,10 @@ export class AdminService {
   }
 
   async getAllMeetings() {
-    return this.prisma.meeting.findMany({
+    const meetings = await this.prisma.meeting.findMany({
       where: { deletedAt: null },
       include: {
-        creator: { select: { id: true, name: true, avatar: true } },
+        createdBy: { select: { id: true, name: true, avatar: true } },
         department: { select: { id: true, name: true } },
         project: { select: { id: true, name: true } },
         _count: { select: { attendees: true } },
@@ -414,5 +489,10 @@ export class AdminService {
       orderBy: { startTime: 'desc' },
       take: 100,
     });
+
+    return meetings.map((m) => ({
+      ...m,
+      creator: m.createdBy,
+    }));
   }
 }

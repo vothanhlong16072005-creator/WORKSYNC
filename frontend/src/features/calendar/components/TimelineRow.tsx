@@ -28,7 +28,7 @@ export const TimelineRow: React.FC<TimelineRowProps> = ({
 }) => {
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
 
-  const getItemsForDay = (date: Date) => {
+  const getItemsForDay = (date: Date, dayIndex: number) => {
     const dayStart = new Date(date);
     dayStart.setHours(0, 0, 0, 0);
     const dayEnd = new Date(date);
@@ -37,6 +37,14 @@ export const TimelineRow: React.FC<TimelineRowProps> = ({
     return items.filter((item) => {
       const itemStart = new Date(item.startAt);
       const itemEnd = new Date(item.endAt);
+
+      if (item.kind === 'sprint') {
+        // If sprint starts on this day, display it here
+        if (isSameDay(itemStart, date)) return true;
+        // If sprint started before the current visible range and is ongoing, display it on the first visible day only
+        if (dayIndex === 0 && itemStart < dayStart && itemEnd >= dayStart) return true;
+        return false;
+      }
 
       if (isSameDay(itemStart, date) || isSameDay(itemEnd, date)) {
         return true;
@@ -90,7 +98,7 @@ export const TimelineRow: React.FC<TimelineRowProps> = ({
         }}
       >
         {days.map((day, idx) => {
-          const dayItems = getItemsForDay(day);
+          const dayItems = getItemsForDay(day, idx);
           const isDragTarget = dragOverIndex === idx;
 
           return (

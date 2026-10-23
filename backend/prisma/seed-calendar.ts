@@ -29,23 +29,25 @@ const addDays = (d: number, h = 9, m = 0) => {
 async function main() {
   console.log('📅 [SEED-CALENDAR] Khởi tạo dữ liệu mẫu cho Work Calendar (M8)...');
 
-  // 1. Get existing users & projects
-  const users = await prisma.user.findMany({ take: 10 });
-  const projects = await prisma.project.findMany({ take: 3 });
+  // 1. Get existing users & TEAM projects (never personal projects)
+  const users = await prisma.user.findMany({ where: { deletedAt: null }, take: 10 });
+  const projects = await prisma.project.findMany({ where: { kind: 'TEAM', deletedAt: null }, take: 3 });
 
   if (users.length === 0 || projects.length === 0) {
-    console.log('⚠️ Không tìm thấy users hoặc projects. Vui lòng chạy seed-enterprise-full trước.');
+    console.log('⚠️ Không tìm thấy users hoặc team projects. Vui lòng chạy seed-enterprise-full trước.');
     return;
   }
 
-  // Idempotency check: Nếu đã seed sprint mẫu của calendar thì bỏ qua
-  const alreadySeeded = await prisma.sprint.findFirst({
-    where: { name: 'Sprint 24 — M8 Work Calendar & Analytics' },
+  // Cleanup any old calendar test sprints and meetings to prevent duplicate conflicts
+  await prisma.meetingAttendee.deleteMany({
+    where: { meeting: { title: { in: ['Họp đồng bộ tiến độ dự án WorkSync', 'Phỏng vấn kỹ thuật Backend Senior (Trùng giờ)'] } } },
   });
-  if (alreadySeeded) {
-    console.log('✅ [SEED-CALENDAR] Dữ liệu Work Calendar đã được khởi tạo trước đó, bỏ qua để tránh trùng lặp.');
-    return;
-  }
+  await prisma.meeting.deleteMany({
+    where: { title: { in: ['Họp đồng bộ tiến độ dự án WorkSync', 'Phỏng vấn kỹ thuật Backend Senior (Trùng giờ)'] } },
+  });
+  await prisma.sprint.deleteMany({
+    where: { name: { in: ['Sprint 24 — M8 Work Calendar & Analytics', 'Sprint 25 — Mobile Responsive & Optimization'] } },
+  });
 
   const u0 = users[0];
   const u1 = users[1] || u0;

@@ -36,11 +36,25 @@ export const adminApi = {
 
   async createDepartment(payload: {
     name: string;
-    code: string;
+    code?: string;
     description?: string;
     managerId?: string;
+    memberIds?: string[];
   }): Promise<any> {
     const res = await apiClient.post('/admin/departments', payload);
+    return res.data;
+  },
+
+  async updateDepartment(
+    id: string,
+    payload: {
+      name?: string;
+      description?: string;
+      managerId?: string;
+      memberIds?: string[];
+    },
+  ): Promise<any> {
+    const res = await apiClient.patch(`/admin/departments/${id}`, payload);
     return res.data;
   },
 

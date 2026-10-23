@@ -12,10 +12,20 @@ import { toast } from 'sonner';
 import { useTranslation } from 'react-i18next';
 import type { MeetingTranscriptChunk } from '../types/meeting.types';
 
-const RECOGNITION_LANG_MAP: Record<string, string> = {
-  vi: 'vi-VN',
-  en: 'en-US',
-};
+/**
+ * Ngôn ngữ nhận diện CỐ ĐỊNH cho toàn bộ cuộc họp.
+ *
+ * Bug trước đây: `lang` được lấy từ `i18n.language` → mỗi máy một ngôn ngữ
+ * (máy để UI là EN sẽ ghi `en-US`, máy UI là VI sẽ ghi `vi-VN`) → cùng một
+ * cuộc họp bị ghi lại lộn xộn Anh/Việt. Giờ ép cứng `vi-VN` cho mọi người.
+ */
+const RECOGNITION_LANG = 'vi-VN';
+
+/** Số từ tối thiểu để coi là một câu hoàn chỉnh và gửi lên server */
+const MIN_SENTENCE_WORDS = 8;
+
+/** Thời gian chờ ghép nối thêm mảnh tiếp theo trước khi flush câu (ms) */
+const FLUSH_DEBOUNCE_MS = 800;
 
 // Web Speech API interface declarations
 interface SpeechRecognitionEvent extends Event {
@@ -71,8 +81,7 @@ export function useLiveTranscription({
   currentUser,
   audioEnabled,
 }: UseLiveTranscriptionProps) {
-  const { t, i18n } = useTranslation();
-  const recognitionLang = RECOGNITION_LANG_MAP[i18n.language?.split('-')[0] || 'vi'] ?? 'vi-VN';
+  const { t } = useTranslation();
 
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [transcripts, setTranscripts] = useState<MeetingTranscriptChunk[]>([]);
@@ -88,11 +97,29 @@ export function useLiveTranscription({
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
   const isTranscribingRef = useRef(isTranscribing);
   const audioEnabledRef = useRef(audioEnabled);
+  const currentUserRef = useRef(currentUser);
   const sentenceBufferRef = useRef<string>('');
   const flushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const captionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const restartAttemptsRef = useRef(0);
   const restartTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const noSpeechCountRef = useRef(0);
+  const noSpeechWarnedRef = useRef(false);
+
+  // Sync refs — BẮT BUỘC. Trước đây `useRef(state)` được đọc trong `onend`
+  // nhưng không có effect đồng bộ → giá trị luôn là giá trị render đầu tiên
+  // → `onend` luôn return sớm → recognition không bao giờ tự restart.
+  useEffect(() => {
+    isTranscribingRef.current = isTranscribing;
+  }, [isTranscribing]);
+
+  useEffect(() => {
+    audioEnabledRef.current = audioEnabled;
+  }, [audioEnabled]);
+
+  useEffect(() => {
+    currentUserRef.current = currentUser;
+  }, [currentUser]);
 
   // Helper: Chuẩn hóa câu tiếng Việt (viết hoa chữ cái đầu, dấu chấm cuối câu)
   const formatSentence = (text: string) => {
@@ -111,7 +138,8 @@ export function useLiveTranscription({
     }
 
     const raw = sentenceBufferRef.current.trim();
-    if (!raw || !socket || !currentUser) return;
+    const user = currentUserRef.current;
+    if (!raw || !socket || !user) return;
 
     const formatted = formatSentence(raw);
     sentenceBufferRef.current = '';
@@ -119,15 +147,15 @@ export function useLiveTranscription({
     socket.emit('meeting:transcript-chunk', {
       meetingId,
       speaker: {
-        id: currentUser.id,
-        name: currentUser.name,
-        role: currentUser.role,
-        avatar: currentUser.avatar,
+        id: user.id,
+        name: user.name,
+        role: user.role,
+        avatar: user.avatar,
       },
       text: formatted,
       timestamp: new Date().toISOString(),
     });
-  }, [meetingId, socket, currentUser]);
+  }, [meetingId, socket]);
 
   // 2. Khởi tạo và thiết lập Recognition với Exponential Backoff Auto-Restart
   const setupRecognition = useCallback(() => {
@@ -139,10 +167,13 @@ export function useLiveTranscription({
       recognition.continuous = true;
       recognition.interimResults = true;
       recognition.maxAlternatives = 1;
-      recognition.lang = recognitionLang;
+      // ★ CỐ ĐỊNH tiếng Việt cho mọi người tham gia (trước đây lấy từ i18n → mỗi máy 1 ngôn ngữ)
+      recognition.lang = RECOGNITION_LANG;
 
       recognition.onstart = () => {
-        restartAttemptsRef.current = 0;
+        // KHÔNG reset backoff ở đây: Chrome gọi `onstart` rồi lại `onend`
+        // liên tục khi không có tiếng → reset sớm sẽ tạo vòng lặp restart.
+        // Backoff chỉ được reset khi thực sự nhận được text.
       };
 
       recognition.onresult = (event: SpeechRecognitionEvent) => {
@@ -158,11 +189,13 @@ export function useLiveTranscription({
           }
         }
 
+        const user = currentUserRef.current;
+
         // 1. Phản hồi tức thì ngay khi người dùng đang nói (Interim Captions)
         const interimTrimmed = interimTranscript.trim();
-        if (interimTrimmed && currentUser) {
+        if (interimTrimmed && user) {
           setCurrentCaption({
-            speakerName: currentUser.name,
+            speakerName: user.name,
             text: interimTrimmed,
             timestamp: new Date().toISOString(),
           });
@@ -171,6 +204,11 @@ export function useLiveTranscription({
         // 2. Gom các mảnh câu (Fragments) vào Bộ đệm thông minh
         const trimmed = finalTranscript.trim();
         if (trimmed) {
+          // Thực sự nhận được text → đặt lại backoff về 0
+          restartAttemptsRef.current = 0;
+          noSpeechCountRef.current = 0;
+          noSpeechWarnedRef.current = false;
+
           sentenceBufferRef.current = (sentenceBufferRef.current + ' ' + trimmed).trim();
 
           const currentFullText = sentenceBufferRef.current;
@@ -178,15 +216,15 @@ export function useLiveTranscription({
           const hasEndingPunctuation = /[.!?…]$/.test(trimmed);
           const hasCommaBreak = /[,;:]$/.test(trimmed) && wordCount >= 6;
 
-          // Nếu câu có dấu ngắt hoặc đã đủ dài (>= 12 từ) -> phát ngay lập tức
-          if (hasEndingPunctuation || hasCommaBreak || wordCount >= 12) {
+          // Nếu câu có dấu ngắt hoặc đã đủ dài (>= MIN_SENTENCE_WORDS) -> phát ngay lập tức
+          if (hasEndingPunctuation || hasCommaBreak || wordCount >= MIN_SENTENCE_WORDS) {
             flushSentenceBuffer();
           } else {
-            // Chờ 1.5s để ghép từ tiếp theo
+            // Chờ FLUSH_DEBOUNCE_MS để ghép từ tiếp theo
             if (flushTimerRef.current) clearTimeout(flushTimerRef.current);
             flushTimerRef.current = setTimeout(() => {
               flushSentenceBuffer();
-            }, 1500);
+            }, FLUSH_DEBOUNCE_MS);
           }
         }
       };
@@ -206,6 +244,17 @@ export function useLiveTranscription({
             console.warn('[STT] network error, will restart with backoff');
             break;
           case 'no-speech':
+            noSpeechCountRef.current += 1;
+            if (noSpeechCountRef.current >= 3 && !noSpeechWarnedRef.current) {
+              noSpeechWarnedRef.current = true;
+              toast.warning(
+                t(
+                  'meeting_room.stt_no_speech_hint',
+                  'Nhận diện tiếng Việt chưa nhận được giọng nói. Nếu bạn dùng Chrome, hãy vào cài đặt Ngôn ngữ và bật "Tiếng Việt" (Vietnamese) trong Speech services.',
+                ),
+              );
+            }
+            break;
           case 'aborted':
             break;
           case 'audio-capture':
@@ -240,9 +289,12 @@ export function useLiveTranscription({
       console.error('[LiveTranscript] Setup failed:', e);
       return null;
     }
-  }, [recognitionLang, currentUser, flushSentenceBuffer, t]);
+  }, [flushSentenceBuffer, t]);
 
   // 3. Quản lý việc bật/tắt recognition theo trạng thái phòng và micro
+  // ⚠️ deps CỐ Ý KHÔNG chứa `setupRecognition`/`currentUser`:
+  // `currentUser` là object literal mới mỗi render → trước đây effect này
+  // restart recognition liên tục (restart storm) → STT lag và mất tiếng.
   useEffect(() => {
     if (!isSpeechSupported) return;
 
@@ -271,7 +323,8 @@ export function useLiveTranscription({
         recognitionRef.current?.stop();
       } catch {}
     };
-  }, [isTranscribing, audioEnabled, isSpeechSupported, setupRecognition]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isTranscribing, audioEnabled, isSpeechSupported]);
 
   // 4. Lắng nghe các sự kiện Socket.IO
   useEffect(() => {

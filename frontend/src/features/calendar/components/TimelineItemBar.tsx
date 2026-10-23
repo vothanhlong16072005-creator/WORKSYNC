@@ -120,6 +120,8 @@ export const TimelineItemBar: React.FC<TimelineItemBarProps> = ({
   const timeLabel =
     item.kind === 'task' || item.kind === 'wfh'
       ? new Date(item.startAt).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' })
+      : item.kind === 'sprint'
+      ? `${new Date(item.startAt).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' })} - ${new Date(item.endAt).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' })}`
       : `${formatTime(item.startAt)} - ${formatTime(item.endAt)}`;
 
   if (compact) {

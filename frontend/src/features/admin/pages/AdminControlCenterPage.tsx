@@ -93,6 +93,8 @@ export default function AdminControlCenterPage() {
   const [newDeptName, setNewDeptName] = useState('');
   const [newDeptCode, setNewDeptCode] = useState('');
   const [newDeptDesc, setNewDeptDesc] = useState('');
+  const [newDeptManagerId, setNewDeptManagerId] = useState('');
+  const [newDeptMemberIds, setNewDeptMemberIds] = useState<string[]>([]);
   const [creatingDept, setCreatingDept] = useState(false);
 
   // Load Overview Data
@@ -218,13 +220,18 @@ export default function AdminControlCenterPage() {
         name: newDeptName,
         code: newDeptCode.toUpperCase(),
         description: newDeptDesc || undefined,
+        managerId: newDeptManagerId || undefined,
+        memberIds: newDeptMemberIds.length > 0 ? newDeptMemberIds : undefined,
       });
       toast.success(isVi ? 'Tạo phòng ban mới thành công' : 'Department created');
       setCreateDeptModal(false);
       setNewDeptName('');
       setNewDeptCode('');
       setNewDeptDesc('');
+      setNewDeptManagerId('');
+      setNewDeptMemberIds([]);
       loadDepartments();
+      loadUsers();
       loadOverview();
     } catch (err: any) {
       const msg = err?.response?.data?.message || (isVi ? 'Lỗi tạo phòng ban' : 'Failed to create department');
@@ -1491,12 +1498,79 @@ export default function AdminControlCenterPage() {
                   {isVi ? 'Mô tả nhiệm vụ' : 'Description'}
                 </label>
                 <textarea
-                  rows={3}
+                  rows={2}
                   placeholder={isVi ? 'Mô tả chức năng nhiệm vụ...' : 'Department scope and goals...'}
                   value={newDeptDesc}
                   onChange={(e) => setNewDeptDesc(e.target.value)}
-                  className="w-full p-3 text-xs rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 resize-none"
+                  className="w-full p-2.5 text-xs rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 resize-none"
                 />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  {isVi ? 'Chỉ định Trưởng phòng (Manager)' : 'Appoint Department Head'}
+                </label>
+                <select
+                  value={newDeptManagerId}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setNewDeptManagerId(val);
+                    // Remove from members if chosen as manager
+                    setNewDeptMemberIds((prev) => prev.filter((id) => id !== val));
+                  }}
+                  className="w-full h-9 px-3 text-xs rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 bg-white"
+                >
+                  <option value="">{isVi ? '-- Chưa chỉ định (Chọn sau) --' : '-- Not assigned (Select later) --'}</option>
+                  {users.map((u) => (
+                    <option key={u.id} value={u.id}>
+                      {u.name} ({u.email}) — [{u.role}]
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  {isVi ? 'Gán nhân viên ban đầu vào phòng ban' : 'Assign Initial Members'}
+                  {newDeptMemberIds.length > 0 && (
+                    <span className="ml-2 font-normal text-indigo-600">
+                      ({newDeptMemberIds.length} {isVi ? 'đã chọn' : 'selected'})
+                    </span>
+                  )}
+                </label>
+                <div className="max-h-36 overflow-y-auto border border-slate-200 rounded-xl p-2 space-y-1.5 bg-slate-50/50">
+                  {users
+                    .filter((u) => u.id !== newDeptManagerId)
+                    .map((u) => {
+                      const isSelected = newDeptMemberIds.includes(u.id);
+                      return (
+                        <label
+                          key={u.id}
+                          className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-white text-xs cursor-pointer select-none transition-colors"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setNewDeptMemberIds((prev) => [...prev, u.id]);
+                              } else {
+                                setNewDeptMemberIds((prev) => prev.filter((id) => id !== u.id));
+                              }
+                            }}
+                            className="w-3.5 h-3.5 text-indigo-600 rounded-sm border-slate-300"
+                          />
+                          <span className="font-semibold text-slate-800">{u.name}</span>
+                          <span className="text-[11px] text-slate-400">({u.email})</span>
+                          {u.department && (
+                            <span className="ml-auto text-[10px] px-1.5 py-0.5 rounded-md bg-slate-200/80 text-slate-600">
+                              {u.department.name}
+                            </span>
+                          )}
+                        </label>
+                      );
+                    })}
+                </div>
               </div>
             </div>
 
