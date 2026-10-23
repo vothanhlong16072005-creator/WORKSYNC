@@ -60,8 +60,8 @@ export class AttendanceService {
       const [startH, startM] = checkinStartTime.split(':').map(Number);
       const [endH, endM] = checkinEndTime.split(':').map(Number);
 
-      const startMinutes = (startH || 6) * 60 + (startM || 0);
-      const endMinutes = (endH || 12) * 60 + (endM || 0);
+      const startMinutes = (Number.isNaN(startH) ? 6 : startH) * 60 + (Number.isNaN(startM) ? 0 : startM);
+      const endMinutes = (Number.isNaN(endH) ? 23 : endH) * 60 + (Number.isNaN(endM) ? 59 : endM);
 
       return currentMinutes >= startMinutes && currentMinutes <= endMinutes;
     } catch {
@@ -562,7 +562,7 @@ export class AttendanceService {
           timezone: 'Asia/Ho_Chi_Minh',
           workStartTime: '08:30',
           workEndTime: '17:30',
-          checkinStartTime: '06:00',
+          checkinStartTime: '00:00',
           checkinEndTime: '23:59',
           allowedIpRanges: ['127.0.0.1', '::1', '192.168.0.0/16', '10.0.0.0/8', '172.16.0.0/12', '118.69.0.0/16', '0.0.0.0/0'],
           officeLatitude: 15.9686,
