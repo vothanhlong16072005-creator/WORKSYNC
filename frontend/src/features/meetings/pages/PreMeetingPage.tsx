@@ -16,11 +16,82 @@ import {
   Users,
   Calendar,
   PictureInPicture,
+  Sparkles,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { meetingApi } from '../api/meeting.api';
 import type { Meeting } from '../types/meeting.types';
 import { useAuthStore } from '@/stores/auth.store';
+
+interface ChecklistItemRowProps {
+  label: string;
+  icon: React.ReactNode;
+  passed: boolean;
+  passedText?: string;
+  pendingText?: string;
+}
+
+const ChecklistItemRow: React.FC<ChecklistItemRowProps> = ({
+  label,
+  icon,
+  passed,
+  passedText,
+  pendingText,
+}) => (
+  <div className="flex items-center justify-between text-xs p-3 rounded-xl bg-white/70 border border-slate-200/80 backdrop-blur-xs transition-all">
+    <div className="flex items-center gap-2.5 text-slate-700 font-semibold">
+      <div className="text-slate-400">{icon}</div>
+      <span>{label}</span>
+    </div>
+    {passed ? (
+      <span className="flex items-center gap-1.5 text-emerald-600 font-bold px-2.5 py-1 rounded-full bg-emerald-50 border border-emerald-200">
+        <CheckCircle2 className="w-3.5 h-3.5" />
+        {passedText || 'Đã đạt'}
+      </span>
+    ) : (
+      <span className="flex items-center gap-1.5 text-rose-500 font-bold px-2.5 py-1 rounded-full bg-rose-50 border border-rose-200">
+        <AlertCircle className="w-3.5 h-3.5" />
+        {pendingText || 'Chưa đạt'}
+      </span>
+    )}
+  </div>
+);
+
+interface AudioLevelMeterProps {
+  level: number;
+  enabled: boolean;
+  label?: string;
+}
+
+const AudioLevelMeter: React.FC<AudioLevelMeterProps> = ({ level, enabled, label }) => {
+  const displayLevel = enabled ? Math.min(100, Math.max(0, level)) : 0;
+  const barColor =
+    displayLevel > 75
+      ? 'bg-rose-500 shadow-rose-500/50'
+      : displayLevel > 35
+      ? 'bg-emerald-500 shadow-emerald-500/50'
+      : 'bg-blue-500 shadow-blue-500/50';
+
+  return (
+    <div className="bg-white/80 backdrop-blur-xs border border-slate-200/80 rounded-xl p-3.5 flex items-center gap-3.5 shadow-2xs">
+      <div className="flex items-center gap-2 text-xs font-bold text-slate-600 shrink-0">
+        <Mic className="w-4 h-4 text-blue-600" />
+        <span>{label || 'Cường độ âm thanh'}:</span>
+      </div>
+
+      <div className="flex-1 h-2.5 bg-slate-100 rounded-full overflow-hidden p-0.5 border border-slate-200">
+        <div
+          className={`h-full rounded-full transition-all duration-75 ${barColor}`}
+          style={{ width: `${displayLevel}%` }}
+        />
+      </div>
+
+      <span className="text-xs font-mono font-bold text-slate-700 w-12 text-right">
+        {enabled ? `${displayLevel}%` : 'OFF'}
+      </span>
+    </div>
+  );
+};
 
 export const PreMeetingPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -61,7 +132,7 @@ export const PreMeetingPage: React.FC = () => {
       .catch((err) => {
         setError(
           err.response?.data?.message ||
-            t('meeting_room.cannot_access', 'Không thể tải thông tin cuộc họp hoặc bạn không có quyền truy cập'),
+            t('meeting_prepare.load_error', 'Không thể tải thông tin cuộc họp hoặc bạn không có quyền truy cập'),
         );
         setLoading(false);
       });
@@ -230,7 +301,7 @@ export const PreMeetingPage: React.FC = () => {
       <div className="w-full min-h-screen bg-slate-50 flex flex-col items-center justify-center text-slate-700">
         <Loader2 className="w-8 h-8 text-blue-600 animate-spin mb-3" />
         <p className="text-sm font-semibold text-slate-600">
-          {t('meeting_room.preparing_waiting_room', 'Đang chuẩn bị phòng chờ cuộc họp...')}
+          {t('meeting_prepare.loading', 'Đang tải thông tin cuộc họp...')}
         </p>
       </div>
     );
@@ -244,7 +315,7 @@ export const PreMeetingPage: React.FC = () => {
             <ShieldAlert className="w-6 h-6" />
           </div>
           <h2 className="text-base font-bold text-slate-900 mb-2">
-            {t('meeting_room.cannot_access', 'Không thể truy cập')}
+            {t('meeting_prepare.load_error', 'Không thể truy cập')}
           </h2>
           <p className="text-xs text-slate-500 mb-6 leading-relaxed">{error}</p>
           <button
@@ -252,7 +323,7 @@ export const PreMeetingPage: React.FC = () => {
             onClick={() => navigate('/meetings')}
             className="w-full py-2.5 bg-slate-900 text-white font-bold text-xs rounded-xl hover:bg-slate-800 transition-colors shadow-xs"
           >
-            {t('meetings.back_to_list', 'Quay lại danh sách')}
+            {t('meeting_prepare.back_to_meetings', 'Quay lại danh sách cuộc họp')}
           </button>
         </div>
       </div>
@@ -260,27 +331,35 @@ export const PreMeetingPage: React.FC = () => {
   }
 
   return (
-    <div className="w-full min-h-screen bg-slate-50 text-slate-900 flex flex-col">
-      {/* Top Navbar — Pure White Modern Bauhaus */}
-      <header className="h-16 px-6 border-b border-slate-200 flex items-center justify-between bg-white shadow-2xs">
+    <div className="relative w-full min-h-screen bg-slate-50/70 text-slate-900 flex flex-col overflow-x-hidden antialiased">
+      {/* Bauhaus Decorative Ambient Orbs & Geometric Shapes */}
+      <div className="pointer-events-none fixed -top-24 -left-24 h-96 w-96 rounded-full bg-blue-500/10 blur-3xl -z-10" />
+      <div className="pointer-events-none fixed bottom-10 right-10 h-80 w-80 rounded-full bg-amber-500/10 blur-3xl -z-10" />
+      <div className="pointer-events-none fixed top-1/4 right-1/4 h-64 w-64 rounded-full bg-indigo-500/10 blur-2xl -z-10" />
+      <div className="pointer-events-none fixed top-1/3 left-1/4 h-32 w-32 border-4 border-indigo-200/40 rounded-full -z-10" />
+      <div className="pointer-events-none fixed bottom-1/4 left-10 w-24 h-24 bg-blue-200/20 rotate-45 -z-10" />
+
+      {/* Top Navbar */}
+      <header className="h-16 px-6 border-b border-slate-200/80 flex items-center justify-between bg-white/80 backdrop-blur-md shadow-2xs sticky top-0 z-20">
         <button
           type="button"
           onClick={() => navigate('/meetings')}
           className="flex items-center gap-2 text-xs font-semibold text-slate-600 hover:text-slate-900 transition-colors"
         >
           <ArrowLeft className="w-4 h-4" />
-          <span>{t('meetings.back_to_list', 'Quay lại')}</span>
+          <span>{t('meeting_prepare.back_to_meetings', 'Quay lại danh sách')}</span>
         </button>
 
         <div className="flex items-center gap-2">
           <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
-          <span className="text-xs font-bold uppercase tracking-wider text-slate-800">
-            {t('meeting_room.waiting_room_title', 'Phòng chuẩn bị cuộc họp')}
+          <span className="text-xs font-bold uppercase tracking-wider text-slate-800 flex items-center gap-1.5">
+            <Sparkles className="w-3.5 h-3.5 text-blue-600" />
+            {t('meeting_prepare.title', 'Chuẩn bị vào phòng')}
           </span>
         </div>
 
         <div className="text-xs text-slate-500">
-          {t('meeting_room.room_code', 'Mã phòng')}:{' '}
+          {t('meeting_prepare.room_code', 'Mã phòng')}:{' '}
           <span className="text-slate-900 font-mono font-bold bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200">
             {meeting.roomCode}
           </span>
@@ -289,21 +368,21 @@ export const PreMeetingPage: React.FC = () => {
 
       {/* Declined Alert Banner */}
       {isDeclined && (
-        <div className="bg-rose-50 border-b border-rose-200 px-6 py-3 text-center">
+        <div className="bg-rose-50/90 border-b border-rose-200 px-6 py-3 text-center backdrop-blur-xs">
           <div className="max-w-2xl mx-auto flex items-center justify-center gap-2.5 text-rose-700">
             <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
             <span className="text-xs font-semibold">
-              Bạn đã từ chối tham gia cuộc họp này (RSVP: DECLINED). Vui lòng đổi lại RSVP nếu muốn vào phòng.
+              {t('meeting_prepare.rsvp_declined', 'Bạn đã từ chối tham gia')}. {t('meeting_prepare.rsvp_declined_desc', 'Bạn vẫn có thể tham gia nếu muốn.')}
             </span>
           </div>
         </div>
       )}
 
       {/* Main Split Layout */}
-      <main className="flex-1 max-w-6xl w-full mx-auto p-4 md:p-8 flex flex-col lg:flex-row gap-8 items-center justify-center">
+      <main className="flex-1 max-w-6xl w-full mx-auto p-4 md:p-8 flex flex-col lg:flex-row gap-8 items-center justify-center relative z-10">
         {/* Left Column: Camera Preview & Audio Meter */}
         <div className="w-full lg:w-3/5 flex flex-col gap-4">
-          <div className="relative w-full aspect-video bg-slate-900 rounded-2xl border border-slate-200 overflow-hidden shadow-sm flex items-center justify-center">
+          <div className="relative w-full aspect-video bg-slate-900 rounded-2xl border border-slate-300/80 overflow-hidden shadow-lg flex items-center justify-center">
             {cameraEnabled && hasCam ? (
               <video
                 ref={videoRef}
@@ -318,7 +397,7 @@ export const PreMeetingPage: React.FC = () => {
                   <CameraOff className="w-8 h-8" />
                 </div>
                 <span className="text-xs font-bold text-slate-300">
-                  {t('meeting_room.camera_off', 'Camera đang tắt')}
+                  {t('meeting_prepare.camera_off', 'Camera đang tắt')}
                 </span>
               </div>
             )}
@@ -334,7 +413,7 @@ export const PreMeetingPage: React.FC = () => {
                       ? 'bg-white/90 border-slate-200 text-slate-700 hover:bg-white'
                       : 'bg-rose-600 border-rose-500 text-white hover:bg-rose-700'
                   }`}
-                  title={cameraEnabled ? t('meeting_room.turn_off_cam', 'Tắt camera') : t('meeting_room.turn_on_cam', 'Bật camera')}
+                  title={cameraEnabled ? t('meeting_prepare.camera_on', 'Tắt camera') : t('meeting_prepare.camera_off', 'Bật camera')}
                 >
                   {cameraEnabled ? <Camera className="w-4 h-4" /> : <CameraOff className="w-4 h-4" />}
                 </button>
@@ -347,7 +426,7 @@ export const PreMeetingPage: React.FC = () => {
                       ? 'bg-white/90 border-slate-200 text-slate-700 hover:bg-white'
                       : 'bg-rose-600 border-rose-500 text-white hover:bg-rose-700'
                   }`}
-                  title={micEnabled ? t('meeting_room.turn_off_mic', 'Tắt micro') : t('meeting_room.turn_on_mic', 'Bật micro')}
+                  title={micEnabled ? t('meeting_prepare.mic_working', 'Tắt micro') : t('meeting_prepare.mic_denied', 'Bật micro')}
                 >
                   {micEnabled ? <Mic className="w-4 h-4" /> : <MicOff className="w-4 h-4" />}
                 </button>
@@ -359,7 +438,7 @@ export const PreMeetingPage: React.FC = () => {
                   type="button"
                   onClick={togglePip}
                   className="p-2.5 rounded-xl bg-black/60 hover:bg-black/80 text-white backdrop-blur-xs transition-colors"
-                  title={t('meeting_room.pip', 'Cửa sổ nổi PiP')}
+                  title={t('meeting_prepare.pip_hint', 'Cửa sổ nổi PiP')}
                 >
                   <PictureInPicture className="w-4 h-4" />
                 </button>
@@ -367,40 +446,22 @@ export const PreMeetingPage: React.FC = () => {
             </div>
           </div>
 
-          {/* Microphone VU Meter */}
-          <div className="bg-white border border-slate-200 rounded-xl p-4 flex items-center gap-4 shadow-xs">
-            <div className="flex items-center gap-2 text-xs font-bold text-slate-600 shrink-0">
-              <Mic className="w-4 h-4 text-blue-600" />
-              <span>{t('meeting_room.audio_intensity', 'Cường độ âm thanh')}:</span>
-            </div>
-
-            <div className="flex-1 h-3 bg-slate-100 rounded-full overflow-hidden p-0.5 border border-slate-200">
-              <div
-                className={`h-full rounded-full transition-all duration-75 ${
-                  audioLevel > 70
-                    ? 'bg-rose-500'
-                    : audioLevel > 30
-                    ? 'bg-emerald-500'
-                    : 'bg-blue-500'
-                }`}
-                style={{ width: `${micEnabled ? audioLevel : 0}%` }}
-              />
-            </div>
-
-            <span className="text-xs font-mono font-bold text-slate-700 w-12 text-right">
-              {micEnabled ? `${audioLevel}%` : t('meeting_room.off', 'Tắt')}
-            </span>
-          </div>
+          {/* Microphone VU Meter Component */}
+          <AudioLevelMeter
+            level={audioLevel}
+            enabled={micEnabled}
+            label={t('meeting_prepare.mic_level', 'Mức âm lượng')}
+          />
 
           {/* Permission Guide if Denied */}
           {permissionDenied && (
             <div className="bg-rose-50 border border-rose-200 rounded-xl p-4 flex items-start justify-between gap-3 text-rose-800 shadow-2xs">
               <div>
                 <h5 className="text-xs font-bold text-rose-800">
-                  {t('meeting_room.permission_denied_title', 'Không thể truy cập Microphone hoặc Camera')}
+                  {t('meeting_prepare.permission_title', 'Cấp quyền truy cập')}
                 </h5>
-                <p className="text-[11px] text-rose-700 mt-0.5">
-                  Vui lòng nhấn biểu tượng cài đặt / ổ khóa trên thanh địa chỉ trình duyệt, chọn "Cho phép" Camera và Microphone, sau đó nhấn nút Thử lại.
+                <p className="text-[11px] text-rose-700 mt-0.5 leading-relaxed">
+                  {t('meeting_prepare.camera_denied_desc', 'Vui lòng cấp quyền camera trong cài đặt trình duyệt')}
                 </p>
               </div>
               <button
@@ -409,7 +470,7 @@ export const PreMeetingPage: React.FC = () => {
                 className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-lg transition-colors shadow-xs"
               >
                 <RotateCcw className="w-3.5 h-3.5" />
-                <span>{t('common.retry', 'Thử lại')}</span>
+                <span>{t('meeting_prepare.retry', 'Thử lại')}</span>
               </button>
             </div>
           )}
@@ -418,11 +479,11 @@ export const PreMeetingPage: React.FC = () => {
         {/* Right Column: Meeting Info & Checklist */}
         <div className="w-full lg:w-2/5 flex flex-col gap-5">
           {/* Meeting Details Card */}
-          <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs space-y-4">
+          <div className="bg-white/90 backdrop-blur-md border border-slate-200/90 rounded-2xl p-6 shadow-sm space-y-4">
             <div>
               <span className="text-[10px] font-bold uppercase tracking-wider bg-blue-50 text-blue-700 border border-blue-200 px-2.5 py-0.5 rounded-md">
                 {meeting.scopeType === 'ONE_ON_ONE'
-                  ? 'Cuộc họp tự do'
+                  ? 'Cuộc họp 1-1'
                   : meeting.scopeType === 'PROJECT'
                   ? 'Dự án'
                   : 'Phòng ban'}
@@ -456,70 +517,51 @@ export const PreMeetingPage: React.FC = () => {
 
               <div className="flex items-center gap-2">
                 <Users className="w-4 h-4 text-slate-400" />
-                <span>{meeting.attendees?.length || 0} {t('meeting_room.attendees_invited', 'người được mời')}</span>
+                <span>
+                  {meeting.attendees?.length || 0} {t('meeting_prepare.participants_count', 'người tham dự')}
+                </span>
               </div>
             </div>
 
             {/* Checklist Section */}
             <div className="pt-3 border-t border-slate-100 space-y-2.5">
               <span className="text-xs font-bold uppercase tracking-wider text-slate-500">
-                {t('meeting_room.device_check_title', 'Kiểm tra thiết bị (3 bước bắt buộc)')}
+                {t('meeting_prepare.checklist_title', 'Kiểm tra trước khi vào phòng')}
               </span>
 
               <div className="space-y-2">
-                {/* 1. Mic */}
-                <div className="flex items-center justify-between text-xs p-2.5 rounded-xl bg-slate-50 border border-slate-200">
-                  <div className="flex items-center gap-2 text-slate-700 font-medium">
-                    <Mic className="w-4 h-4 text-slate-400" />
-                    <span>Microphone hoạt động</span>
-                  </div>
-                  {hasMic ? (
-                    <span className="flex items-center gap-1 text-emerald-600 font-bold">
-                      <CheckCircle2 className="w-4 h-4" /> {t('meeting_room.ready', 'Sẵn sàng')}
-                    </span>
-                  ) : (
-                    <span className="text-rose-500 font-bold">{t('meeting_room.not_found', 'Chưa phát hiện')}</span>
-                  )}
-                </div>
+                <ChecklistItemRow
+                  label={t('meeting_prepare.check_mic', 'Mic hoạt động bình thường')}
+                  icon={<Mic className="w-4 h-4" />}
+                  passed={hasMic}
+                  passedText={t('meeting_prepare.check_passed', 'Đã đạt')}
+                  pendingText={t('meeting_prepare.check_pending', 'Chưa đạt')}
+                />
 
-                {/* 2. Cam */}
-                <div className="flex items-center justify-between text-xs p-2.5 rounded-xl bg-slate-50 border border-slate-200">
-                  <div className="flex items-center gap-2 text-slate-700 font-medium">
-                    <Camera className="w-4 h-4 text-slate-400" />
-                    <span>Camera hoạt động</span>
-                  </div>
-                  {hasCam ? (
-                    <span className="flex items-center gap-1 text-emerald-600 font-bold">
-                      <CheckCircle2 className="w-4 h-4" /> {t('meeting_room.ready', 'Sẵn sàng')}
-                    </span>
-                  ) : (
-                    <span className="text-rose-500 font-bold">{t('meeting_room.not_found', 'Chưa phát hiện')}</span>
-                  )}
-                </div>
+                <ChecklistItemRow
+                  label={t('meeting_prepare.check_camera', 'Camera hoạt động bình thường')}
+                  icon={<Camera className="w-4 h-4" />}
+                  passed={hasCam}
+                  passedText={t('meeting_prepare.check_passed', 'Đã đạt')}
+                  pendingText={t('meeting_prepare.check_pending', 'Chưa đạt')}
+                />
 
-                {/* 3. Permissions */}
-                <div className="flex items-center justify-between text-xs p-2.5 rounded-xl bg-slate-50 border border-slate-200">
-                  <div className="flex items-center gap-2 text-slate-700 font-medium">
-                    <Video className="w-4 h-4 text-slate-400" />
-                    <span>Quyền truy cập trình duyệt</span>
-                  </div>
-                  {hasPermission ? (
-                    <span className="flex items-center gap-1 text-emerald-600 font-bold">
-                      <CheckCircle2 className="w-4 h-4" /> {t('meeting_room.granted', 'Đã cấp')}
-                    </span>
-                  ) : (
-                    <span className="text-rose-500 font-bold">{t('meeting_room.not_granted', 'Chưa cấp quyền')}</span>
-                  )}
-                </div>
+                <ChecklistItemRow
+                  label={t('meeting_prepare.check_permission', 'Quyền truy cập trình duyệt đã được cấp')}
+                  icon={<Video className="w-4 h-4" />}
+                  passed={hasPermission}
+                  passedText={t('meeting_prepare.check_passed', 'Đã đạt')}
+                  pendingText={t('meeting_prepare.check_pending', 'Chưa đạt')}
+                />
               </div>
             </div>
 
             {/* Countdown / Status Notice */}
             {secondsUntilOpen > 0 ? (
-              <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-center space-y-1">
+              <div className="p-3 bg-amber-50/90 border border-amber-200 rounded-xl text-center space-y-1">
                 <div className="flex items-center justify-center gap-1.5 text-amber-700 text-xs font-bold">
                   <Clock className="w-4 h-4" />
-                  <span>Phòng họp sẽ mở trước 15 phút</span>
+                  <span>{t('meeting_prepare.opens_in', 'Mở phòng sau')}</span>
                 </div>
                 <div className="text-2xl font-bold font-mono text-amber-600">
                   {formatCountdown(secondsUntilOpen)}
@@ -528,14 +570,14 @@ export const PreMeetingPage: React.FC = () => {
             ) : isMeetingOver ? (
               <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-center space-y-2">
                 <p className="text-xs text-slate-600 font-medium">
-                  Cuộc họp này đã kết thúc thời gian biểu.
+                  {t('meeting_prepare.meeting_over_desc', 'Thời gian cuộc họp đã qua. Bạn vẫn có thể xem biên bản.')}
                 </p>
                 <button
                   type="button"
                   onClick={() => navigate(`/meetings/${id}/report`)}
                   className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl transition-colors w-full shadow-xs"
                 >
-                  Xem biên bản & Báo cáo cuộc họp
+                  {t('meeting_prepare.view_report', 'Xem báo cáo cuộc họp')}
                 </button>
               </div>
             ) : null}
@@ -553,7 +595,11 @@ export const PreMeetingPage: React.FC = () => {
                 }`}
               >
                 <Video className="w-5 h-5" />
-                <span>{t('meeting_room.enter_meeting', 'Vào cuộc họp')}</span>
+                <span>
+                  {isButtonEnabled
+                    ? t('meeting_prepare.join_now', 'Vào cuộc họp ngay')
+                    : t('meeting_prepare.join_button_locked', 'Vui lòng hoàn tất 3 bước kiểm tra')}
+                </span>
               </button>
             )}
           </div>

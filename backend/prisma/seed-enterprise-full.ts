@@ -70,6 +70,14 @@ async function main() {
       avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
     },
     {
+      email: 'head@gmail.com',
+      name: 'Trần Minh Quân (Trưởng phòng)',
+      role: Role.DEPARTMENT_HEAD,
+      position: 'Trưởng phòng Kỹ thuật Phần mềm (Department Head)',
+      departmentId: 'dept-eng',
+      avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150',
+    },
+    {
       email: 'pm@worksync.com',
       name: 'Nguyễn Minh Tuấn',
       role: Role.PM,

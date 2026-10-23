@@ -9,7 +9,13 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import type { Socket } from 'socket.io-client';
 import { toast } from 'sonner';
+import { useTranslation } from 'react-i18next';
 import type { MeetingTranscriptChunk } from '../types/meeting.types';
+
+const RECOGNITION_LANG_MAP: Record<string, string> = {
+  vi: 'vi-VN',
+  en: 'en-US',
+};
 
 // Web Speech API interface declarations
 interface SpeechRecognitionEvent extends Event {
@@ -26,6 +32,7 @@ interface SpeechRecognitionInstance extends EventTarget {
   continuous: boolean;
   interimResults: boolean;
   lang: string;
+  maxAlternatives?: number;
   start: () => void;
   stop: () => void;
   abort: () => void;
@@ -64,6 +71,9 @@ export function useLiveTranscription({
   currentUser,
   audioEnabled,
 }: UseLiveTranscriptionProps) {
+  const { t, i18n } = useTranslation();
+  const recognitionLang = RECOGNITION_LANG_MAP[i18n.language?.split('-')[0] || 'vi'] ?? 'vi-VN';
+
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [transcripts, setTranscripts] = useState<MeetingTranscriptChunk[]>([]);
   const [currentCaption, setCurrentCaption] = useState<{
@@ -81,13 +91,15 @@ export function useLiveTranscription({
   const sentenceBufferRef = useRef<string>('');
   const flushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const captionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const restartAttemptsRef = useRef(0);
+  const restartTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Helper: Chuẩn hóa câu tiếng Việt (viết hoa chữ cái đầu, dấu chấm cuối câu)
   const formatSentence = (text: string) => {
     let clean = text.trim().replace(/\s+/g, ' ');
     if (!clean) return '';
     clean = clean.charAt(0).toUpperCase() + clean.slice(1);
-    if (!/[.!?]$/.test(clean)) clean += '.';
+    if (!/[.!?…]$/.test(clean)) clean += '.';
     return clean;
   };
 
@@ -117,7 +129,7 @@ export function useLiveTranscription({
     });
   }, [meetingId, socket, currentUser]);
 
-  // 2. Khởi tạo và thiết lập Recognition với Watchdog Auto-Restart
+  // 2. Khởi tạo và thiết lập Recognition với Exponential Backoff Auto-Restart
   const setupRecognition = useCallback(() => {
     const SpeechRecognitionClass = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognitionClass) return null;
@@ -125,7 +137,13 @@ export function useLiveTranscription({
     try {
       const recognition = new SpeechRecognitionClass();
       recognition.continuous = true;
-      recognition.lang = 'vi-VN'; // Luôn khóa chuẩn tiếng Việt theo yêu cầu
+      recognition.interimResults = true;
+      recognition.maxAlternatives = 1;
+      recognition.lang = recognitionLang;
+
+      recognition.onstart = () => {
+        restartAttemptsRef.current = 0;
+      };
 
       recognition.onresult = (event: SpeechRecognitionEvent) => {
         let finalTranscript = '';
@@ -150,45 +168,71 @@ export function useLiveTranscription({
           });
         }
 
-        // 2. Gom các mảnh câu (Fragments) vào Bộ đệm thông minh để tạo thành câu hoàn chỉnh
+        // 2. Gom các mảnh câu (Fragments) vào Bộ đệm thông minh
         const trimmed = finalTranscript.trim();
         if (trimmed) {
           sentenceBufferRef.current = (sentenceBufferRef.current + ' ' + trimmed).trim();
 
           const currentFullText = sentenceBufferRef.current;
           const wordCount = currentFullText.split(/\s+/).length;
-          const hasEndingPunctuation = /[.!?]$/.test(trimmed);
+          const hasEndingPunctuation = /[.!?…]$/.test(trimmed);
+          const hasCommaBreak = /[,;:]$/.test(trimmed) && wordCount >= 6;
 
-          // Nếu câu có dấu ngắt hoặc đã đủ dài (>= 15 từ) -> phát ngay lập tức
-          if (hasEndingPunctuation || wordCount >= 15) {
+          // Nếu câu có dấu ngắt hoặc đã đủ dài (>= 12 từ) -> phát ngay lập tức
+          if (hasEndingPunctuation || hasCommaBreak || wordCount >= 12) {
             flushSentenceBuffer();
           } else {
-            // Nếu người nói chỉ ngừng lấy hơi ngắn -> chờ 1.8s để ghép tiếp từ tiếp theo
+            // Chờ 1.5s để ghép từ tiếp theo
             if (flushTimerRef.current) clearTimeout(flushTimerRef.current);
             flushTimerRef.current = setTimeout(() => {
               flushSentenceBuffer();
-            }, 1800);
+            }, 1500);
           }
         }
       };
 
       recognition.onerror = (err: SpeechRecognitionErrorEvent) => {
-        if (err.error === 'not-allowed' || err.error === 'service-not-allowed') {
-          toast.error('Trình duyệt chưa được cấp quyền nhận diện giọng nói (Microphone). Vui lòng cấp quyền trên thanh địa chỉ URL.');
-        } else if (err.error !== 'no-speech' && err.error !== 'aborted') {
-          console.warn('[LiveTranscript] SpeechRecognition error:', err.error);
+        switch (err.error) {
+          case 'not-allowed':
+          case 'service-not-allowed':
+            toast.error(
+              t(
+                'meeting_room.stt_permission_denied',
+                'Trình duyệt chưa được cấp quyền nhận diện giọng nói (Microphone). Vui lòng cấp quyền trên thanh URL.',
+              ),
+            );
+            break;
+          case 'network':
+            console.warn('[STT] network error, will restart with backoff');
+            break;
+          case 'no-speech':
+          case 'aborted':
+            break;
+          case 'audio-capture':
+            toast.error(t('meeting_room.stt_no_mic', 'Không tìm thấy thiết bị microphone.'));
+            break;
+          default:
+            console.warn('[LiveTranscript] SpeechRecognition error:', err.error);
         }
       };
 
-      // Watchdog Auto-Restart: Tự động khởi động lại khi Chrome ngắt im lặng 60s
+      // Watchdog Auto-Restart với Exponential Backoff
       recognition.onend = () => {
-        if (isTranscribingRef.current && audioEnabledRef.current) {
+        if (!isTranscribingRef.current || !audioEnabledRef.current) return;
+
+        const attempt = restartAttemptsRef.current;
+        const delay = Math.min(1000 * 2 ** attempt, 10000); // 1s, 2s, 4s, 8s, 10s
+        restartAttemptsRef.current = attempt + 1;
+
+        if (restartTimerRef.current) clearTimeout(restartTimerRef.current);
+        restartTimerRef.current = setTimeout(() => {
+          if (!isTranscribingRef.current || !audioEnabledRef.current) return;
           try {
             recognition.start();
           } catch {
-            // Tránh throw nếu đã đang chạy
+            // Đã chạy
           }
-        }
+        }, delay);
       };
 
       return recognition;
@@ -196,7 +240,7 @@ export function useLiveTranscription({
       console.error('[LiveTranscript] Setup failed:', e);
       return null;
     }
-  }, [meetingId, socket, currentUser]);
+  }, [recognitionLang, currentUser, flushSentenceBuffer, t]);
 
   // 3. Quản lý việc bật/tắt recognition theo trạng thái phòng và micro
   useEffect(() => {
@@ -208,10 +252,13 @@ export function useLiveTranscription({
       }
       try {
         recognitionRef.current?.start();
-      } catch {
-        // Đã start từ trước
+      } catch (err) {
+        if ((err as DOMException)?.name !== 'InvalidStateError') {
+          console.warn('[STT] start failed', err);
+        }
       }
     } else {
+      if (restartTimerRef.current) clearTimeout(restartTimerRef.current);
       try {
         recognitionRef.current?.stop();
       } catch {

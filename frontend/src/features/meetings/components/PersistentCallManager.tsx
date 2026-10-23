@@ -23,26 +23,15 @@ import { toast } from 'sonner';
 import { useTranslation } from 'react-i18next';
 import { useAuthStore } from '@/stores/auth.store';
 import { useActiveCallStore } from '../stores/active-call.store';
-import type { Meeting } from '../types/meeting.types';
+import type { Meeting, ChatMessage } from '../types/meeting.types';
 import { useLiveTranscription } from '../hooks/useLiveTranscription';
+import { useWebRTCPeer, type RemotePeer } from '../hooks/useWebRTCPeer';
 import { InMeetingChat } from './InMeetingChat';
 import { LiveCaptionOverlay } from './LiveCaptionOverlay';
 import { MeetingAiDrawer } from './MeetingAiDrawer';
 import { MinutesEditor } from './MinutesEditor';
 import { MeetingParticipantsDrawer } from './MeetingParticipantsDrawer';
 import { HostEndMeetingModal } from './HostEndMeetingModal';
-
-interface PeerConnection {
-  socketId: string;
-  userId: string;
-  name: string;
-  avatar?: string;
-  peer: RTCPeerConnection;
-  stream?: MediaStream;
-  isMicOn?: boolean;
-  isCamOn?: boolean;
-  isScreenSharing?: boolean;
-}
 
 export const PersistentCallManager: React.FC = () => {
   const { activeMeeting, clearActiveMeeting } = useActiveCallStore();
@@ -96,30 +85,69 @@ const ActiveCallSession: React.FC<ActiveCallSessionProps> = ({
   const { t } = useTranslation();
   const { user } = useAuthStore();
   const [socket, setSocket] = useState<Socket | null>(null);
+  const socketRef = useRef<Socket | null>(null);
 
   const localVideoRef = useRef<HTMLVideoElement>(null);
-  const localScreenVideoRef = useRef<HTMLVideoElement>(null);
+  const presenterVideoRef = useRef<HTMLVideoElement>(null);
   const miniVideoRef = useRef<HTMLVideoElement>(null);
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
-
-  const [peers, setPeers] = useState<Map<string, PeerConnection>>(new Map());
-  const peersRef = useRef<Map<string, PeerConnection>>(new Map());
+  const localStreamRef = useRef<MediaStream | null>(null);
 
   // Media toggles
   const [audioEnabled, setAudioEnabled] = useState(true);
   const [videoEnabled, setVideoEnabled] = useState(true);
   const [isScreenSharing, setIsScreenSharing] = useState(false);
   const screenStreamRef = useRef<MediaStream | null>(null);
+  const toggleScreenShareRef = useRef<() => Promise<void>>(async () => {});
 
   // Spotlighting & Pinning
   const [spotlightUserId, setSpotlightUserId] = useState<string | null>(null);
 
-  // Side drawers
+  // Side drawers & Chat state
   const [isChatOpen, setIsChatOpen] = useState(false);
+  const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
+  const [chatUnread, setChatUnread] = useState(0);
+
   const [isParticipantsOpen, setIsParticipantsOpen] = useState(false);
   const [isMinutesOpen, setIsMinutesOpen] = useState(false);
   const [isAiDrawerOpen, setIsAiDrawerOpen] = useState(false);
   const [isEndModalOpen, setIsEndModalOpen] = useState(false);
+
+  // WebRTC Peer Hook
+  const {
+    peers,
+    ensurePeer,
+    shouldInitiate,
+    makeOfferTo,
+    removePeer,
+    updatePeerMediaState,
+    attachScreenShare,
+    detachScreenShare,
+    teardownAll,
+    pcsRef,
+  } = useWebRTCPeer({
+    socket,
+    meetingId: meeting.id,
+    self: {
+      id: user?.id ?? 'anon',
+      name: user?.name ?? 'Ẩn danh',
+      avatar: user?.avatar,
+    },
+    localCamStream: localStream,
+    localScreenStream: screenStreamRef.current,
+  });
+
+  // ICE Candidates Buffer
+  const pendingCandidatesRef = useRef<Map<string, RTCIceCandidateInit[]>>(new Map());
+
+  const flushPendingCandidates = useCallback(async (remoteSocketId: string, pc: RTCPeerConnection) => {
+    const list = pendingCandidatesRef.current.get(remoteSocketId);
+    if (!list?.length) return;
+    for (const c of list) {
+      await pc.addIceCandidate(new RTCIceCandidate(c)).catch(() => {});
+    }
+    pendingCandidatesRef.current.delete(remoteSocketId);
+  }, []);
 
   // Live Transcription & AI Assistant
   const {
@@ -146,18 +174,6 @@ const ActiveCallSession: React.FC<ActiveCallSessionProps> = ({
   // Duration timer
   const [durationSeconds, setDurationSeconds] = useState(0);
 
-  const updatePeers = useCallback(
-    (updater: (prev: Map<string, PeerConnection>) => Map<string, PeerConnection>) => {
-      setPeers((prev) => {
-        const next = updater(new Map(prev));
-        peersRef.current = next;
-        return next;
-      });
-    },
-    [],
-  );
-
-  // Timer
   useEffect(() => {
     const timer = setInterval(() => {
       setDurationSeconds((s) => s + 1);
@@ -175,379 +191,459 @@ const ActiveCallSession: React.FC<ActiveCallSessionProps> = ({
     return `${mins.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
   };
 
-  // Synchronize screen share video element
-  useEffect(() => {
-    if (localScreenVideoRef.current && isScreenSharing && screenStreamRef.current) {
-      localScreenVideoRef.current.srcObject = screenStreamRef.current;
-      localScreenVideoRef.current.play().catch(() => {});
+  // 3-Tầng Cleanup: React unmount, beforeunload, visibilitychange (FIX BUG-6)
+  const stopAllMedia = useCallback(() => {
+    localStreamRef.current?.getTracks().forEach((t) => t.stop());
+    localStreamRef.current = null;
+    screenStreamRef.current?.getTracks().forEach((t) => t.stop());
+    screenStreamRef.current = null;
+    setLocalStream(null);
+    setIsScreenSharing(false);
+  }, []);
+
+  const handleLeaveCall = useCallback(() => {
+    const s = socketRef.current;
+    if (s?.connected) {
+      s.emit('leave-room', { meetingId: meeting.id });
+      s.disconnect();
     }
-  }, [isScreenSharing]);
+    socketRef.current = null;
+    teardownAll();
+    stopAllMedia();
+    onLeave();
+  }, [meeting.id, onLeave, stopAllMedia, teardownAll]);
 
-  // Sync video stream to video refs (both full room and mini widget)
-  useEffect(() => {
-    const stream = screenStreamRef.current || localStream;
-    if (stream) {
-      if (localVideoRef.current) {
-        localVideoRef.current.srcObject = stream;
-        localVideoRef.current.play().catch(() => {});
-      }
-      if (miniVideoRef.current) {
-        miniVideoRef.current.srcObject = stream;
-        miniVideoRef.current.play().catch(() => {});
-      }
+  const handleEndForAll = useCallback(() => {
+    const s = socketRef.current;
+    if (s?.connected && user?.id) {
+      s.emit('meeting:end-for-all', { meetingId: meeting.id, userId: user.id });
     }
-  }, [localStream, isScreenSharing, isFullView]);
+    teardownAll();
+    stopAllMedia();
+    setIsEndModalOpen(false);
+    onMeetingEnded();
+  }, [meeting.id, onMeetingEnded, stopAllMedia, teardownAll, user?.id]);
 
-  // Connect WebRTC and Socket
+  // Media Lifecycle Init & Cleanup
   useEffect(() => {
-    let activeLocalStream: MediaStream | null = null;
+    let mounted = true;
 
-    const initMediaAndSocket = async () => {
+    const initMedia = async () => {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
-          video: true,
-          audio: true,
+          video: { width: { ideal: 1280 }, height: { ideal: 720 } },
+          audio: { echoCancellation: true, noiseSuppression: true },
         });
-        activeLocalStream = stream;
+        if (!mounted) {
+          stream.getTracks().forEach((t) => t.stop());
+          return;
+        }
+        localStreamRef.current = stream;
         setLocalStream(stream);
       } catch (err) {
-        console.warn('Không thể truy cập camera hoặc mic, tiếp tục chế độ chỉ xem:', err);
+        console.warn('[Media] getUserMedia failed, continuing in view-only mode', err);
+        toast.warning(t('meeting_room.camera_denied', 'Không thể truy cập camera hoặc mic. Đang ở chế độ xem.'));
       }
-
-      const socketUrl = import.meta.env.VITE_API_URL
-        ? import.meta.env.VITE_API_URL.replace('/api', '')
-        : 'http://localhost:4000';
-
-      const s = io(`${socketUrl}/meetings`, {
-        transports: ['websocket', 'polling'],
-      });
-
-      setSocket(s);
-
-      s.on('connect', () => {
-        s.emit('join-room', {
-          meetingId: meeting.id,
-          user: {
-            id: user?.id,
-            name: user?.name,
-            avatar: user?.avatar,
-            role: user?.role,
-          },
-        });
-      });
-
-      s.on(
-        'room-users',
-        ({
-          participants,
-        }: {
-          participants: Array<{ socketId: string; userId: string; name: string; avatar?: string }>;
-        }) => {
-          participants
-            .filter((p) => p.userId !== user?.id)
-            .forEach((p) => {
-              createPeerConnection(p.socketId, p.userId, p.name, p.avatar, true, s, activeLocalStream);
-            });
-        },
-      );
-
-      s.on(
-        'participant-joined',
-        (p: { socketId: string; userId: string; name: string; avatar?: string }) => {
-          if (p.userId === user?.id) return;
-          toast.info(`${p.name} ${t('meeting_room.joined', 'đã tham gia cuộc họp')}`);
-          createPeerConnection(p.socketId, p.userId, p.name, p.avatar, false, s, activeLocalStream);
-        },
-      );
-
-      s.on('offer', async ({ offer, fromSocketId, fromUser }: any) => {
-        if (fromUser?.id === user?.id) return;
-        let pc = peersRef.current.get(fromSocketId)?.peer;
-        if (!pc) {
-          pc = createPeerConnection(
-            fromSocketId,
-            fromUser?.id || '',
-            fromUser?.name || 'Đồng nghiệp',
-            fromUser?.avatar,
-            false,
-            s,
-            activeLocalStream,
-          );
-        }
-        await pc.setRemoteDescription(new RTCSessionDescription(offer));
-        const answer = await pc.createAnswer();
-        await pc.setLocalDescription(answer);
-        s.emit('answer', { targetSocketId: fromSocketId, answer });
-      });
-
-      s.on('answer', async ({ answer, fromSocketId }: any) => {
-        const pc = peersRef.current.get(fromSocketId)?.peer;
-        if (pc) {
-          await pc.setRemoteDescription(new RTCSessionDescription(answer));
-        }
-      });
-
-      s.on('ice-candidate', async ({ candidate, fromSocketId }: any) => {
-        const pc = peersRef.current.get(fromSocketId)?.peer;
-        if (pc && candidate) {
-          try {
-            await pc.addIceCandidate(new RTCIceCandidate(candidate));
-          } catch (e) {
-            console.error('Error adding ice candidate', e);
-          }
-        }
-      });
-
-      s.on(
-        'user-media-state',
-        ({
-          socketId,
-          audioEnabled,
-          videoEnabled,
-          screenSharing,
-        }: {
-          socketId: string;
-          audioEnabled: boolean;
-          videoEnabled: boolean;
-          screenSharing: boolean;
-        }) => {
-          updatePeers((map) => {
-            const p = map.get(socketId);
-            if (p) {
-              map.set(socketId, {
-                ...p,
-                isMicOn: audioEnabled,
-                isCamOn: videoEnabled,
-                isScreenSharing: screenSharing,
-              });
-            }
-            return map;
-          });
-        },
-      );
-
-      s.on('participant-left', ({ socketId }: { socketId: string }) => {
-        const p = peersRef.current.get(socketId);
-        if (p) {
-          toast.info(`${p.name} ${t('meeting_room.left', 'đã rời cuộc họp')}`);
-          p.peer.close();
-          updatePeers((map) => {
-            map.delete(socketId);
-            return map;
-          });
-        }
-      });
-
-      s.on('meeting:ended', ({ message }: { message: string }) => {
-        toast.info(message || t('meeting_room.meeting_ended_by_host', 'Người chủ trì đã kết thúc cuộc họp.'));
-        if (activeLocalStream) {
-          activeLocalStream.getTracks().forEach((t) => t.stop());
-        }
-        if (screenStreamRef.current) {
-          screenStreamRef.current.getTracks().forEach((t) => t.stop());
-        }
-        s.disconnect();
-        onMeetingEnded();
-      });
     };
 
-    initMediaAndSocket();
+    void initMedia();
+
+    const handleBeforeUnload = () => {
+      stopAllMedia();
+      if (socketRef.current?.connected) {
+        socketRef.current.emit('leave-room', { meetingId: meeting.id });
+        socketRef.current.disconnect();
+      }
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden' && !socketRef.current?.connected) {
+        handleBeforeUnload();
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
 
     return () => {
-      if (activeLocalStream) {
-        activeLocalStream.getTracks().forEach((t) => t.stop());
-      }
-      if (screenStreamRef.current) {
-        screenStreamRef.current.getTracks().forEach((t) => t.stop());
-      }
-      peersRef.current.forEach((p) => p.peer.close());
+      mounted = false;
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      stopAllMedia();
+      teardownAll();
     };
-  }, [meeting.id, user, updatePeers, onMeetingEnded, t]);
+  }, [meeting.id, stopAllMedia, teardownAll, t]);
 
-  const createPeerConnection = (
-    targetSocketId: string,
-    userId: string,
-    name: string,
-    avatar: string | undefined,
-    isInitiator: boolean,
-    s: Socket,
-    stream: MediaStream | null,
-  ): RTCPeerConnection => {
-    const pc = new RTCPeerConnection({
-      iceServers: [
-        { urls: 'stun:stun.l.google.com:19302' },
-        { urls: 'stun:stun1.l.google.com:19302' },
-      ],
+  // Socket Connection Setup
+  useEffect(() => {
+    const socketUrl = import.meta.env.VITE_API_URL
+      ? import.meta.env.VITE_API_URL.replace('/api', '')
+      : 'http://localhost:4000';
+
+    const s = io(`${socketUrl}/meetings`, {
+      transports: ['websocket', 'polling'],
     });
 
-    if (stream) {
-      stream.getTracks().forEach((track) => pc.addTrack(track, stream));
-    }
+    setSocket(s);
+    socketRef.current = s;
 
-    pc.onicecandidate = (event) => {
-      if (event.candidate) {
-        s.emit('ice-candidate', {
-          targetSocketId,
-          candidate: event.candidate,
+    s.on('connect', () => {
+      s.emit('join-room', {
+        meetingId: meeting.id,
+        user: {
+          id: user?.id,
+          name: user?.name,
+          avatar: user?.avatar,
+          role: user?.role,
+        },
+      });
+      s.emit('request-chat-history', { meetingId: meeting.id });
+    });
+
+    return () => {
+      s.disconnect();
+      socketRef.current = null;
+    };
+  }, [meeting.id, user]);
+
+  // WebRTC Signaling & Socket Event Handlers (FIX BUG-1, BUG-2)
+  useEffect(() => {
+    if (!socket) return;
+
+    // 1. room-users
+    const handleRoomUsers = ({
+      participants,
+      self,
+    }: {
+      participants: Array<{
+        socketId: string;
+        userId: string;
+        name: string;
+        avatar?: string;
+        audioEnabled: boolean;
+        videoEnabled: boolean;
+        screenSharing: boolean;
+      }>;
+      self?: { audioEnabled: boolean; videoEnabled: boolean; screenSharing: boolean };
+    }) => {
+      if (self) {
+        setAudioEnabled(self.audioEnabled);
+        setVideoEnabled(self.videoEnabled);
+        localStreamRef.current?.getAudioTracks().forEach((tr) => (tr.enabled = self.audioEnabled));
+        localStreamRef.current?.getVideoTracks().forEach((tr) => (tr.enabled = self.videoEnabled));
+      }
+
+      for (const p of participants) {
+        if (p.userId === user?.id) continue;
+
+        if (shouldInitiate(p.userId)) {
+          void makeOfferTo(p.socketId, {
+            userId: p.userId,
+            name: p.name,
+            avatar: p.avatar,
+            audioEnabled: p.audioEnabled,
+            videoEnabled: p.videoEnabled,
+            screenSharing: p.screenSharing,
+          });
+        } else {
+          ensurePeer(p.socketId, {
+            userId: p.userId,
+            name: p.name,
+            avatar: p.avatar,
+            audioEnabled: p.audioEnabled,
+            videoEnabled: p.videoEnabled,
+            screenSharing: p.screenSharing,
+          });
+        }
+      }
+    };
+    socket.on('room-users', handleRoomUsers);
+
+    // 2. participant-joined
+    const handleParticipantJoined = (p: {
+      socketId: string;
+      userId: string;
+      name: string;
+      avatar?: string;
+      audioEnabled: boolean;
+      videoEnabled: boolean;
+      screenSharing: boolean;
+    }) => {
+      if (p.userId === user?.id) return;
+      toast.info(t('meeting_room.peer_joined', '{{name}} đã tham gia', { name: p.name }));
+
+      if (shouldInitiate(p.userId)) {
+        void makeOfferTo(p.socketId, {
+          userId: p.userId,
+          name: p.name,
+          avatar: p.avatar,
+          audioEnabled: p.audioEnabled,
+          videoEnabled: p.videoEnabled,
+          screenSharing: p.screenSharing,
+        });
+      } else {
+        ensurePeer(p.socketId, {
+          userId: p.userId,
+          name: p.name,
+          avatar: p.avatar,
+          audioEnabled: p.audioEnabled,
+          videoEnabled: p.videoEnabled,
+          screenSharing: p.screenSharing,
         });
       }
     };
+    socket.on('participant-joined', handleParticipantJoined);
 
-    pc.ontrack = (event) => {
-      const remoteStream =
-        event.streams && event.streams[0] ? event.streams[0] : new MediaStream([event.track]);
-      updatePeers((map) => {
-        const existing = map.get(targetSocketId);
-        if (existing) {
-          map.set(targetSocketId, { ...existing, stream: remoteStream });
-        }
-        return map;
+    // 3. offer
+    const handleOffer = async ({
+      offer,
+      fromSocketId,
+      fromUser,
+    }: {
+      offer: RTCSessionDescriptionInit;
+      fromSocketId: string;
+      fromUser?: { id: string; name: string; avatar?: string };
+    }) => {
+      if (fromSocketId === socket.id) return;
+
+      const pc = ensurePeer(fromSocketId, {
+        userId: fromUser?.id || 'unknown',
+        name: fromUser?.name || 'Đồng nghiệp',
+        avatar: fromUser?.avatar,
+      });
+
+      const offerCollision =
+        pc.signalingState !== 'stable' && pc.signalingState !== 'have-local-offer';
+      if (offerCollision) {
+        await pc.setLocalDescription({ type: 'rollback' }).catch(() => {});
+      }
+
+      await pc.setRemoteDescription(new RTCSessionDescription(offer));
+      await flushPendingCandidates(fromSocketId, pc);
+
+      const answer = await pc.createAnswer();
+      await pc.setLocalDescription(answer);
+      socket.emit('answer', {
+        targetSocketId: fromSocketId,
+        answer: pc.localDescription,
       });
     };
+    socket.on('offer', handleOffer);
 
-    const peerObj: PeerConnection = {
-      socketId: targetSocketId,
-      userId,
-      name,
-      avatar,
-      peer: pc,
-      isMicOn: true,
-      isCamOn: true,
-      isScreenSharing: false,
+    // 4. answer
+    const handleAnswer = async ({
+      answer,
+      fromSocketId,
+    }: {
+      answer: RTCSessionDescriptionInit;
+      fromSocketId: string;
+    }) => {
+      const pc = pcsRef.current.get(fromSocketId);
+      if (!pc) return;
+      if (pc.signalingState !== 'have-local-offer') {
+        console.warn('[WebRTC] unexpected answer state', pc.signalingState);
+        return;
+      }
+      await pc.setRemoteDescription(new RTCSessionDescription(answer));
+      await flushPendingCandidates(fromSocketId, pc);
     };
+    socket.on('answer', handleAnswer);
 
-    updatePeers((map) => {
-      map.set(targetSocketId, peerObj);
-      return map;
-    });
+    // 5. ice-candidate
+    const handleIceCandidate = async ({
+      candidate,
+      fromSocketId,
+    }: {
+      candidate: RTCIceCandidateInit;
+      fromSocketId: string;
+    }) => {
+      const pc = pcsRef.current.get(fromSocketId);
+      if (!pc || !candidate) return;
 
-    if (isInitiator) {
-      pc.createOffer()
-        .then((offer) => pc.setLocalDescription(offer))
-        .then(() => {
-          s.emit('offer', {
-            targetSocketId,
-            offer: pc.localDescription,
-            fromUser: {
-              id: user?.id,
-              name: user?.name,
-              avatar: user?.avatar,
-            },
-          });
-        })
-        .catch((err) => console.error('Error creating offer', err));
+      if (pc.remoteDescription) {
+        await pc.addIceCandidate(new RTCIceCandidate(candidate)).catch(() => {});
+      } else {
+        const list = pendingCandidatesRef.current.get(fromSocketId) ?? [];
+        list.push(candidate);
+        pendingCandidatesRef.current.set(fromSocketId, list);
+      }
+    };
+    socket.on('ice-candidate', handleIceCandidate);
+
+    // 6. user-media-state
+    const handleUserMediaState = ({
+      socketId,
+      audioEnabled: audio,
+      videoEnabled: video,
+      screenSharing,
+    }: {
+      socketId: string;
+      audioEnabled: boolean;
+      videoEnabled: boolean;
+      screenSharing: boolean;
+    }) => {
+      updatePeerMediaState(socketId, {
+        audioEnabled: audio,
+        videoEnabled: video,
+        isScreenSharing: screenSharing,
+      });
+    };
+    socket.on('user-media-state', handleUserMediaState);
+
+    // 7. participant-left
+    const handleParticipantLeft = ({ socketId }: { socketId: string }) => {
+      const p = peers.get(socketId);
+      if (p) {
+        toast.info(t('meeting_room.peer_left', '{{name}} đã rời cuộc họp', { name: p.name }));
+      }
+      removePeer(socketId);
+    };
+    socket.on('participant-left', handleParticipantLeft);
+
+    // 8. chat-history (FIX BUG-2)
+    const handleChatHistory = ({ messages: msgs }: { messages: ChatMessage[] }) => {
+      if (Array.isArray(msgs)) {
+        setChatHistory(msgs);
+      }
+    };
+    socket.on('chat-history', handleChatHistory);
+
+    // 9. chat-message unread tracker
+    const handleChatMessage = () => {
+      if (!isChatOpen) {
+        setChatUnread((prev) => prev + 1);
+      }
+    };
+    socket.on('chat-message', handleChatMessage);
+
+    // 10. meeting:ended
+    const handleMeetingEnded = ({ message }: { message: string }) => {
+      toast.info(message || t('meeting_room.ended_by_host', 'Người chủ trì đã kết thúc cuộc họp.'));
+      socket.disconnect();
+      socketRef.current = null;
+      teardownAll();
+      stopAllMedia();
+      onMeetingEnded();
+    };
+    socket.on('meeting:ended', handleMeetingEnded);
+
+    return () => {
+      socket.off('room-users', handleRoomUsers);
+      socket.off('participant-joined', handleParticipantJoined);
+      socket.off('offer', handleOffer);
+      socket.off('answer', handleAnswer);
+      socket.off('ice-candidate', handleIceCandidate);
+      socket.off('user-media-state', handleUserMediaState);
+      socket.off('participant-left', handleParticipantLeft);
+      socket.off('chat-history', handleChatHistory);
+      socket.off('chat-message', handleChatMessage);
+      socket.off('meeting:ended', handleMeetingEnded);
+    };
+  }, [
+    socket,
+    user?.id,
+    shouldInitiate,
+    makeOfferTo,
+    ensurePeer,
+    removePeer,
+    updatePeerMediaState,
+    teardownAll,
+    stopAllMedia,
+    onMeetingEnded,
+    t,
+    flushPendingCandidates,
+    pcsRef,
+    peers,
+    isChatOpen,
+  ]);
+
+  // Sync local camera stream to local video element
+  useEffect(() => {
+    if (localVideoRef.current && localStream) {
+      localVideoRef.current.srcObject = localStream;
+      localVideoRef.current.play().catch(() => {});
     }
+  }, [localStream, videoEnabled, isFullView]);
 
-    return pc;
-  };
-
+  // Audio Toggle
   const toggleAudio = () => {
     const nextState = !audioEnabled;
-    if (localStream) {
-      localStream.getAudioTracks().forEach((t) => (t.enabled = nextState));
+    if (localStreamRef.current) {
+      localStreamRef.current.getAudioTracks().forEach((t) => (t.enabled = nextState));
       setAudioEnabled(nextState);
     }
-    if (socket) {
-      socket.emit('media-state-changed', {
-        meetingId: meeting.id,
-        audioEnabled: nextState,
-        videoEnabled,
-        screenSharing: isScreenSharing,
-      });
-    }
+    socketRef.current?.emit('media-state-changed', {
+      meetingId: meeting.id,
+      audioEnabled: nextState,
+      videoEnabled,
+      screenSharing: isScreenSharing,
+    });
   };
 
+  // Video Toggle
   const toggleVideo = () => {
     const nextState = !videoEnabled;
-    if (localStream) {
-      localStream.getVideoTracks().forEach((t) => (t.enabled = nextState));
+    if (localStreamRef.current) {
+      localStreamRef.current.getVideoTracks().forEach((t) => (t.enabled = nextState));
       setVideoEnabled(nextState);
     }
-    if (socket) {
-      socket.emit('media-state-changed', {
+    socketRef.current?.emit('media-state-changed', {
+      meetingId: meeting.id,
+      audioEnabled,
+      videoEnabled: nextState,
+      screenSharing: isScreenSharing,
+    });
+  };
+
+  // Screen Share Toggle with Dual-Track (FIX BUG-3)
+  const toggleScreenShare = useCallback(async () => {
+    if (isScreenSharing) {
+      screenStreamRef.current?.getTracks().forEach((t) => t.stop());
+      screenStreamRef.current = null;
+      setIsScreenSharing(false);
+      await detachScreenShare();
+      socketRef.current?.emit('media-state-changed', {
         meetingId: meeting.id,
         audioEnabled,
-        videoEnabled: nextState,
-        screenSharing: isScreenSharing,
+        videoEnabled,
+        screenSharing: false,
       });
+      return;
     }
-  };
 
-  const toggleScreenShare = async () => {
-    if (isScreenSharing) {
-      if (screenStreamRef.current) {
-        screenStreamRef.current.getTracks().forEach((t) => t.stop());
-        screenStreamRef.current = null;
-      }
-      if (localStream) {
-        const videoTrack = localStream.getVideoTracks()[0];
-        peersRef.current.forEach(({ peer }) => {
-          const sender = peer.getSenders().find((s) => s.track?.kind === 'video');
-          if (sender && videoTrack) sender.replaceTrack(videoTrack);
-        });
-      }
-      setIsScreenSharing(false);
-      if (socket) {
-        socket.emit('media-state-changed', {
-          meetingId: meeting.id,
-          audioEnabled,
-          videoEnabled,
-          screenSharing: false,
-        });
-      }
-    } else {
-      try {
-        const screenStream = await navigator.mediaDevices.getDisplayMedia({
-          video: true,
-          audio: false,
-        });
-        screenStreamRef.current = screenStream;
-        const screenTrack = screenStream.getVideoTracks()[0];
+    try {
+      const screenStream = await navigator.mediaDevices.getDisplayMedia({
+        video: { frameRate: { ideal: 30, max: 60 } },
+        audio: false,
+      });
+      const screenTrack = screenStream.getVideoTracks()[0];
+      if (!screenTrack) return;
 
-        screenTrack.onended = () => {
-          toggleScreenShare();
-        };
+      screenStreamRef.current = screenStream;
+      setIsScreenSharing(true);
 
-        if (localScreenVideoRef.current) {
-          localScreenVideoRef.current.srcObject = screenStream;
-          localScreenVideoRef.current.play().catch(() => {});
-        }
+      screenTrack.onended = () => {
+        void toggleScreenShareRef.current();
+      };
 
-        peersRef.current.forEach(async ({ peer, socketId }) => {
-          const sender = peer.getSenders().find((s) => s.track?.kind === 'video');
-          if (sender) {
-            await sender.replaceTrack(screenTrack);
-          } else {
-            peer.addTrack(screenTrack, screenStream);
-            const offer = await peer.createOffer();
-            await peer.setLocalDescription(offer);
-            socket?.emit('offer', {
-              targetSocketId: socketId,
-              offer: peer.localDescription,
-              fromUser: {
-                id: user?.id,
-                name: user?.name,
-                avatar: user?.avatar,
-              },
-            });
-          }
-        });
+      await attachScreenShare(screenStream);
 
-        setIsScreenSharing(true);
-
-        if (socket) {
-          socket.emit('media-state-changed', {
-            meetingId: meeting.id,
-            audioEnabled,
-            videoEnabled,
-            screenSharing: true,
-          });
-        }
-      } catch (err) {
-        console.warn('Hủy chia sẻ màn hình', err);
+      socketRef.current?.emit('media-state-changed', {
+        meetingId: meeting.id,
+        audioEnabled,
+        videoEnabled,
+        screenSharing: true,
+      });
+    } catch (err) {
+      if ((err as DOMException)?.name === 'NotAllowedError') {
+        toast.info(t('meeting_room.share_cancelled', 'Đã hủy chia sẻ màn hình'));
       }
     }
-  };
+  }, [attachScreenShare, audioEnabled, detachScreenShare, isScreenSharing, meeting.id, t, videoEnabled]);
+
+  useEffect(() => {
+    toggleScreenShareRef.current = toggleScreenShare;
+  }, [toggleScreenShare]);
 
   const togglePictureInPicture = async () => {
     try {
@@ -562,41 +658,6 @@ const ActiveCallSession: React.FC<ActiveCallSessionProps> = ({
     }
   };
 
-  const handleLeaveCall = () => {
-    if (socket) {
-      socket.emit('leave-room', { meetingId: meeting.id });
-      socket.disconnect();
-    }
-    if (localStream) {
-      localStream.getTracks().forEach((t) => t.stop());
-    }
-    if (screenStreamRef.current) {
-      screenStreamRef.current.getTracks().forEach((t) => t.stop());
-      screenStreamRef.current = null;
-    }
-    setIsScreenSharing(false);
-    onLeave();
-  };
-
-  const handleEndForAll = () => {
-    if (socket && user?.id) {
-      socket.emit('meeting:end-for-all', {
-        meetingId: meeting.id,
-        userId: user.id,
-      });
-    }
-    if (localStream) {
-      localStream.getTracks().forEach((t) => t.stop());
-    }
-    if (screenStreamRef.current) {
-      screenStreamRef.current.getTracks().forEach((t) => t.stop());
-      screenStreamRef.current = null;
-    }
-    setIsScreenSharing(false);
-    setIsEndModalOpen(false);
-    onMeetingEnded();
-  };
-
   const handleEndCallClick = () => {
     if (canManageMeeting) {
       setIsEndModalOpen(true);
@@ -605,31 +666,48 @@ const ActiveCallSession: React.FC<ActiveCallSessionProps> = ({
     }
   };
 
-  // Peers list deduplication
-  const uniqueRemotePeers = Array.from(peers.values()).filter(
-    (p) => p.userId && p.userId !== user?.id,
-  );
-  const peerListMap = new Map<string, PeerConnection>();
-  for (const p of uniqueRemotePeers) {
-    peerListMap.set(p.userId, p);
-  }
-  const peerList = Array.from(peerListMap.values());
+  // Deduplicated Peers List
+  const peerList = Array.from(peers.values()).filter((p) => p.userId && p.userId !== user?.id);
   const totalInRoom = peerList.length + 1;
 
-  // Presenter check for spotlight
-  const remotePresenter = peerList.find((p) => p.isScreenSharing);
-  const isPresentingMode = isScreenSharing || Boolean(remotePresenter);
+  // Stream Resolution: Presenter vs Camera (FIX BUG-4)
+  const remotePresenter = peerList.find((p) => p.screenStream && p.isScreenSharing);
+  const localIsPresenting = isScreenSharing && Boolean(screenStreamRef.current);
+  const isPresentingMode = localIsPresenting || Boolean(remotePresenter);
 
-  // Active presenter stream for mini floating widget
-  const activePresenterStream = remotePresenter?.stream || (isScreenSharing ? screenStreamRef.current : localStream);
+  const presenterStream = localIsPresenting
+    ? screenStreamRef.current
+    : remotePresenter?.screenStream ?? null;
+
+  const presenterName = localIsPresenting
+    ? `${user?.name || 'Tôi'} (${t('meeting_room.you', 'Bạn')})`
+    : remotePresenter?.name ?? '';
+
+  // Synchronize Presenter Video Element
+  useEffect(() => {
+    if (presenterVideoRef.current && presenterStream) {
+      presenterVideoRef.current.srcObject = presenterStream;
+      presenterVideoRef.current.play().catch(() => {});
+    }
+  }, [presenterStream]);
+
+  // Mini Widget Stream & Video
+  const miniDisplayStream = presenterStream ?? localStream;
+  const miniShowVideo =
+    Boolean(miniDisplayStream) &&
+    (videoEnabled || isScreenSharing || Boolean(remotePresenter?.screenStream));
+
+  useEffect(() => {
+    if (miniVideoRef.current && miniDisplayStream) {
+      miniVideoRef.current.srcObject = miniDisplayStream;
+      miniVideoRef.current.play().catch(() => {});
+    }
+  }, [miniDisplayStream, isFullView]);
 
   // ============================================================
   // 1. FLOATING MINI WIDGET VIEW (When navigating on other pages)
   // ============================================================
   if (!isFullView) {
-    const isLocalCamActive = videoEnabled || isScreenSharing;
-    const isPresenterVideoActive = remotePresenter ? remotePresenter.isCamOn !== false : isLocalCamActive;
-
     return (
       <div className="fixed bottom-5 right-5 z-50 w-84 bg-white border border-slate-200/90 rounded-2xl shadow-2xl overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-150 text-slate-800">
         {/* Header */}
@@ -640,7 +718,7 @@ const ActiveCallSession: React.FC<ActiveCallSessionProps> = ({
           </div>
           <button
             onClick={onMaximize}
-            className="p-1.5 rounded-lg text-slate-500 hover:text-slate-800 hover:bg-slate-200 transition-colors"
+            className="p-1.5 rounded-lg text-slate-500 hover:text-slate-800 hover:bg-slate-200 transition-colors cursor-pointer"
             title={t('meeting_room.expand', 'Phóng to cuộc họp')}
           >
             <Maximize2 className="w-3.5 h-3.5" />
@@ -649,7 +727,7 @@ const ActiveCallSession: React.FC<ActiveCallSessionProps> = ({
 
         {/* Video or Avatar Display */}
         <div className="relative w-full h-44 bg-slate-900 flex items-center justify-center overflow-hidden">
-          {isPresenterVideoActive && activePresenterStream ? (
+          {miniShowVideo && miniDisplayStream ? (
             <video
               ref={miniVideoRef}
               autoPlay
@@ -668,6 +746,15 @@ const ActiveCallSession: React.FC<ActiveCallSessionProps> = ({
               </span>
             </div>
           )}
+
+          {/* Badge "Đang chia sẻ" */}
+          {presenterStream && (
+            <div className="absolute top-2 right-2 px-2 py-0.5 rounded-md bg-blue-600/90 text-[10px] text-white font-bold flex items-center gap-1 backdrop-blur-xs">
+              <MonitorUp className="w-2.5 h-2.5" />
+              {t('meeting_room.presenting_short', 'Đang trình bày')}
+            </div>
+          )}
+
           <div className="absolute top-2 left-2 px-2 py-0.5 rounded-md bg-black/60 text-[10px] text-white backdrop-blur-xs font-mono">
             {formatDuration(durationSeconds)}
           </div>
@@ -677,8 +764,10 @@ const ActiveCallSession: React.FC<ActiveCallSessionProps> = ({
         <div className="p-2.5 bg-white flex items-center justify-center gap-2 border-t border-slate-100">
           <button
             onClick={toggleAudio}
-            className={`p-2 rounded-full transition-all ${
-              audioEnabled ? 'bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200' : 'bg-rose-500 text-white shadow-xs'
+            className={`p-2 rounded-full transition-all cursor-pointer ${
+              audioEnabled
+                ? 'bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200'
+                : 'bg-rose-500 text-white shadow-xs'
             }`}
             title={audioEnabled ? t('meeting_room.turn_off_mic', 'Tắt mic') : t('meeting_room.turn_on_mic', 'Bật mic')}
           >
@@ -686,8 +775,10 @@ const ActiveCallSession: React.FC<ActiveCallSessionProps> = ({
           </button>
           <button
             onClick={toggleVideo}
-            className={`p-2 rounded-full transition-all ${
-              videoEnabled ? 'bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200' : 'bg-rose-500 text-white shadow-xs'
+            className={`p-2 rounded-full transition-all cursor-pointer ${
+              videoEnabled
+                ? 'bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200'
+                : 'bg-rose-500 text-white shadow-xs'
             }`}
             title={videoEnabled ? t('meeting_room.turn_off_cam', 'Tắt camera') : t('meeting_room.turn_on_cam', 'Bật camera')}
           >
@@ -695,14 +786,14 @@ const ActiveCallSession: React.FC<ActiveCallSessionProps> = ({
           </button>
           <button
             onClick={onMaximize}
-            className="p-2 rounded-full bg-blue-600 hover:bg-blue-700 text-white shadow-xs"
+            className="p-2 rounded-full bg-blue-600 hover:bg-blue-700 text-white shadow-xs cursor-pointer"
             title={t('meeting_room.expand', 'Phóng to')}
           >
             <Maximize2 className="w-4 h-4" />
           </button>
           <button
             onClick={handleEndCallClick}
-            className="p-2 rounded-full bg-rose-600 hover:bg-rose-700 text-white shadow-xs"
+            className="p-2 rounded-full bg-rose-600 hover:bg-rose-700 text-white shadow-xs cursor-pointer"
             title={t('meeting_room.leave_call', 'Rời cuộc họp')}
           >
             <PhoneOff className="w-4 h-4" />
@@ -724,7 +815,7 @@ const ActiveCallSession: React.FC<ActiveCallSessionProps> = ({
   }
 
   // ============================================================
-  // 2. FULL MEETING ROOM VIEW — Bright Light Theme (Point 6)
+  // 2. FULL MEETING ROOM VIEW — Light Clean UI
   // ============================================================
   return (
     <div className="fixed inset-0 z-40 bg-slate-100 text-slate-900 flex flex-col overflow-hidden select-none">
@@ -755,7 +846,7 @@ const ActiveCallSession: React.FC<ActiveCallSessionProps> = ({
               setIsParticipantsOpen(!isParticipantsOpen);
               if (isChatOpen) setIsChatOpen(false);
             }}
-            className="flex items-center gap-1.5 text-xs text-slate-700 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 border border-slate-200 px-2.5 py-1 rounded-lg transition-colors"
+            className="flex items-center gap-1.5 text-xs text-slate-700 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 border border-slate-200 px-2.5 py-1 rounded-lg transition-colors cursor-pointer"
             title={t('meeting_room.participants', 'Người tham gia')}
           >
             <Users className="w-3.5 h-3.5" />
@@ -768,34 +859,31 @@ const ActiveCallSession: React.FC<ActiveCallSessionProps> = ({
       <div className="flex-1 flex overflow-hidden relative p-4 gap-4">
         {/* Video Content Container */}
         <div className="flex-1 flex flex-col h-full overflow-hidden">
-          {/* A) SCREEN SHARE SPOTLIGHT MODE (Point 5) */}
-          {isPresentingMode ? (
+          {/* A) SCREEN SHARE SPOTLIGHT MODE (FIX BUG-3 & BUG-4) */}
+          {isPresentingMode && presenterStream ? (
             <div className="flex-1 flex flex-col lg:flex-row gap-4 h-full overflow-hidden">
               {/* Main Presenter Spotlight Tile */}
               <div className="flex-1 h-full min-h-[380px] bg-slate-950 rounded-2xl overflow-hidden border-2 border-blue-500 shadow-md flex items-center justify-center relative">
-                {isScreenSharing ? (
-                  <video
-                    ref={localScreenVideoRef}
-                    autoPlay
-                    muted
-                    playsInline
-                    className="w-full h-full object-contain bg-slate-950"
-                  />
-                ) : remotePresenter ? (
-                  <PresenterStreamTile peer={remotePresenter} />
-                ) : null}
-
+                <video
+                  ref={presenterVideoRef}
+                  autoPlay
+                  muted={localIsPresenting}
+                  playsInline
+                  className="w-full h-full object-contain bg-slate-950"
+                />
                 <div className="absolute bottom-3 left-3 flex items-center gap-2 bg-black/70 backdrop-blur-md px-3 py-1.5 rounded-xl text-xs font-semibold text-white">
                   <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
                   <span>
-                    {isScreenSharing
-                      ? `${user?.name} (${t('meeting_room.you', 'Bạn')}) - ${t('meeting_room.presenting', 'Đang chia sẻ màn hình')}`
-                      : `${remotePresenter?.name} - ${t('meeting_room.presenting', 'Đang chia sẻ màn hình')}`}
+                    {localIsPresenting
+                      ? t('meeting_room.you_presenting', 'Bạn đang trình bày')
+                      : t('meeting_room.peer_presenting', '{{name}} đang trình bày', {
+                          name: presenterName,
+                        })}
                   </span>
                 </div>
               </div>
 
-              {/* Side Camera Thumbnails Strip */}
+              {/* Side Camera Thumbnails Strip (Dual-Track Camera Tiles) */}
               <div className="w-full lg:w-56 flex lg:flex-col gap-3 overflow-y-auto shrink-0">
                 {/* Local Camera Tile (Thumbnail) */}
                 <div className="relative w-44 lg:w-full aspect-video bg-white rounded-xl overflow-hidden border border-slate-200 shadow-xs flex items-center justify-center shrink-0">
@@ -805,10 +893,10 @@ const ActiveCallSession: React.FC<ActiveCallSessionProps> = ({
                     muted
                     playsInline
                     className={`w-full h-full object-contain bg-slate-900 ${
-                      videoEnabled && !isScreenSharing ? 'block' : 'hidden'
+                      videoEnabled ? 'block' : 'hidden'
                     }`}
                   />
-                  {(!videoEnabled || isScreenSharing) && (
+                  {!videoEnabled && (
                     <div className="flex flex-col items-center justify-center p-2 text-center">
                       <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs font-bold">
                         {user?.name?.charAt(0) || 'U'}
@@ -819,21 +907,23 @@ const ActiveCallSession: React.FC<ActiveCallSessionProps> = ({
                     </div>
                   )}
                   <div className="absolute bottom-1.5 left-1.5 bg-black/60 px-1.5 py-0.5 rounded text-[10px] text-white">
-                    {user?.name?.split(' ')[0]}
+                    {user?.name?.split(' ')[0]} ({t('meeting_room.you', 'Bạn')})
                   </div>
                 </div>
 
-                {/* Remote Peers Thumbnails */}
-                {peerList
-                  .filter((p) => !p.isScreenSharing)
-                  .map((p) => (
-                    <div
-                      key={p.socketId}
-                      className="relative w-44 lg:w-full aspect-video bg-white rounded-xl overflow-hidden border border-slate-200 shadow-xs flex items-center justify-center shrink-0"
-                    >
-                      <RemoteVideoTile peer={p} isHost={meeting.createdById === p.userId} />
-                    </div>
-                  ))}
+                {/* Remote Peers Camera Thumbnails */}
+                {peerList.map((p) => (
+                  <div
+                    key={p.socketId}
+                    className="relative w-44 lg:w-full aspect-video bg-white rounded-xl overflow-hidden border border-slate-200 shadow-xs flex items-center justify-center shrink-0"
+                  >
+                    <RemoteVideoTile
+                      peer={p}
+                      stream={p.camStream}
+                      isHost={meeting.createdById === p.userId}
+                    />
+                  </div>
+                ))}
               </div>
             </div>
           ) : (
@@ -856,7 +946,9 @@ const ActiveCallSession: React.FC<ActiveCallSessionProps> = ({
                   autoPlay
                   muted
                   playsInline
-                  className={`w-full h-full object-contain bg-slate-900 ${videoEnabled ? 'block' : 'hidden'}`}
+                  className={`w-full h-full object-contain bg-slate-900 ${
+                    videoEnabled ? 'block' : 'hidden'
+                  }`}
                 />
                 {!videoEnabled && (
                   <div className="flex flex-col items-center justify-center p-4">
@@ -871,14 +963,16 @@ const ActiveCallSession: React.FC<ActiveCallSessionProps> = ({
                 )}
 
                 <div className="absolute bottom-3 left-3 flex items-center gap-2 bg-white/90 backdrop-blur-md px-2.5 py-1 rounded-lg text-xs font-semibold text-slate-800 border border-slate-200 shadow-xs">
-                  <span>{user?.name || 'Tôi'} ({t('meeting_room.you', 'Bạn')})</span>
+                  <span>
+                    {user?.name || 'Tôi'} ({t('meeting_room.you', 'Bạn')})
+                  </span>
                   {!audioEnabled && <MicOff className="w-3.5 h-3.5 text-rose-500" />}
                 </div>
 
                 <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1.5">
                   <button
                     onClick={togglePictureInPicture}
-                    className="p-1.5 rounded-lg bg-white/80 hover:bg-white text-slate-700 border border-slate-200 backdrop-blur-xs transition-colors shadow-xs"
+                    className="p-1.5 rounded-lg bg-white/80 hover:bg-white text-slate-700 border border-slate-200 backdrop-blur-xs transition-colors shadow-xs cursor-pointer"
                     title={t('meeting_room.pip', 'Cửa sổ nổi PiP')}
                   >
                     <PictureInPicture className="w-3.5 h-3.5" />
@@ -891,6 +985,7 @@ const ActiveCallSession: React.FC<ActiveCallSessionProps> = ({
                 <RemoteVideoTile
                   key={p.socketId}
                   peer={p}
+                  stream={p.camStream}
                   isHost={meeting.createdById === p.userId}
                   onPin={() => setSpotlightUserId(spotlightUserId === p.userId ? null : p.userId)}
                   isPinned={spotlightUserId === p.userId}
@@ -916,13 +1011,13 @@ const ActiveCallSession: React.FC<ActiveCallSessionProps> = ({
               userId: p.userId,
               name: p.name,
               avatar: p.avatar,
-              isMicOn: p.isMicOn,
-              isCamOn: p.isCamOn,
+              isMicOn: p.audioEnabled,
+              isCamOn: p.videoEnabled,
             }))}
           />
         )}
 
-        {/* Side Panel 2: Chat */}
+        {/* Side Panel 2: Chat Drawer (FIX BUG-2) */}
         {isChatOpen && (
           <InMeetingChat
             meetingId={meeting.id}
@@ -934,11 +1029,14 @@ const ActiveCallSession: React.FC<ActiveCallSessionProps> = ({
             }}
             isOpen={isChatOpen}
             onClose={() => setIsChatOpen(false)}
+            initialMessages={chatHistory}
+            unreadCount={chatUnread}
+            onRead={() => setChatUnread(0)}
           />
         )}
       </div>
 
-      {/* Bottom Control Bar — Frosted White Light Theme (Point 6) */}
+      {/* Bottom Control Bar */}
       <div className="h-20 px-6 flex items-center justify-between border-t border-slate-200 bg-white/95 backdrop-blur-md z-10 shadow-2xs">
         {/* Left: Info */}
         <div className="hidden sm:flex items-center gap-3 text-xs text-slate-500">
@@ -952,7 +1050,7 @@ const ActiveCallSession: React.FC<ActiveCallSessionProps> = ({
           {/* 1. Mic */}
           <button
             onClick={toggleAudio}
-            className={`w-11 h-11 rounded-full flex items-center justify-center font-semibold transition-all shadow-xs ${
+            className={`w-11 h-11 rounded-full flex items-center justify-center font-semibold transition-all shadow-xs cursor-pointer ${
               audioEnabled
                 ? 'bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200'
                 : 'bg-rose-600 hover:bg-rose-700 text-white'
@@ -965,7 +1063,7 @@ const ActiveCallSession: React.FC<ActiveCallSessionProps> = ({
           {/* 2. Camera */}
           <button
             onClick={toggleVideo}
-            className={`w-11 h-11 rounded-full flex items-center justify-center font-semibold transition-all shadow-xs ${
+            className={`w-11 h-11 rounded-full flex items-center justify-center font-semibold transition-all shadow-xs cursor-pointer ${
               videoEnabled
                 ? 'bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200'
                 : 'bg-rose-600 hover:bg-rose-700 text-white'
@@ -978,20 +1076,24 @@ const ActiveCallSession: React.FC<ActiveCallSessionProps> = ({
           {/* 3. Screen Share */}
           <button
             onClick={toggleScreenShare}
-            className={`w-11 h-11 rounded-full flex items-center justify-center font-semibold transition-all shadow-xs ${
+            className={`w-11 h-11 rounded-full flex items-center justify-center font-semibold transition-all shadow-xs cursor-pointer ${
               isScreenSharing
                 ? 'bg-blue-600 hover:bg-blue-700 text-white'
                 : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200'
             }`}
-            title={isScreenSharing ? t('meeting_room.stop_share', 'Dừng chia sẻ') : t('meeting_room.share_screen', 'Chia sẻ màn hình')}
+            title={
+              isScreenSharing
+                ? t('meeting_room.stop_share', 'Dừng chia sẻ')
+                : t('meeting_room.share_screen', 'Chia sẻ màn hình')
+            }
           >
             {isScreenSharing ? <MonitorOff className="w-5 h-5" /> : <MonitorUp className="w-5 h-5" />}
           </button>
 
-          {/* 4. Thu nhỏ (Minimize to Dashboard / Other pages) — Point 4 */}
+          {/* 4. Minimize */}
           <button
             onClick={onMinimize}
-            className="w-11 h-11 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 flex items-center justify-center transition-all shadow-xs"
+            className="w-11 h-11 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 flex items-center justify-center transition-all shadow-xs cursor-pointer"
             title={t('meeting_room.minimize', 'Thu nhỏ cuộc họp (vừa họp vừa làm việc)')}
           >
             <Minimize2 className="w-5 h-5" />
@@ -1000,7 +1102,7 @@ const ActiveCallSession: React.FC<ActiveCallSessionProps> = ({
           {/* 5. AI Assistant */}
           <button
             onClick={() => setIsAiDrawerOpen(!isAiDrawerOpen)}
-            className={`w-11 h-11 rounded-full flex items-center justify-center font-semibold transition-all shadow-xs ${
+            className={`w-11 h-11 rounded-full flex items-center justify-center font-semibold transition-all shadow-xs cursor-pointer ${
               isAiDrawerOpen
                 ? 'bg-amber-500 text-white shadow-sm'
                 : 'bg-slate-100 hover:bg-slate-200 text-amber-600 border border-slate-200'
@@ -1014,7 +1116,7 @@ const ActiveCallSession: React.FC<ActiveCallSessionProps> = ({
           {canManageMeeting && (
             <button
               onClick={isTranscribing ? stopTranscription : startTranscription}
-              className={`w-11 h-11 rounded-full flex items-center justify-center font-semibold transition-all shadow-xs ${
+              className={`w-11 h-11 rounded-full flex items-center justify-center font-semibold transition-all shadow-xs cursor-pointer ${
                 isTranscribing
                   ? 'bg-rose-600 hover:bg-rose-700 text-white animate-pulse'
                   : 'bg-slate-100 hover:bg-slate-200 text-rose-600 border border-slate-200'
@@ -1035,7 +1137,7 @@ const ActiveCallSession: React.FC<ActiveCallSessionProps> = ({
               setIsParticipantsOpen(!isParticipantsOpen);
               if (isChatOpen) setIsChatOpen(false);
             }}
-            className={`relative w-11 h-11 rounded-full flex items-center justify-center font-semibold transition-all shadow-xs ${
+            className={`relative w-11 h-11 rounded-full flex items-center justify-center font-semibold transition-all shadow-xs cursor-pointer ${
               isParticipantsOpen
                 ? 'bg-blue-600 text-white'
                 : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200'
@@ -1048,13 +1150,14 @@ const ActiveCallSession: React.FC<ActiveCallSessionProps> = ({
             </span>
           </button>
 
-          {/* 8. Chat Drawer */}
+          {/* 8. Chat Drawer with unread badge */}
           <button
             onClick={() => {
               setIsChatOpen(!isChatOpen);
               if (isParticipantsOpen) setIsParticipantsOpen(false);
+              setChatUnread(0);
             }}
-            className={`w-11 h-11 rounded-full flex items-center justify-center font-semibold transition-all shadow-xs ${
+            className={`relative w-11 h-11 rounded-full flex items-center justify-center font-semibold transition-all shadow-xs cursor-pointer ${
               isChatOpen
                 ? 'bg-blue-600 text-white'
                 : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200'
@@ -1062,12 +1165,17 @@ const ActiveCallSession: React.FC<ActiveCallSessionProps> = ({
             title={t('meeting_room.chat', 'Trò chuyện')}
           >
             <MessageSquare className="w-5 h-5" />
+            {chatUnread > 0 && (
+              <span className="absolute -top-1 -right-1 px-1.5 h-4 min-w-[16px] rounded-full bg-rose-600 text-white text-[10px] font-bold flex items-center justify-center animate-pulse">
+                {chatUnread}
+              </span>
+            )}
           </button>
 
           {/* 9. Minutes Editor */}
           <button
             onClick={() => setIsMinutesOpen(true)}
-            className="w-11 h-11 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 flex items-center justify-center transition-all shadow-xs"
+            className="w-11 h-11 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 flex items-center justify-center transition-all shadow-xs cursor-pointer"
             title={t('meeting_room.minutes', 'Biên bản cuộc họp')}
           >
             <FileText className="w-5 h-5" />
@@ -1076,7 +1184,7 @@ const ActiveCallSession: React.FC<ActiveCallSessionProps> = ({
           {/* 10. End Call */}
           <button
             onClick={handleEndCallClick}
-            className="h-11 px-5 rounded-full bg-rose-600 hover:bg-rose-700 text-white font-semibold transition-all shadow-xs flex items-center gap-2 ml-1"
+            className="h-11 px-5 rounded-full bg-rose-600 hover:bg-rose-700 text-white font-semibold transition-all shadow-xs flex items-center gap-2 ml-1 cursor-pointer"
             title={t('meeting_room.leave_call', 'Rời cuộc họp')}
           >
             <PhoneOff className="w-5 h-5" />
@@ -1129,36 +1237,38 @@ const ActiveCallSession: React.FC<ActiveCallSessionProps> = ({
 
 // Remote peer tile with full aspect-video and object-contain
 const RemoteVideoTile: React.FC<{
-  peer: PeerConnection;
+  peer: RemotePeer;
+  stream: MediaStream | null;
   isHost?: boolean;
   onPin?: () => void;
   isPinned?: boolean;
-}> = ({ peer, isHost, onPin, isPinned }) => {
+}> = ({ peer, stream, isHost, onPin, isPinned }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const { t } = useTranslation();
+  const isVideoShowing = Boolean(stream && peer.videoEnabled);
 
   useEffect(() => {
-    if (videoRef.current && peer.stream) {
-      videoRef.current.srcObject = peer.stream;
+    if (videoRef.current && stream) {
+      videoRef.current.srcObject = stream;
       videoRef.current.play().catch(() => {});
     }
-  }, [peer.stream]);
+  }, [stream]);
 
   useEffect(() => {
-    if (!peer.stream) return;
+    if (!stream) return;
     const handleTrackUpdate = () => {
-      if (videoRef.current && peer.stream) {
-        videoRef.current.srcObject = peer.stream;
+      if (videoRef.current && stream) {
+        videoRef.current.srcObject = stream;
         videoRef.current.play().catch(() => {});
       }
     };
-    peer.stream.addEventListener('addtrack', handleTrackUpdate);
-    peer.stream.addEventListener('removetrack', handleTrackUpdate);
+    stream.addEventListener('addtrack', handleTrackUpdate);
+    stream.addEventListener('removetrack', handleTrackUpdate);
     return () => {
-      peer.stream?.removeEventListener('addtrack', handleTrackUpdate);
-      peer.stream?.removeEventListener('removetrack', handleTrackUpdate);
+      stream.removeEventListener('addtrack', handleTrackUpdate);
+      stream.removeEventListener('removetrack', handleTrackUpdate);
     };
-  }, [peer.stream]);
+  }, [stream]);
 
   return (
     <div
@@ -1175,10 +1285,10 @@ const RemoteVideoTile: React.FC<{
         autoPlay
         playsInline
         className={`w-full h-full object-contain bg-slate-900 ${
-          peer.stream && peer.isCamOn !== false ? 'block' : 'hidden'
+          isVideoShowing ? 'block' : 'hidden'
         }`}
       />
-      {!(peer.stream && peer.isCamOn !== false) && (
+      {!isVideoShowing && (
         <div className="flex flex-col items-center justify-center p-4">
           <div className="w-20 h-20 rounded-full bg-slate-200 text-slate-700 flex items-center justify-center text-2xl font-bold uppercase shadow-xs">
             {peer.avatar ? (
@@ -1206,7 +1316,7 @@ const RemoteVideoTile: React.FC<{
             • {t('meeting_room.presenting', 'Đang chia sẻ')}
           </span>
         )}
-        {peer.isMicOn === false && <MicOff className="w-3.5 h-3.5 text-rose-500" />}
+        {!peer.audioEnabled && <MicOff className="w-3.5 h-3.5 text-rose-500" />}
       </div>
 
       {/* Top Hover Controls */}
@@ -1214,8 +1324,10 @@ const RemoteVideoTile: React.FC<{
         {onPin && (
           <button
             onClick={onPin}
-            className={`p-1.5 rounded-lg border backdrop-blur-xs transition-colors shadow-xs ${
-              isPinned ? 'bg-amber-500 text-white border-amber-600' : 'bg-white/80 hover:bg-white text-slate-700 border-slate-200'
+            className={`p-1.5 rounded-lg border backdrop-blur-xs transition-colors shadow-xs cursor-pointer ${
+              isPinned
+                ? 'bg-amber-500 text-white border-amber-600'
+                : 'bg-white/80 hover:bg-white text-slate-700 border-slate-200'
             }`}
             title={isPinned ? 'Bỏ ghim' : 'Ghim nổi bật'}
           >
@@ -1224,26 +1336,5 @@ const RemoteVideoTile: React.FC<{
         )}
       </div>
     </div>
-  );
-};
-
-// Presenter stream tile
-const PresenterStreamTile: React.FC<{ peer: PeerConnection }> = ({ peer }) => {
-  const videoRef = useRef<HTMLVideoElement>(null);
-
-  useEffect(() => {
-    if (videoRef.current && peer.stream) {
-      videoRef.current.srcObject = peer.stream;
-      videoRef.current.play().catch(() => {});
-    }
-  }, [peer.stream]);
-
-  return (
-    <video
-      ref={videoRef}
-      autoPlay
-      playsInline
-      className="w-full h-full object-contain bg-slate-950"
-    />
   );
 };

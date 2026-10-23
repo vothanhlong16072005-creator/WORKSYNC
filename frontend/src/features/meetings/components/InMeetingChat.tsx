@@ -11,6 +11,9 @@ interface InMeetingChatProps {
   currentUser: { id: string; name: string; avatar?: string };
   isOpen: boolean;
   onClose: () => void;
+  initialMessages?: ChatMessage[];
+  unreadCount?: number;
+  onRead?: () => void;
 }
 
 export const InMeetingChat: React.FC<InMeetingChatProps> = ({
@@ -19,9 +22,12 @@ export const InMeetingChat: React.FC<InMeetingChatProps> = ({
   currentUser,
   isOpen,
   onClose,
+  initialMessages = [],
+  unreadCount = 0,
+  onRead,
 }) => {
   const { t } = useTranslation();
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [messages, setMessages] = useState<ChatMessage[]>(initialMessages);
   const [inputText, setInputText] = useState('');
   const [selectedFile, setSelectedFile] = useState<{
     name: string;
@@ -34,10 +40,29 @@ export const InMeetingChat: React.FC<InMeetingChatProps> = ({
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
+    if (initialMessages.length > 0) {
+      setMessages((prev) => {
+        const knownIds = new Set(prev.map((m) => m.id));
+        const merged = [...prev, ...initialMessages.filter((m) => !knownIds.has(m.id))];
+        return merged.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+      });
+    }
+  }, [initialMessages]);
+
+  useEffect(() => {
+    if (isOpen) {
+      onRead?.();
+    }
+  }, [isOpen, onRead]);
+
+  useEffect(() => {
     if (!socket) return;
 
     const handleNewMessage = (msg: ChatMessage) => {
       setMessages((prev) => [...prev, msg]);
+      if (isOpen) {
+        onRead?.();
+      }
     };
 
     const handleChatHistory = ({ messages: history }: { messages: ChatMessage[] }) => {
@@ -53,7 +78,7 @@ export const InMeetingChat: React.FC<InMeetingChatProps> = ({
       socket.off('chat-message', handleNewMessage);
       socket.off('chat-history', handleChatHistory);
     };
-  }, [socket]);
+  }, [socket, isOpen, onRead]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -108,9 +133,16 @@ export const InMeetingChat: React.FC<InMeetingChatProps> = ({
     <div className="w-80 sm:w-88 h-full bg-white border-l border-slate-200 flex flex-col shadow-xl z-20 animate-in slide-in-from-right duration-200">
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3.5 border-b border-slate-200 bg-white/95 backdrop-blur-md">
-        <h3 className="font-semibold text-sm text-slate-800">
-          {t('meeting_room.chat_title', 'Trò chuyện trong cuộc họp')}
-        </h3>
+        <div className="flex items-center gap-2">
+          <h3 className="font-semibold text-sm text-slate-800">
+            {t('meeting_room.chat_title', 'Trò chuyện trong cuộc họp')}
+          </h3>
+          {unreadCount > 0 && (
+            <span className="px-1.5 py-0.5 text-[10px] font-bold bg-amber-500 text-white rounded-full">
+              {unreadCount}
+            </span>
+          )}
+        </div>
         <button
           onClick={onClose}
           className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"

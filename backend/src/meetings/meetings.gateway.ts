@@ -28,6 +28,9 @@ interface RoomParticipant {
   name: string;
   avatar?: string;
   joinedTimestamp: number;
+  audioEnabled: boolean;
+  videoEnabled: boolean;
+  screenSharing: boolean;
 }
 
 @WebSocketGateway({
@@ -124,7 +127,10 @@ export class MeetingsGateway implements OnGatewayConnection, OnGatewayDisconnect
       for (const [existingSocketId, p] of participants.entries()) {
         if (p.userId === user.id && existingSocketId !== client.id) {
           participants.delete(existingSocketId);
-          client.to(meetingId).emit('participant-left', { socketId: existingSocketId });
+          client.to(meetingId).emit('participant-left', {
+            socketId: existingSocketId,
+            userId: p.userId,
+          });
         }
       }
 
@@ -134,16 +140,32 @@ export class MeetingsGateway implements OnGatewayConnection, OnGatewayDisconnect
         name: user.name,
         avatar: user.avatar,
         joinedTimestamp: Date.now(),
+        audioEnabled: true,
+        videoEnabled: true,
+        screenSharing: false,
       };
       participants.set(client.id, participantInfo);
 
-      // Return current participants to the newly joined peer (excluding self) so they can initiate calls
+      // Return current participants to the newly joined peer (excluding self) with media states
       const existingParticipants = Array.from(participants.values()).filter(
         (p) => p.socketId !== client.id && p.userId !== user.id,
       );
 
       client.emit('room-users', {
-        participants: existingParticipants,
+        participants: existingParticipants.map((p) => ({
+          socketId: p.socketId,
+          userId: p.userId,
+          name: p.name,
+          avatar: p.avatar,
+          audioEnabled: p.audioEnabled ?? true,
+          videoEnabled: p.videoEnabled ?? true,
+          screenSharing: p.screenSharing ?? false,
+        })),
+        self: {
+          audioEnabled: participantInfo.audioEnabled,
+          videoEnabled: participantInfo.videoEnabled,
+          screenSharing: participantInfo.screenSharing,
+        },
       });
 
       // Synchronize live transcription state and past transcript chunks (Constraint 4)
@@ -173,12 +195,15 @@ export class MeetingsGateway implements OnGatewayConnection, OnGatewayDisconnect
       const chatHistory = this.roomChatHistory.get(meetingId) || [];
       client.emit('chat-history', { messages: chatHistory });
 
-      // Broadcast to other peers in room
+      // Broadcast to other peers in room with initial media state
       client.to(meetingId).emit('participant-joined', {
         socketId: client.id,
         userId: user.id,
         name: user.name,
         avatar: user.avatar,
+        audioEnabled: participantInfo.audioEnabled,
+        videoEnabled: participantInfo.videoEnabled,
+        screenSharing: participantInfo.screenSharing,
       });
     } catch (err: any) {
       client.emit('error', { message: err?.message || 'Lỗi khi tham gia phòng' });
@@ -274,6 +299,15 @@ export class MeetingsGateway implements OnGatewayConnection, OnGatewayDisconnect
     this.server.to(payload.meetingId).emit('chat-message', messageData);
   }
 
+  @SubscribeMessage('request-chat-history')
+  handleRequestChatHistory(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() payload: { meetingId: string },
+  ) {
+    const history = this.roomChatHistory.get(payload.meetingId) || [];
+    client.emit('chat-history', { messages: history });
+  }
+
   getMeetingChatHistory(meetingId: string) {
     return this.roomChatHistory.get(meetingId) || [];
   }
@@ -328,6 +362,10 @@ export class MeetingsGateway implements OnGatewayConnection, OnGatewayDisconnect
       if (participants) {
         for (const p of participants.values()) {
           await this.recordParticipantLeave(meetingId, p);
+          client.to(meetingId).emit('participant-left', {
+            socketId: p.socketId,
+            userId: p.userId,
+          });
         }
         this.roomParticipants.delete(meetingId);
       }
@@ -354,11 +392,39 @@ export class MeetingsGateway implements OnGatewayConnection, OnGatewayDisconnect
       screenSharing: boolean;
     },
   ) {
+    const participants = this.roomParticipants.get(payload.meetingId);
+    const participant = participants?.get(client.id);
+    if (participant) {
+      participant.audioEnabled = payload.audioEnabled;
+      participant.videoEnabled = payload.videoEnabled;
+      participant.screenSharing = payload.screenSharing;
+    }
+
     client.to(payload.meetingId).emit('user-media-state', {
       socketId: client.id,
+      userId: participant?.userId,
       audioEnabled: payload.audioEnabled,
       videoEnabled: payload.videoEnabled,
       screenSharing: payload.screenSharing,
+    });
+  }
+
+  @SubscribeMessage('screen-track-ready')
+  handleScreenTrackReady(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() payload: { meetingId: string; hasScreenTrack: boolean },
+  ) {
+    const participants = this.roomParticipants.get(payload.meetingId);
+    const participant = participants?.get(client.id);
+    if (participant) {
+      participant.screenSharing = payload.hasScreenTrack;
+    }
+    client.to(payload.meetingId).emit('user-media-state', {
+      socketId: client.id,
+      userId: participant?.userId,
+      audioEnabled: participant?.audioEnabled ?? true,
+      videoEnabled: participant?.videoEnabled ?? true,
+      screenSharing: payload.hasScreenTrack,
     });
   }
 

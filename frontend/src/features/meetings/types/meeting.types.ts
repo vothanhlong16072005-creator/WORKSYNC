@@ -204,3 +204,21 @@ export interface ChatMessage {
   };
   createdAt: string;
 }
+
+export type InMeetingMessage = ChatMessage;
+
+export interface RemotePeer {
+  socketId: string;
+  userId: string;
+  name: string;
+  avatar?: string;
+  /** Camera stream (transceiver 0) */
+  camStream: MediaStream | null;
+  /** Screen share stream (transceiver 1) — null if not sharing */
+  screenStream: MediaStream | null;
+  audioEnabled: boolean;
+  videoEnabled: boolean;
+  isScreenSharing: boolean;
+  connectionState: RTCPeerConnectionState;
+}
+
