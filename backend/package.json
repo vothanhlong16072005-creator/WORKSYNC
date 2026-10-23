@@ -26,7 +26,15 @@
     "seed:enterprise": "node --experimental-strip-types prisma/seed-enterprise-full.ts",
     "seed:meetings": "node --experimental-strip-types prisma/seed-meetings.ts",
     "seed:calendar": "node --experimental-strip-types prisma/seed-calendar.ts",
-    "seed:chat": "node --experimental-strip-types prisma/seed-chat.ts"
+    "seed:chat": "node --experimental-strip-types prisma/seed-chat.ts",
+    "seed:org": "node --experimental-strip-types prisma/seed-organizational.ts",
+    "seed:sprints": "node --experimental-strip-types prisma/seed-sprints-history.ts",
+    "seed:quicktasks": "node --experimental-strip-types prisma/seed-quicktasks.ts",
+    "seed:docs": "node --experimental-strip-types prisma/seed-project-docs.ts",
+    "seed:activity": "node --experimental-strip-types prisma/seed-activity.ts",
+    "seed:demo": "npm run seed:org && npm run seed:sprints && npm run seed:quicktasks && npm run seed:docs && npm run seed:activity",
+    "seed:verify": "node --experimental-strip-types prisma/verify-seed.ts",
+    "seed:rollback": "node --experimental-strip-types prisma/rollback-seed.ts"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",

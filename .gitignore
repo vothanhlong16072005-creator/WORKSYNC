@@ -40,6 +40,8 @@ restore-points/
 scratch/
 backend/uploads/*
 !backend/uploads/**/.gitkeep
+backend/prisma/backups/*.sql
+!backend/prisma/backups/.gitkeep
 
 # AI Agent & Editor configurations
 .agents/
