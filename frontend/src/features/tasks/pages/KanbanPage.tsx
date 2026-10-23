@@ -10,7 +10,6 @@ import {
   Eye,
   EyeOff,
   Filter,
-  Info,
   ListOrdered,
   ListTodo,
   MoreHorizontal,
@@ -25,6 +24,7 @@ import {
   Flag,
   Flame,
   Zap,
+  Users,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -162,6 +162,7 @@ function getDeadlineInfo(dueDateStr?: string | null, t?: (key: string, options?:
 
 export default function KanbanPage() {
   const { t, i18n } = useTranslation();
+  const isVi = i18n.language.startsWith('vi');
   const { projectId } = useParams<{ projectId?: string }>();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -238,6 +239,24 @@ export default function KanbanPage() {
   const isPM = user?.role === 'PM';
 
   const canCreateTask = isPersonalScope || isAdmin || isDeptHead || isPM;
+
+  /**
+   * Quyền kéo thả công việc trên bảng Kanban:
+   * 1. Dự án cá nhân (isPersonalScope) -> Người dùng tự do kéo thả tất cả
+   * 2. Quản trị viên (ADMIN), PM hoặc Trưởng phòng (DEPT_HEAD) -> Kéo thả được mọi việc
+   * 3. Nhân viên: ĐƯỢC kéo thả task được giao cho mình (assignee) hoặc do mình tạo (createdBy)
+   */
+  const canDragTask = (task: Task): boolean => {
+    if (isPersonalScope) return true;
+    if (isAdmin || isPM || isDeptHead) return true;
+    const currentUserId = user?.id;
+    if (!currentUserId) return false;
+    return (
+      task.assignee?.id === currentUserId ||
+      (task as any).assigneeId === currentUserId ||
+      (task as any).createdById === currentUserId
+    );
+  };
 
   const creatableProjects = useMemo(() => {
     const list = projects.filter((p) => {
@@ -376,8 +395,13 @@ export default function KanbanPage() {
     if (!destination) return;
     if (destination.droppableId === source.droppableId && destination.index === source.index) return;
 
-    if (!isPersonalScope) {
-      toast.info('Bảng dự án đang ở chế độ xem tiến độ chung. Để cập nhật trạng thái công việc của bạn, vui lòng thao tác tại mục "Việc của tôi".');
+    const task = tasks.find((t) => t.id === draggableId);
+    if (task && !canDragTask(task)) {
+      toast.warning(
+        isVi
+          ? 'Bạn chỉ có thể cập nhật trạng thái công việc được giao cho chính mình'
+          : 'You can only update tasks assigned to you'
+      );
       return;
     }
 
@@ -613,9 +637,9 @@ export default function KanbanPage() {
               </div>
             )}
             {!isPersonalScope && (
-              <span className="inline-flex items-center gap-1.5 ml-2 px-2.5 py-1 text-[11px] font-medium text-slate-500 bg-slate-100 rounded-lg">
-                <Info className="w-3.5 h-3.5 text-slate-400" />
-                {t('kanban.project_view_readonly', 'Chế độ xem dự án (Chỉ xem)')}
+              <span className="inline-flex items-center gap-1.5 ml-2 px-2.5 py-1 text-[11px] font-semibold text-blue-700 bg-blue-50 border border-blue-200/80 rounded-lg">
+                <Users className="w-3.5 h-3.5 text-blue-500" />
+                {t('kanban.team_project_badge', isVi ? 'Dự án nhóm' : 'Team Project')}
               </span>
             )}
           </div>
@@ -1136,7 +1160,7 @@ export default function KanbanPage() {
                     </button>
                   </header>
 
-                  <Droppable droppableId={column.id} isDropDisabled={!isPersonalScope}>
+                  <Droppable droppableId={column.id} isDropDisabled={false}>
                     {(provided, snapshot) => (
                       <div
                         ref={provided.innerRef}
@@ -1152,9 +1176,10 @@ export default function KanbanPage() {
                         {columnTasks.map((task, index) => {
                           const deadline = getDeadlineInfo(task.dueDate, t, i18n.language);
                           const cardPriorityClass = PRIORITY_CARD_FRAME[task.priority];
+                          const isMovable = canDragTask(task);
 
                           return (
-                            <Draggable key={task.id} draggableId={task.id} index={index} isDragDisabled={!isPersonalScope}>
+                            <Draggable key={task.id} draggableId={task.id} index={index} isDragDisabled={!isMovable}>
                               {(draggable, dragSnapshot) => {
                                 const dragHandleProps = draggable.dragHandleProps;
                                 return (
@@ -1169,10 +1194,16 @@ export default function KanbanPage() {
                                     onKeyDown={(event) => {
                                       if (event.key === 'Enter') setSelectedTaskId(task.id);
                                     }}
+                                    title={
+                                      !isMovable
+                                        ? (isVi ? 'Công việc này do nhân sự khác phụ trách' : 'Assigned to another member')
+                                        : undefined
+                                    }
                                     className={
                                       'kanban-task transition-shadow ' +
                                       cardPriorityClass +
-                                      (dragSnapshot.isDragging ? ' kanban-task--dragging' : '')
+                                      (dragSnapshot.isDragging ? ' kanban-task--dragging' : '') +
+                                      (!isMovable ? ' opacity-85 cursor-default' : ' cursor-grab active:cursor-grabbing')
                                     }
                                   >
                                     <div className="kanban-task__meta flex flex-wrap items-center gap-1.5">

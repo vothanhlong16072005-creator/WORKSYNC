@@ -43,6 +43,7 @@
     "all_projects_badge": "TẤT CẢ DỰ ÁN",
     "tasks_count": "{{count}} công việc",
     "project_view_readonly": "Chế độ xem dự án (Chỉ xem)",
+    "team_project_badge": "Dự án nhóm",
     "kpi_total": "Tổng công việc",
     "kpi_active": "Đang thực hiện",
     "kpi_overdue": "Đã quá hạn",

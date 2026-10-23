@@ -43,6 +43,7 @@
     "all_projects_badge": "ALL PROJECTS",
     "tasks_count": "{{count}} tasks",
     "project_view_readonly": "Project view (Read-only)",
+    "team_project_badge": "Team Project",
     "kpi_total": "Total Tasks",
     "kpi_active": "In Progress",
     "kpi_overdue": "Overdue",
