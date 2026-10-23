@@ -35,4 +35,4 @@ RUN mkdir -p uploads/chat uploads/documents
 
 EXPOSE 10000
 
-CMD ["sh", "-c", "npx prisma db push && npm run seed:all && node dist/main"]
+CMD ["sh", "-c", "npx prisma db push && (npm run seed:all || true) && node dist/main"]

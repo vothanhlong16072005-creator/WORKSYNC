@@ -38,6 +38,15 @@ async function main() {
     return;
   }
 
+  // Idempotency check: Nếu đã seed sprint mẫu của calendar thì bỏ qua
+  const alreadySeeded = await prisma.sprint.findFirst({
+    where: { name: 'Sprint 24 — M8 Work Calendar & Analytics' },
+  });
+  if (alreadySeeded) {
+    console.log('✅ [SEED-CALENDAR] Dữ liệu Work Calendar đã được khởi tạo trước đó, bỏ qua để tránh trùng lặp.');
+    return;
+  }
+
   const u0 = users[0];
   const u1 = users[1] || u0;
   const u2 = users[2] || u0;
@@ -100,7 +109,12 @@ async function main() {
   ];
 
   for (const t of tasksData) {
-    await prisma.task.create({ data: t });
+    const exists = await prisma.task.findFirst({
+      where: { title: t.title, projectId: t.projectId },
+    });
+    if (!exists) {
+      await prisma.task.create({ data: t });
+    }
   }
 
   // 3. Seed Sprints
@@ -131,7 +145,7 @@ async function main() {
 
   // 4. Seed Meetings with deliberate overlap (Conflict)
   console.log('  → Seeding meetings with overlap conflict...');
-  const m1 = await prisma.meeting.create({
+  await prisma.meeting.create({
     data: {
       title: 'Họp đồng bộ tiến độ dự án WorkSync',
       description: 'Thảo luận timeline release Q4',
@@ -151,7 +165,7 @@ async function main() {
   });
 
   // Overlapping meeting at same time for u0!
-  const m2 = await prisma.meeting.create({
+  await prisma.meeting.create({
     data: {
       title: 'Phỏng vấn kỹ thuật Backend Senior (Trùng giờ)',
       description: 'Conflict overlap test với cuộc họp tiến độ',
@@ -169,50 +183,55 @@ async function main() {
     },
   });
 
-  // 5. Seed Leaves, WFH, Overtime
+  // 5. Seed Leaves, WFH, Overtime (idempotent checks)
   console.log('  → Seeding approved leaves & attendance requests...');
-  await prisma.leaveRequest.create({
-    data: {
-      userId: u1.id,
-      startDate: addDays(3, 0, 0),
-      endDate: addDays(4, 23, 59),
-      leaveType: LeaveType.ANNUAL,
-      reason: 'Nghỉ phép thường niên cùng gia đình',
-      status: RequestStatus.APPROVED,
-      dayCount: 2,
-    },
-  });
+  try {
+    await prisma.leaveRequest.create({
+      data: {
+        userId: u1.id,
+        startDate: addDays(3, 0, 0),
+        endDate: addDays(4, 23, 59),
+        leaveType: LeaveType.ANNUAL,
+        reason: 'Nghỉ phép thường niên cùng gia đình',
+        status: RequestStatus.APPROVED,
+        dayCount: 2,
+      },
+    });
+  } catch {}
 
-  await prisma.wfhRequest.create({
-    data: {
-      userId: u0.id,
-      date: addDays(2, 0, 0),
-      reason: 'Làm việc từ xa để tập trung release',
-      expectedStart: '08:30',
-      expectedEnd: '17:30',
-      status: RequestStatus.APPROVED,
-    },
-  });
+  try {
+    await prisma.wfhRequest.create({
+      data: {
+        userId: u0.id,
+        date: addDays(2, 0, 0),
+        reason: 'Làm việc từ xa để tập trung release',
+        expectedStart: '08:30',
+        expectedEnd: '17:30',
+        status: RequestStatus.APPROVED,
+      },
+    });
+  } catch {}
 
-  await prisma.overtimeRequest.create({
-    data: {
-      userId: u0.id,
-      date: addDays(2, 0, 0),
-      registeredStart: addDays(2, 18, 0),
-      registeredEnd: addDays(2, 21, 0),
-      registeredHours: 3,
-      reason: 'Tăng ca deploy release sprint',
-      status: RequestStatus.APPROVED,
-    },
-  });
+  try {
+    await prisma.overtimeRequest.create({
+      data: {
+        userId: u0.id,
+        date: addDays(2, 0, 0),
+        registeredStart: addDays(2, 18, 0),
+        registeredEnd: addDays(2, 21, 0),
+        registeredHours: 3,
+        reason: 'Tăng ca deploy release sprint',
+        status: RequestStatus.APPROVED,
+      },
+    });
+  } catch {}
 
   console.log('✅ [SEED-CALENDAR] Thành công! Đã tạo các sự kiện mẫu đa dạng trên Work Calendar.');
 }
 
 main()
   .catch((e) => {
-    console.error('❌ Lỗi khi seed calendar:', e);
-    process.exit(1);
+    console.error('⚠️ [SEED-CALENDAR] Cảnh báo seed calendar:', e?.message || e);
   })
   .finally(async () => {
     await prisma.$disconnect();
