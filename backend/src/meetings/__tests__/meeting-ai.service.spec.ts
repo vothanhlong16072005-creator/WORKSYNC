@@ -142,4 +142,118 @@ describe('MeetingAiService', () => {
       }),
     );
   });
+
+  it('should use referenceContent as the primary source over the transcript (Phase 5)', async () => {
+    const meetingId = 'meet-123';
+    const referenceContent = `
+BIÊN BẢN THAM CHIẾU — DỰ ÁN TTĐN
+I. QUYẾT ĐỊNH
+- Chốt triển khai cơ chế nội dung tham chiếu cho biên bản AI trước khi cải thiện STT.
+II. CÔNG VIỆC CẦN LÀM
+- PM: Hoàn thiện đồng bộ track media, hạn cuối tuần này, ưu tiên cao.
+    `;
+
+    mockPrisma.meeting.findUnique.mockResolvedValue({
+      id: meetingId,
+      title: 'Họp Dự Án TTĐN',
+      scopeType: 'PROJECT',
+      projectId: 'proj-1',
+      departmentId: null,
+      startTime: new Date(),
+      endTime: new Date(),
+      attendees: [
+        {
+          userId: 'user-tuan',
+          user: { id: 'user-tuan', name: 'Nguyễn Minh Tuấn', email: 'tuan@worksync.com', role: 'PM' },
+        },
+      ],
+      minutes: null,
+    });
+
+    // Transcript rác (STT tiếng Việt kém) — KHÔNG được ghi đè nội dung tham chiếu
+    mockPrisma.meetingTranscriptChunk.findMany.mockResolvedValue([
+      {
+        id: 'chunk-1',
+        meetingId,
+        speakerId: 'user-tuan',
+        speakerName: 'Nguyễn Minh Tuấn',
+        speakerRole: 'PM',
+        text: 'xong giong dau roi mot hai ba bon',
+        timestamp: new Date(),
+      },
+    ]);
+
+    const result = await service.generateSummary(meetingId, {
+      language: 'VI',
+      referenceContent,
+    });
+
+    expect(result).toBeDefined();
+    expect(result.summary).toBeDefined();
+    // Nội dung tham chiếu phải chi phối kết quả
+    expect(result.summary).toContain('đồng bộ track media');
+    // Transcript vẫn được giữ lại làm nguyên liệu hỗ trợ
+    expect(result.rawTranscript).toContain('xong giong dau roi');
+  });
+
+  it('should prefer minutes.content over transcript when no referenceContent is given', async () => {
+    const meetingId = 'meet-123';
+
+    mockPrisma.meeting.findUnique.mockResolvedValue({
+      id: meetingId,
+      title: 'Họp Dự Án TTĐN',
+      scopeType: 'PROJECT',
+      projectId: 'proj-1',
+      departmentId: null,
+      startTime: new Date(),
+      endTime: new Date(),
+      attendees: [
+        {
+          userId: 'user-tuan',
+          user: { id: 'user-tuan', name: 'Nguyễn Minh Tuấn', email: 'tuan@worksync.com', role: 'PM' },
+        },
+      ],
+      minutes: {
+        content:
+          'Nội dung biên bản viết tay trong MinutesEditor: chốt triển khai module họp trực tuyến trong quý này.',
+      },
+    });
+
+    mockPrisma.meetingTranscriptChunk.findMany.mockResolvedValue([
+      {
+        id: 'chunk-1',
+        meetingId,
+        speakerId: 'user-tuan',
+        speakerName: 'Nguyễn Minh Tuấn',
+        speakerRole: 'PM',
+        text: 'garbled transcript content that should not win',
+        timestamp: new Date(),
+      },
+    ]);
+
+    const result = await service.generateSummary(meetingId, { language: 'VI' });
+
+    expect(result.summary).toContain('module họp trực tuyến');
+    expect(result.summary).not.toContain('garbled transcript content that should not win');
+  });
+
+  it('should throw BadRequest when there is no usable source content', async () => {
+    const meetingId = 'meet-empty';
+
+    mockPrisma.meeting.findUnique.mockResolvedValue({
+      id: meetingId,
+      title: 'Họp trống',
+      scopeType: 'PROJECT',
+      projectId: 'proj-1',
+      departmentId: null,
+      startTime: new Date(),
+      endTime: new Date(),
+      attendees: [],
+      minutes: null,
+    });
+
+    mockPrisma.meetingTranscriptChunk.findMany.mockResolvedValue([]);
+
+    await expect(service.generateSummary(meetingId, { language: 'VI' })).rejects.toThrow();
+  });
 });

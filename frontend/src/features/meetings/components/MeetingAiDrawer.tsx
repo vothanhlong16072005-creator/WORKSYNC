@@ -4,6 +4,7 @@ import {
   AlertTriangle,
   Bot,
   CheckCircle2,
+  ClipboardEdit,
   Clock,
   Download,
   FileText,
@@ -37,6 +38,38 @@ interface MeetingAiDrawerProps {
   canManage: boolean;
 }
 
+/**
+ * Mẫu nội dung tham chiếu tiếng Việt dùng cho demo.
+ * Người dùng bấm "Tải mẫu demo" → AI sinh biên bản bám theo đúng nội dung này.
+ */
+const DEMO_REFERENCE_SAMPLE = `BIÊN BẢN CUỘC HỌP — DỰ ÁN TTĐN (MẪU THAM CHIẾU)
+
+I. THÀNH PHẦN THAM DỰ
+- Người chủ trì: PM dự án
+- Thành viên: các thành viên trong nhóm dự án
+- Thư ký: ghi chép AI
+
+II. NỘI DUNG THẢO LUẬN
+1. Tiến độ phát triển module họp trực tuyến đạt khoảng 80%, đã hoàn thành phần WebRTC signaling và giao diện phòng họp.
+2. Vấn đề nhận diện giọng nói tiếng Việt chưa ổn định do phụ thuộc Web Speech API của trình duyệt, đã quyết định bổ sung cơ chế nội dung tham chiếu để biên bản AI vẫn chính xác.
+3. Vấn đề người vào sau không thấy camera của người đã vào trước, đã xác định nguyên nhân do đồng bộ track chưa hoàn chỉnh, dự kiến khắc phục trong đợt sprint tới.
+4. Quyết định sử dụng mô hình mesh WebRTC cho các quy mô nhóm nhỏ dưới 10 người, chưa triển khai SFU ở thời điểm hiện tại.
+
+III. QUYẾT ĐỊNH
+- Thống nhất triển khai tính năng biên bản AI với nội dung tham chiếu trước khi cải thiện chất lượng nhận diện giọng nói.
+- Thống nhất ưu tiên ổn định kết nối WebRTC và phân loại camera/màn hình chia sẻ trước khi tối ưu chất lượng hình ảnh.
+
+IV. CÔNG VIỆC CẦN LÀM
+- PM: Hoàn thiện cơ chế đồng bộ track media để người vào sau thấy đầy đủ camera của người đã vào trước, hạn cuối tuần này, ưu tiên cao.
+- Frontend: Sửa lỗi phân loại camera và màn hình chia sẻ, đảm bảo màn hình share hiển thị toàn màn hình cho người xem, hạn cuối tuần này, ưu tiên cao.
+- Backend: Bổ sung endpoint truyền msid track để đồng bộ loại media, hạn cuối tuần này, ưu tiên trung bình.
+- QA: Kiểm thử lại kịch bản 2 người vào phòng lệch thời điểm, hạn cuối tuần này, ưu tiên trung bình.
+
+V. RỦI RO
+- Chất lượng nhận diện giọng nói tiếng Việt phụ thuộc vào pack ngôn ngữ của trình duyệt, nếu thiếu sẽ ảnh hưởng đến chất lượng bản ghi âm.
+- Mô hình mesh chưa đáp ứng tốt khi số người tham gia vượt quá 10, có nguy cơ nghẽn băng thông.
+- Chưa cấu hình TURN server, mạng nội bộ chặn UDP sẽ không kết nối được.`;
+
 export const MeetingAiDrawer: React.FC<MeetingAiDrawerProps> = ({
   meeting,
   isOpen,
@@ -54,6 +87,13 @@ export const MeetingAiDrawer: React.FC<MeetingAiDrawerProps> = ({
   const [aiSummary, setAiSummary] = useState<MeetingSummaryResult | null>(null);
   const [loadingSummary, setLoadingSummary] = useState(false);
   const [generating, setGenerating] = useState(false);
+
+  /**
+   * Nội dung tham chiếu — dùng để định hướng AI khi STT tiếng Việt chưa chính xác.
+   * AI sẽ bám theo nội dung này thay vì tự suy diễn từ transcript rác.
+   */
+  const [referenceContent, setReferenceContent] = useState('');
+  const [showReference, setShowReference] = useState(false);
 
   // Export to document state
   const [exportingDoc, setExportingDoc] = useState(false);
@@ -104,7 +144,10 @@ export const MeetingAiDrawer: React.FC<MeetingAiDrawerProps> = ({
     setGenerating(true);
     try {
       toast.info('Trợ lý AI đang phân tích toàn bộ kịch bản cuộc họp...');
-      const res = await meetingApi.generateAiSummary(meeting.id, { language });
+      const res = await meetingApi.generateAiSummary(meeting.id, {
+        language,
+        referenceContent: referenceContent.trim() || undefined,
+      });
       setAiSummary(res);
       toast.success('Đã tạo thành công biên bản AI!');
     } catch (err: any) {
@@ -372,6 +415,53 @@ export const MeetingAiDrawer: React.FC<MeetingAiDrawerProps> = ({
                 )}
               </div>
             </div>
+
+            {/* Nội dung tham chiếu — định hướng biên bản AI (hữu ích khi STT tiếng Việt chưa chính xác) */}
+            {canManage && (
+              <div className="p-3 rounded-xl bg-amber-50/40 border border-amber-200">
+                <div className="flex items-center justify-between gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowReference((v) => !v)}
+                    className="flex items-center gap-1.5 text-[11px] font-bold text-amber-800 uppercase tracking-wider hover:text-amber-900 transition-colors"
+                  >
+                    <ClipboardEdit className="w-3.5 h-3.5" />
+                    Nội dung tham chiếu
+                    {referenceContent.trim() && (
+                      <span className="px-1.5 py-0.5 rounded bg-amber-200 text-amber-900 text-[10px] font-bold">
+                        Đã nhập
+                      </span>
+                    )}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setReferenceContent(DEMO_REFERENCE_SAMPLE)}
+                    className="text-[10px] font-semibold text-amber-700 hover:text-amber-900 px-2 py-1 rounded-md hover:bg-amber-100 transition-colors"
+                  >
+                    Tải mẫu demo
+                  </button>
+                </div>
+
+                {showReference && (
+                  <div className="mt-2.5 space-y-2">
+                    <textarea
+                      value={referenceContent}
+                      onChange={(e) => setReferenceContent(e.target.value)}
+                      rows={8}
+                      maxLength={20000}
+                      placeholder={
+                        'Nhập nội dung chuẩn của biên bản (ví dụ: các đầu việc, quyết định, rủi ro cần nêu). AI sẽ tạo biên bản bám theo nội dung này thay vì dựa hoàn toàn vào giọng nói được ghi âm.'
+                      }
+                      className="w-full px-3 py-2 rounded-lg bg-white border border-amber-200 text-xs text-foreground focus:outline-hidden focus:border-amber-400 leading-relaxed"
+                    />
+                    <p className="text-[10px] text-amber-700/80">
+                      Khi có nội dung tham chiếu, AI sẽ bám theo nội dung này làm chuẩn. Lời thoại
+                      ghi âm chỉ dùng bổ sung. Số ký tự: {referenceContent.length}/20000
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
 
             {loadingSummary ? (
               <div className="flex items-center justify-center py-20">

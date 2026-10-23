@@ -27,6 +27,7 @@ import {
   ConversationsQuerySchema,
   type ChatActor,
 } from './types/chat.types.js';
+import { SendCultureWishSchema } from './dto/send-culture-wish.dto.js';
 import { ChatMessageType } from '@prisma/client';
 
 function parseOrThrow<T>(schema: ZodSchema<T>, data: unknown): T {
@@ -66,6 +67,18 @@ export class ChatController {
     @CurrentUser() actor: ChatActor,
   ) {
     return this.chatService.getOrCreateDirectConversation(actor.id, targetUserId);
+  }
+
+  /**
+   * 2b. Tự động gửi tin nhắn mẫu chúc mừng Sinh nhật / Kỷ niệm cống hiến qua Chat 1-1
+   */
+  @Post('culture/send-wish')
+  async sendCultureWish(
+    @CurrentUser() actor: ChatActor,
+    @Body() rawBody: unknown,
+  ) {
+    const dto = parseOrThrow(SendCultureWishSchema, rawBody);
+    return this.chatService.sendCultureWish(actor, dto);
   }
 
   /**

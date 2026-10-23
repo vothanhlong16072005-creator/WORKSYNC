@@ -18,6 +18,8 @@ import type {
   CompanyAttendanceResponse,
   AttendanceSettings,
   UpdateAttendanceSettingsPayload,
+  EmployeeAuditQuery,
+  EmployeeAuditResponse,
 } from '../types/role-attendance.types';
 import type {
   EarlyLeaveRequest,
@@ -223,6 +225,16 @@ export const attendanceApi = {
 
   async updateSettings(payload: UpdateAttendanceSettingsPayload): Promise<AttendanceSettings> {
     const res = await apiClient.patch<AttendanceSettings>('/attendance/settings', payload);
+    return res.data;
+  },
+
+  async getEmployeeAudit(
+    userId: string,
+    params?: EmployeeAuditQuery,
+  ): Promise<EmployeeAuditResponse> {
+    const res = await apiClient.get<EmployeeAuditResponse>(`/attendance/audit/${userId}`, {
+      params,
+    });
     return res.data;
   },
 };

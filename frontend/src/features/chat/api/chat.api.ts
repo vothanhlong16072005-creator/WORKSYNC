@@ -141,4 +141,19 @@ export const chatApi = {
     const res = await apiClient.delete<{ success: boolean }>(`/chat/messages/${messageId}`);
     return res.data;
   },
+
+  /**
+   * Gửi lời chúc mừng sinh nhật / kỷ niệm làm việc trực tiếp qua chat 1-1
+   */
+  async sendCultureWish(payload: {
+    recipientUserId: string;
+    type: 'BIRTHDAY' | 'WORK_ANNIVERSARY';
+    customMessage?: string;
+  }): Promise<{ success: boolean; conversationId: string; message: ChatMessage }> {
+    const res = await apiClient.post<{ success: boolean; conversationId: string; message: ChatMessage }>(
+      '/chat/culture/send-wish',
+      payload,
+    );
+    return res.data;
+  },
 };

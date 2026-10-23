@@ -3,6 +3,8 @@ import {
   ConflictException,
   BadRequestException,
   InternalServerErrorException,
+  NotFoundException,
+  ForbiddenException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { IpValidationService } from './ip-validation.service.js';
@@ -584,5 +586,179 @@ export class AttendanceService {
       where: { id: config.id },
       data: dto,
     });
+  }
+
+  /**
+   * Audit an employee's attendance, working hours, and submitted requests
+   * For HR, ADMIN, and DEPARTMENT_HEAD (within their department), or EMPLOYEE (themselves)
+   */
+  async getEmployeeAudit(
+    userId: string,
+    query: { fromDate?: string; toDate?: string },
+    actor: { id: string; role: string; departmentId?: string | null },
+  ) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId, deletedAt: null },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        avatar: true,
+        role: true,
+        position: true,
+        departmentId: true,
+        department: {
+          select: { id: true, name: true },
+        },
+      },
+    });
+
+    if (!user) {
+      throw new NotFoundException('Nhân viên không tồn tại trong hệ thống');
+    }
+
+    if (actor.role === 'DEPARTMENT_HEAD' && user.departmentId !== actor.departmentId) {
+      throw new ForbiddenException('Trưởng phòng chỉ được tra cứu nhân viên thuộc phòng ban của mình');
+    }
+
+    if (actor.role === 'EMPLOYEE' && actor.id !== userId) {
+      throw new ForbiddenException('Bạn chỉ có quyền xem hồ sơ chuyên cần của chính mình');
+    }
+
+    // Determine date range
+    let from: Date;
+    let to: Date;
+
+    if (query.fromDate && query.toDate) {
+      from = new Date(`${query.fromDate}T00:00:00.000Z`);
+      to = new Date(`${query.toDate}T23:59:59.999Z`);
+    } else {
+      const now = new Date();
+      from = new Date(Date.UTC(now.getFullYear(), now.getMonth(), 1, 0, 0, 0));
+      to = new Date(Date.UTC(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999));
+    }
+
+    // Fetch attendance records, leaves, wfhs, and overtimes in parallel
+    const [records, leaves, wfhs, overtimes] = await Promise.all([
+      this.prisma.attendanceRecord.findMany({
+        where: {
+          userId,
+          date: { gte: from, lte: to },
+        },
+        orderBy: { date: 'desc' },
+      }),
+      this.prisma.leaveRequest.findMany({
+        where: {
+          userId,
+          startDate: { lte: to },
+          endDate: { gte: from },
+        },
+        orderBy: { startDate: 'desc' },
+      }),
+      this.prisma.wfhRequest.findMany({
+        where: {
+          userId,
+          date: { gte: from, lte: to },
+        },
+        orderBy: { date: 'desc' },
+      }),
+      this.prisma.overtimeRequest.findMany({
+        where: {
+          userId,
+          date: { gte: from, lte: to },
+        },
+        orderBy: { date: 'desc' },
+      }),
+    ]);
+
+    let onTimeDays = 0;
+    let lateDays = 0;
+    let wfhDays = 0;
+    let leaveDays = 0;
+    let totalWorkHours = 0;
+
+    const mappedRecords = records.map((r) => {
+      let workHours = 0;
+      if (r.checkInTime && r.checkOutTime) {
+        const diffMs = r.checkOutTime.getTime() - r.checkInTime.getTime();
+        workHours = Math.max(0, Math.round((diffMs / (1000 * 60 * 60)) * 10) / 10);
+      } else if (r.status === 'ON_TIME' || r.status === 'WFH') {
+        workHours = 8.0;
+      } else if (r.status === 'LATE' || r.status === 'VERY_LATE') {
+        workHours = 7.5;
+      }
+
+      totalWorkHours += workHours;
+
+      if (r.status === 'ON_TIME') onTimeDays++;
+      else if (r.status === 'LATE' || r.status === 'VERY_LATE') lateDays++;
+      else if (r.status === 'WFH') wfhDays++;
+      else if (r.status === 'ABSENT_APPROVED' || r.status === 'ABSENT_UNAPPROVED') leaveDays++;
+
+      return {
+        id: r.id,
+        date: r.date.toISOString().split('T')[0],
+        status: r.status,
+        checkInTime: r.checkInTime,
+        checkOutTime: r.checkOutTime,
+        workHours,
+        checkInMethod: r.checkInMethod,
+        checkInIp: r.checkInIp,
+        note: r.note,
+      };
+    });
+
+    const attendedDays = onTimeDays + lateDays + wfhDays;
+    const punctualityRate = attendedDays > 0 ? Math.round((onTimeDays / attendedDays) * 100) : 100;
+    const averageHoursPerDay = attendedDays > 0 ? Math.round((totalWorkHours / attendedDays) * 10) / 10 : 0;
+
+    return {
+      user,
+      period: {
+        from: from.toISOString().split('T')[0],
+        to: to.toISOString().split('T')[0],
+      },
+      kpi: {
+        totalDays: records.length,
+        attendedDays,
+        onTimeDays,
+        lateDays,
+        wfhDays,
+        leaveDays,
+        totalWorkHours: Math.round(totalWorkHours * 10) / 10,
+        averageHoursPerDay,
+        punctualityRate,
+      },
+      records: mappedRecords,
+      requests: {
+        leaves: leaves.map((l) => ({
+          id: l.id,
+          startDate: l.startDate.toISOString().split('T')[0],
+          endDate: l.endDate.toISOString().split('T')[0],
+          leaveType: l.leaveType,
+          reason: l.reason,
+          status: l.status,
+          dayCount: l.dayCount,
+          reviewedAt: l.reviewedAt,
+        })),
+        wfhs: wfhs.map((w) => ({
+          id: w.id,
+          date: w.date.toISOString().split('T')[0],
+          reason: w.reason,
+          status: w.status,
+          expectedStart: w.expectedStart,
+          expectedEnd: w.expectedEnd,
+          reviewedAt: w.reviewedAt,
+        })),
+        overtimes: overtimes.map((o) => ({
+          id: o.id,
+          date: o.date.toISOString().split('T')[0],
+          hours: o.registeredHours,
+          reason: o.reason,
+          status: o.status,
+          reviewedAt: o.reviewedAt,
+        })),
+      },
+    };
   }
 }

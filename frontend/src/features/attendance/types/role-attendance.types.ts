@@ -125,3 +125,74 @@ export interface UpdateAttendanceSettingsPayload {
   allowedIpRanges?: string[];
   wfhAutoApproveTime?: string;
 }
+
+// ---------- Employee Attendance Audit (HR/ADMIN/DEPT_HEAD) ----------
+
+export interface EmployeeAuditQuery {
+  fromDate?: string;
+  toDate?: string;
+}
+
+export interface EmployeeAuditRecord {
+  id: string;
+  date: string;
+  status: string;
+  checkInTime: string | null;
+  checkOutTime: string | null;
+  workHours: number;
+  note: string | null;
+}
+
+export interface EmployeeAuditRequests {
+  leaves: Array<{
+    id: string;
+    startDate: string;
+    endDate: string;
+    reason: string;
+    type: string;
+    status: string;
+    createdAt: string;
+  }>;
+  wfhs: Array<{
+    id: string;
+    date: string;
+    reason: string;
+    status: string;
+    createdAt: string;
+  }>;
+  overtimes: Array<{
+    id: string;
+    date: string;
+    hours: number;
+    reason: string;
+    status: string;
+    createdAt: string;
+  }>;
+}
+
+export interface EmployeeAuditResponse {
+  user: {
+    id: string;
+    name: string;
+    email: string;
+    role: string;
+    avatar: string | null;
+    department: { id: string; name: string } | null;
+  };
+  period: { fromDate: string; toDate: string };
+  kpis: {
+    totalDays: number;
+    attendedDays: number;
+    onTimeDays: number;
+    lateDays: number;
+    wfhDays: number;
+    leaveDays: number;
+    earlyLeaveDays: number;
+    totalWorkHours: number;
+    averageDailyHours: number;
+    punctualityRate: number;
+  };
+  records: EmployeeAuditRecord[];
+  requests: EmployeeAuditRequests;
+}
+

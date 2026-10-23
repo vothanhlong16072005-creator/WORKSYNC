@@ -13,8 +13,8 @@
  *
  *    Cách sửa: sau khi `setLocalDescription`, parse `a=msid:` trong SDP cục bộ
  *    để lấy msid THẬT của từng track, rồi gửi qua Socket.IO. Phía remote
- *    so `event.streams[0].id` (hoặc msid từ remote SDP) với danh sách này
- *    → phân loại chính xác, không đoán.
+ *    so `event.streams[0].id` với danh sách này → phân loại chính xác,
+ *    không đoán bằng heuristic.
  *
  * 2. RACE CONDITION MEDIA (late joiner không thấy camera):
  *    `getUserMedia()` là async, có thể resolve SAU khi `room-users` tới →
@@ -117,6 +117,7 @@ export function useWebRTCPeer({
   const pendingTracksRef = useRef<Map<string, Map<string, PendingRemoteTrack>>>(new Map());
   /** Named stream dùng chung cho mọi PC → msid nhất quán giữa các peer */
   const camNamedStreamRef = useRef<MediaStream | null>(null);
+  const micNamedStreamRef = useRef<MediaStream | null>(null);
   const screenNamedStreamRef = useRef<MediaStream | null>(null);
   /** Chống gửi trùng track-ids khi nội dung không đổi */
   const lastEmittedKindsRef = useRef<string>('');
@@ -151,23 +152,25 @@ export function useWebRTCPeer({
     [self.id],
   );
 
-  /** Tạo named stream ổn định (dùng chung cho mọi PC) để msid nhất quán */
-  const getNamedStream = useCallback(
+  /**
+   * Tạo named stream ổn định (dùng chung cho mọi PC) để msid nhất quán.
+   * `Object.defineProperty` chỉ là fallback — msid thật được lấy từ SDP.
+   */
+  const ensureNamedStream = useCallback(
     (
-      kind: RemoteTrackKind,
-      videoTrack: MediaStreamTrack,
-      audioTrack?: MediaStreamTrack,
+      cached: MediaStream | null,
+      setCached: (stream: MediaStream | null) => void,
+      prefix: string,
+      tracks: MediaStreamTrack[],
     ): MediaStream => {
-      const isCam = kind === 'cam';
-      const cached = isCam ? camNamedStreamRef.current : screenNamedStreamRef.current;
-
-      if (cached && cached.getVideoTracks()[0] === videoTrack) {
-        return cached;
+      if (cached) {
+        const sameTracks =
+          cached.getTracks().length === tracks.length &&
+          tracks.every((t) => cached.getTracks().includes(t));
+        if (sameTracks) return cached;
       }
 
-      const tracks = audioTrack ? [videoTrack, audioTrack] : [videoTrack];
       const stream = new MediaStream(tracks);
-      const prefix = isCam ? CAM_STREAM_PREFIX : SCREEN_STREAM_PREFIX;
       try {
         Object.defineProperty(stream, 'id', {
           value: `${prefix}-${self.id}`,
@@ -177,13 +180,7 @@ export function useWebRTCPeer({
       } catch {
         // Fallback: trình duyệt chặn defineProperty → dùng msid từ SDP
       }
-      trackKindRegistry.set(videoTrack, kind);
-
-      if (isCam) {
-        camNamedStreamRef.current = stream;
-      } else {
-        screenNamedStreamRef.current = stream;
-      }
+      setCached(stream);
       return stream;
     },
     [self.id],
@@ -220,6 +217,8 @@ export function useWebRTCPeer({
 
     const payload = { meetingId, camStreamIds, screenStreamIds };
     const fingerprint = JSON.stringify(payload);
+    // ⚠️ Fingerprint chỉ chặn emit TRÙNG LẶT trong cùng một phiên kết nối.
+    // Khi tạo PC mới (reconnect / renegotiate), msid có thể đổi → cần emit lại.
     if (fingerprint === lastEmittedKindsRef.current) return;
     lastEmittedKindsRef.current = fingerprint;
 
@@ -250,7 +249,14 @@ export function useWebRTCPeer({
       const pending = pendingTracksRef.current.get(remoteSocketId);
       if (!pending || pending.size === 0) return;
 
-      const hasExplicitKinds = remoteKindsRef.current.has(remoteSocketId);
+      const kinds = remoteKindsRef.current.get(remoteSocketId);
+      // ⚠️ Mapping rỗng (chưa nhận được track-ids từ peer) KHÔNG được coi là
+      // "đã biết" — nếu vậy track sẽ bị đẩy vào stillPending vĩnh viễn và
+      // không bao giờ được gán vào camStream → tile hiện avatar thay vì camera.
+      const hasUsableMapping = Boolean(
+        kinds && (kinds.camStreamIds.length > 0 || kinds.screenStreamIds.length > 0),
+      );
+
       const stillPending = new Map<string, PendingRemoteTrack>();
       let camEntry: PendingRemoteTrack | null = null;
       let screenEntry: PendingRemoteTrack | null = null;
@@ -261,11 +267,12 @@ export function useWebRTCPeer({
           screenEntry = entry;
         } else if (explicit === 'cam') {
           camEntry = entry;
-        } else if (!hasExplicitKinds) {
-          // Chưa có tín hiệu nào → dùng loại suy luận
+        } else if (!hasUsableMapping) {
+          // Chưa có tín hiệu rõ ràng nào → dùng loại suy luận (fallback heuristic)
           if (entry.inferredKind === 'screen') screenEntry = entry;
           else camEntry = entry;
         } else {
+          // Đã có mapping nhưng stream id này không khớp → chờ mapping đúng
           stillPending.set(trackId, entry);
         }
       }
@@ -297,6 +304,19 @@ export function useWebRTCPeer({
   /** Nhận msid từ peer và phân loại lại các track đang chờ */
   const setRemoteStreamKinds = useCallback(
     (remoteSocketId: string, kinds: RemoteStreamKinds) => {
+      const previous = remoteKindsRef.current.get(remoteSocketId);
+
+      // ⚠️ KHÔNG ghi đè mapping đã biết bằng mapping RỖNG.
+      // `participant-joined` có thể tới SAU `meeting:track-ids` và mang
+      // `camStreamIds: []` (lúc peer vừa vào chưa negotiate xong) → nếu ghi đè
+      // thì phân loại camera/screen bị mất → camera hiện avatar.
+      const incomingHasData =
+        kinds.camStreamIds.length > 0 || kinds.screenStreamIds.length > 0;
+      const previousHasData =
+        previous && (previous.camStreamIds.length > 0 || previous.screenStreamIds.length > 0);
+
+      if (previousHasData && !incomingHasData) return;
+
       remoteKindsRef.current.set(remoteSocketId, kinds);
       applyRemoteTracks(remoteSocketId);
     },
@@ -318,13 +338,30 @@ export function useWebRTCPeer({
         const micTrack = activeCam.getAudioTracks()[0];
 
         if (camTrack && !added.has(camTrack.id)) {
-          const named = getNamedStream('cam', camTrack, micTrack);
+          const named = ensureNamedStream(
+            camNamedStreamRef.current,
+            (s) => {
+              camNamedStreamRef.current = s;
+            },
+            CAM_STREAM_PREFIX,
+            [camTrack],
+          );
+          trackKindRegistry.set(camTrack, 'cam');
           pc.addTrack(camTrack, named);
           added.add(camTrack.id);
           changed = true;
         }
+
         if (micTrack && !added.has(micTrack.id)) {
-          const named = getNamedStream('cam', activeCam.getVideoTracks()[0] ?? micTrack, micTrack);
+          const named = ensureNamedStream(
+            micNamedStreamRef.current,
+            (s) => {
+              micNamedStreamRef.current = s;
+            },
+            CAM_STREAM_PREFIX,
+            [micTrack],
+          );
+          trackKindRegistry.set(micTrack, 'cam');
           pc.addTrack(micTrack, named);
           added.add(micTrack.id);
           changed = true;
@@ -336,7 +373,15 @@ export function useWebRTCPeer({
         const screenTrack = activeScreen.getVideoTracks()[0];
         if (screenTrack && !added.has(screenTrack.id)) {
           screenTrack.contentHint = 'detail';
-          const named = getNamedStream('screen', screenTrack);
+          const named = ensureNamedStream(
+            screenNamedStreamRef.current,
+            (s) => {
+              screenNamedStreamRef.current = s;
+            },
+            SCREEN_STREAM_PREFIX,
+            [screenTrack],
+          );
+          trackKindRegistry.set(screenTrack, 'screen');
           pc.addTrack(screenTrack, named);
           added.add(screenTrack.id);
           changed = true;
@@ -346,7 +391,7 @@ export function useWebRTCPeer({
       addedTrackIdsRef.current.set(remoteSocketId, added);
       return changed;
     },
-    [getNamedStream],
+    [ensureNamedStream],
   );
 
   /** Nguồn sự thật duy nhất cho RTCPeerConnection */
@@ -378,6 +423,10 @@ export function useWebRTCPeer({
         ],
       });
       pcsRef.current.set(remoteSocketId, pc);
+
+      // ⭐ PC mới → msid sẽ khác → phải cho phép emit lại `meeting:track-ids`
+      // để peer đồng bộ mapping camera/screen.
+      lastEmittedKindsRef.current = '';
 
       // 3. Gắn local tracks (camera & mic & screen) — luôn làm cho cả 2 chiều
       addLocalTracksToPeer(pc, remoteSocketId);
@@ -457,6 +506,9 @@ export function useWebRTCPeer({
               camStream: null,
               screenStream: null,
               audioEnabled: meta.audioEnabled ?? true,
+              // ⭐ Nhận được track video ⇒ peer ĐANG bật camera.
+              // Không để mặc định `false` vì `RemoteVideoTile` dùng cờ này để
+              // quyết định hiển thị khung video hay avatar + "Camera đang tắt".
               videoEnabled: meta.videoEnabled ?? true,
               isScreenSharing: meta.screenSharing ?? false,
               connectionState: pc.connectionState,
@@ -538,7 +590,16 @@ export function useWebRTCPeer({
 
   /**
    * Gắn track vào các PC đã tồn tại khi media tới SAU (fix race late joiner).
-   * Chỉ initiator được gửi offer → tránh glare.
+   *
+   * ⚠️ VẾT NGUY HIỂM: chỉ bên initiator gửi offer khi renegotiate là ĐÚNG để
+   * tránh glare, nhưng nếu bên KHÔNG phải initiator là người vừa có camera
+   * (media của họ đến muộn), thì bên initiator sẽ không bao giờ biết để gửi
+   * offer → track mới không bao giờ được negotiate → camera của người đó
+   * KHÔNG xuất hiện ở phía bên kia.
+   *
+   * Cách sửa: bên không phải initiator gửi tín hiệu `meeting:renegotiate-request`
+   * → bên kia (initiator) nhận và chủ động gửi offer. Tín hiệu này chỉ mang
+   * ý nghĩa "bạn cần gửi offer", không mang nội dung SDP → không thể gây glare.
    */
   const syncTracksToPeers = useCallback(async () => {
     let anyChanged = false;
@@ -551,8 +612,12 @@ export function useWebRTCPeer({
       anyChanged = true;
 
       const remoteUserId = pcCacheRef.current.get(remoteSocketId);
-      if (remoteUserId && shouldInitiate(remoteUserId)) {
-        const meta = peersRef.current.get(remoteSocketId);
+      if (!remoteUserId) continue;
+
+      const meta = peersRef.current.get(remoteSocketId);
+
+      if (shouldInitiate(remoteUserId)) {
+        // Tôi là initiator → tôi gửi offer (đã có sẵn cơ chế rollback ở handleOffer)
         await makeOfferTo(remoteSocketId, {
           userId: remoteUserId,
           name: meta?.name ?? 'Đồng nghiệp',
@@ -561,13 +626,20 @@ export function useWebRTCPeer({
           videoEnabled: meta?.videoEnabled,
           screenSharing: meta?.isScreenSharing ?? false,
         });
+      } else {
+        // Tôi không phải initiator → nhờ bên kia (initiator) gửi offer
+        socket?.emit('meeting:renegotiate-request', {
+          meetingId,
+          targetSocketId: remoteSocketId,
+          reason: 'media-ready',
+        });
       }
     }
 
     if (anyChanged) {
       emitTrackIds();
     }
-  }, [addLocalTracksToPeer, emitTrackIds, makeOfferTo, shouldInitiate]);
+  }, [addLocalTracksToPeer, emitTrackIds, makeOfferTo, meetingId, shouldInitiate, socket]);
 
   const removePeer = useCallback(
     (remoteSocketId: string) => {
@@ -597,10 +669,17 @@ export function useWebRTCPeer({
         const next = new Map(prev);
         const existing = next.get(remoteSocketId);
         if (existing) {
+          // ⚠️ KHÔNG xóa `screenStream` khi cờ `isScreenSharing` về false.
+          // Cờ này là metadata qua socket, có thể tới trễ/sai thứ tự → xóa stream
+          // thật đã nhận được sẽ làm màn hình share biến mất ở phía người xem.
+          // Stream thật tự được dọn qua `track.onended` khi peer ngừng share.
           next.set(remoteSocketId, {
             ...existing,
             ...states,
-            screenStream: states.isScreenSharing === false ? null : existing.screenStream,
+            isScreenSharing:
+              states.isScreenSharing !== undefined
+                ? states.isScreenSharing || Boolean(existing.screenStream)
+                : existing.isScreenSharing,
           });
         }
         return next;
@@ -622,13 +701,22 @@ export function useWebRTCPeer({
       for (const [remoteSocketId, pc] of pcsRef.current.entries()) {
         const added = addedTrackIdsRef.current.get(remoteSocketId) ?? new Set<string>();
         if (!added.has(screenTrack.id)) {
-          const named = getNamedStream('screen', screenTrack);
+          const named = ensureNamedStream(
+            screenNamedStreamRef.current,
+            (s) => {
+              screenNamedStreamRef.current = s;
+            },
+            SCREEN_STREAM_PREFIX,
+            [screenTrack],
+          );
           pc.addTrack(screenTrack, named);
           added.add(screenTrack.id);
           addedTrackIdsRef.current.set(remoteSocketId, added);
         }
 
-        // Renegotiate — chỉ initiator gửi offer để tránh glare
+        // Renegotiate — chỉ initiator gửi offer để tránh glare.
+        // Nếu tôi KHÔNG phải initiator → nhờ bên kia gửi offer, nếu không
+        // màn hình share sẽ không bao giờ được negotiate → người xem không thấy.
         const remoteUserId = pcCacheRef.current.get(remoteSocketId);
         const meta = peersRef.current.get(remoteSocketId);
         if (remoteUserId && shouldInitiate(remoteUserId)) {
@@ -640,13 +728,19 @@ export function useWebRTCPeer({
             videoEnabled: meta?.videoEnabled,
             screenSharing: true,
           });
+        } else if (remoteUserId) {
+          socket?.emit('meeting:renegotiate-request', {
+            meetingId,
+            targetSocketId: remoteSocketId,
+            reason: 'screen-share',
+          });
         }
       }
 
       emitTrackIds();
       socket?.emit('screen-track-ready', { meetingId, hasScreenTrack: true });
     },
-    [emitTrackIds, getNamedStream, makeOfferTo, meetingId, self.id, shouldInitiate, socket],
+    [emitTrackIds, ensureNamedStream, makeOfferTo, meetingId, shouldInitiate, socket],
   );
 
   /** Khi dừng share màn hình: gỡ track + renegotiate */
@@ -655,15 +749,15 @@ export function useWebRTCPeer({
     screenNamedStreamRef.current = null;
 
     for (const [remoteSocketId, pc] of pcsRef.current.entries()) {
+      const added = addedTrackIdsRef.current.get(remoteSocketId);
       const senders = pc.getSenders().filter((s) => {
         if (!s.track) return false;
-        const kind = trackKindRegistry.get(s.track);
-        return kind === 'screen';
+        return trackKindRegistry.get(s.track) === 'screen';
       });
       for (const sender of senders) {
+        const trackId = sender.track?.id;
         pc.removeTrack(sender);
-        const added = addedTrackIdsRef.current.get(remoteSocketId);
-        if (added && s_trackId(sender)) added.delete(s_trackId(sender)!);
+        if (trackId && added) added.delete(trackId);
       }
 
       const remoteUserId = pcCacheRef.current.get(remoteSocketId);
@@ -676,6 +770,13 @@ export function useWebRTCPeer({
           audioEnabled: meta?.audioEnabled,
           videoEnabled: meta?.videoEnabled,
           screenSharing: false,
+        });
+      } else if (remoteUserId) {
+        // Không phải initiator → nhờ bên kia gửi offer để gỡ track screen
+        socket?.emit('meeting:renegotiate-request', {
+          meetingId,
+          targetSocketId: remoteSocketId,
+          reason: 'screen-share-stopped',
         });
       }
     }
@@ -700,16 +801,22 @@ export function useWebRTCPeer({
     remoteKindsRef.current.clear();
     pendingTracksRef.current.clear();
     camNamedStreamRef.current = null;
+    micNamedStreamRef.current = null;
     screenNamedStreamRef.current = null;
     lastEmittedKindsRef.current = '';
     setPeersBoth(new Map());
   }, [setPeersBoth]);
 
   // Media tới sau khi PC đã tạo → gắn track + renegotiate (fix late joiner)
+  //
+  // ⚠️ Phải watch CẢ `localCamStream` VÀ `localScreenStream`:
+  // - Camera có thể đến trước mic (hoặc ngược lại) → nếu chỉ watch cam thì
+  //   lần sync đầu chưa có mic, mic tới sau sẽ không được addTrack.
+  // - Screen share có thể bật trước khi camera stream sẵn sàng.
   useEffect(() => {
-    if (!localCamStream) return;
+    if (!localCamStream && !localScreenStream) return;
     void syncTracksToPeers();
-  }, [localCamStream, syncTracksToPeers]);
+  }, [localCamStream, localScreenStream, syncTracksToPeers]);
 
   return {
     peers,
@@ -725,9 +832,4 @@ export function useWebRTCPeer({
     setRemoteStreamKinds,
     emitTrackIds,
   };
-}
-
-/** Lấy track id của một sender (helper an toàn, không dùng `any`) */
-function s_trackId(sender: RTCRtpSender): string | null {
-  return sender.track?.id ?? null;
 }

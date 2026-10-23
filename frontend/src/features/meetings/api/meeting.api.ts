@@ -128,8 +128,15 @@ export const meetingApi = {
 
   /**
    * ⭐ M5.1 — Kích hoạt sinh AI Summary (Gemini 1.5 Flash)
+   *
+   * `referenceContent` (optional): nội dung tham chiếu định hướng AI.
+   * Khi có trường này, AI bám theo nội dung tham chiếu làm chuẩn (hữu ích cho demo
+   * khi chất lượng STT tiếng Việt chưa tốt).
    */
-  async generateAiSummary(id: string, options?: { language?: 'VI' | 'EN' }): Promise<MeetingSummaryResult> {
+  async generateAiSummary(
+    id: string,
+    options?: { language?: 'VI' | 'EN'; referenceContent?: string },
+  ): Promise<MeetingSummaryResult> {
     const res = await apiClient.post<MeetingSummaryResult>(`/meetings/${id}/ai-summary/generate`, options || {});
     return res.data;
   },

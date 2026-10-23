@@ -51,13 +51,14 @@ export class MeetingAiService {
   /**
    * Sinh AI summary cho meeting (Full extraction từ Live Transcript hoặc Minutes)
    * @param meetingId ID cuộc họp
-   * @param options Tùy chọn ngôn ngữ (VI | EN)
+   * @param options Tùy chọn ngôn ngữ (VI | EN) + nội dung tham chiếu định hướng
    */
   async generateSummary(
     meetingId: string,
-    options?: { language?: 'VI' | 'EN' },
+    options?: { language?: 'VI' | 'EN'; referenceContent?: string },
   ): Promise<MeetingSummaryResult> {
     const language = options?.language || 'VI';
+    const referenceContent = options?.referenceContent?.trim() || null;
 
     const meeting = await this.prisma.meeting.findUnique({
       where: { id: meetingId },
@@ -107,10 +108,14 @@ export class MeetingAiService {
       });
     }
 
-    // Nguồn văn bản ưu tiên transcriptText từ giọng nói, fallback sang minutes.content
-    const sourceContent = transcriptText || meeting.minutes?.content || '';
+    // Nguồn văn bản ưu tiên:
+    // 1. Nội dung tham chiếu do người dùng nhập (định hướng/demo) — ưu tiên cao nhất
+    // 2. Minutes.content (biên bản soạn tay trong MinutesEditor)
+    // 3. Transcript chunks từ Web Speech API (thường rác tiếng Việt)
+    const manualMinutes = meeting.minutes?.content?.trim() || '';
+    const sourceContent = referenceContent || manualMinutes || transcriptText;
 
-    if (sourceContent.trim().length < 30) {
+    if (!referenceContent && sourceContent.trim().length < 30) {
       throw new BadRequestException(
         'Chưa có dữ liệu lời thoại được ghi lại từ cuộc họp. Vui lòng bật mic, bấm "Bắt đầu ghi AI" và phát biểu để hệ thống nhận diện giọng nói trước khi tạo biên bản.',
       );
@@ -135,6 +140,8 @@ export class MeetingAiService {
           title: meeting.title,
           participants,
           language,
+          referenceContent,
+          transcriptText,
         });
       } catch (error) {
         this.logger.warn(
@@ -368,6 +375,8 @@ export class MeetingAiService {
       title: string;
       participants: ParticipantInfo[];
       language: 'VI' | 'EN';
+      referenceContent?: string | null;
+      transcriptText?: string;
     },
   ): Promise<MeetingSummaryResult> {
     const genAI = new GoogleGenerativeAI(apiKey);
@@ -384,6 +393,30 @@ export class MeetingAiService {
     const participantsList = context.participants
       .map((p) => `- ID: "${p.id}" | Tên: "${p.name}" | Email: "${p.email}"`)
       .join('\n');
+
+    /**
+     * Khối nội dung tham chiếu — ưu tiên cao nhất, AI bám theo để tạo biên bản.
+     * Dùng cho demo khi chất lượng STT tiếng Việt chưa đủ tin cậy.
+     */
+    const referenceBlock = context.referenceContent
+      ? `
+NỘI DUNG THAM CHIẾU — BẮT BUỘC BÁM THEO (ưu tiên cao nhất):
+Đây là nội dung chuẩn mà biên bản phải phản ánh đúng. Hãy tổng hợp, diễn đạt lại và cấu trúc hóa nội dung này thành biên bản chuyên nghiệp. TUYỆT ĐỐI KHÔNG bịa thêm thông tin nào không có trong nội dung tham chiếu. Nếu nội dung tham chiếu nhắc tới người tham gia cụ thể, hãy ánh xạ sang đúng ID trong danh sách người tham gia ở trên.
+"""
+${context.referenceContent.substring(0, 45000)}
+"""
+`
+      : '';
+
+    /** Lời thoại ghi được — nguyên liệu hỗ trợ, không được ghi đè nội dung tham chiếu */
+    const transcriptBlock = context.transcriptText
+      ? `
+LỜI THOẠI GHI ĐƯỢC TỪ CUỘC HỌP (nguyên liệu hỗ trợ — có thể chứa lỗi nhận diện giọng nói, dùng để bổ sung chi tiết và xác định người phát biểu, KHÔNG được ghi đè nội dung tham chiếu):
+"""
+${context.transcriptText.substring(0, 20000)}
+"""
+`
+      : '';
 
     const prompt = `Bạn là Trợ lý Thư ký AI Doanh nghiệp cấp cao của hệ thống WorkSync.
 Nhiệm vụ của bạn là phân tích toàn bộ kịch bản lời thoại hoặc ghi chú cuộc họp dưới đây để tạo biên bản cuộc họp chuyên nghiệp, súc tích và có tính hành động cao.
@@ -422,8 +455,8 @@ QUY TẮC BẮT BUỘC:
 
 THÔNG TIN CUỘC HỌP:
 - Tiêu đề: ${context.title}
-
-NỘI DUNG LỜI THOẠI / BIÊN BẢN:
+${referenceBlock}${transcriptBlock}
+NỘI DUNG CẦN PHÂN TÍCH (nguồn chính để tạo biên bản):
 """
 ${content.substring(0, 45000)}
 """`;

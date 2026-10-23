@@ -1,5 +1,5 @@
 import React from 'react';
-import { X, Mic, MicOff, Video, VideoOff, Crown, Users, Clock } from 'lucide-react';
+import { X, Mic, MicOff, Video, VideoOff, Crown, Users, Clock, LogOut } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import type { Meeting } from '../types/meeting.types';
 
@@ -22,6 +22,8 @@ interface MeetingParticipantsDrawerProps {
   isMyMicOn: boolean;
   isMyCamOn: boolean;
   activePeers: ParticipantItem[];
+  /** userId của những người ĐÃ rời cuộc họp (tách khỏi nhóm "Chưa tham gia") */
+  leftUserIds?: string[];
 }
 
 export const MeetingParticipantsDrawer: React.FC<MeetingParticipantsDrawerProps> = ({
@@ -34,6 +36,7 @@ export const MeetingParticipantsDrawer: React.FC<MeetingParticipantsDrawerProps>
   isMyMicOn,
   isMyCamOn,
   activePeers,
+  leftUserIds = [],
 }) => {
   const { t } = useTranslation();
 
@@ -45,12 +48,24 @@ export const MeetingParticipantsDrawer: React.FC<MeetingParticipantsDrawerProps>
     ...activePeers.map((p) => p.userId).filter(Boolean),
   ]);
 
+  // Những người ĐÃ rời cuộc họp (từng vào phòng nhưng đã ngắt kết nối)
+  const leftUserIdSet = new Set<string>(leftUserIds);
+
+  const leftAttendees = (meeting.attendees || []).filter(
+    (att) =>
+      att.userId &&
+      !activeUserIds.has(att.userId) &&
+      leftUserIdSet.has(att.userId) &&
+      Boolean(att.joinedAt),
+  );
+
   // Invited attendees who are not yet connected in room
   const invitedAttendees = (meeting.attendees || []).filter(
-    (att) => att.userId && !activeUserIds.has(att.userId),
+    (att) => att.userId && !activeUserIds.has(att.userId) && !leftUserIdSet.has(att.userId),
   );
 
   const totalInCall = 1 + activePeers.length;
+  const totalInvited = (meeting.attendees || []).length;
 
   return (
     <div className="w-80 sm:w-88 h-full bg-white border-l border-slate-200 flex flex-col shadow-xl z-20 animate-in slide-in-from-right duration-200">
@@ -59,7 +74,7 @@ export const MeetingParticipantsDrawer: React.FC<MeetingParticipantsDrawerProps>
         <div className="flex items-center gap-2">
           <Users className="w-4 h-4 text-blue-600" />
           <h3 className="font-semibold text-sm text-slate-800">
-            {t('meeting_room.participants', 'Người tham gia')} ({totalInCall})
+            {t('meeting_room.participants', 'Người tham gia')} ({totalInCall}/{totalInvited})
           </h3>
         </div>
         <button
@@ -171,7 +186,53 @@ export const MeetingParticipantsDrawer: React.FC<MeetingParticipantsDrawerProps>
           </div>
         </div>
 
-        {/* Section 2: Invited but not joined yet */}
+        {/* Section 2: Đã rời cuộc họp */}
+        {leftAttendees.length > 0 && (
+          <div>
+            <div className="flex items-center justify-between text-[11px] font-bold text-amber-600 uppercase tracking-wider mb-3">
+              <span>Đã rời cuộc họp ({leftAttendees.length})</span>
+              <LogOut className="w-3 h-3 text-amber-500" />
+            </div>
+
+            <div className="space-y-2">
+              {leftAttendees.map((att) => {
+                const u = att.user;
+                if (!u) return null;
+                const durationMin = att.totalDurationSeconds
+                  ? Math.round(att.totalDurationSeconds / 60)
+                  : 0;
+                return (
+                  <div
+                    key={att.id}
+                    className="flex items-center justify-between p-2.5 rounded-xl bg-amber-50/50 border border-amber-200/70"
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div className="w-7 h-7 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center text-xs font-medium shrink-0">
+                        {u.avatar ? (
+                          <img src={u.avatar} alt={u.name} className="w-full h-full rounded-full object-cover" />
+                        ) : (
+                          u.name.charAt(0).toUpperCase()
+                        )}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-xs font-medium text-slate-700 truncate">{u.name}</p>
+                        <p className="text-[10px] text-slate-500 truncate">
+                          {durationMin > 0 ? `Tham gia ${durationMin} phút` : 'Đã vào phòng'}
+                        </p>
+                      </div>
+                    </div>
+
+                    <span className="text-[10px] font-medium text-amber-700 px-2 py-0.5 rounded-md bg-white border border-amber-200 shrink-0">
+                      Đã rời
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Section 3: Invited but not joined yet */}
         {invitedAttendees.length > 0 && (
           <div>
             <div className="flex items-center justify-between text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-3">

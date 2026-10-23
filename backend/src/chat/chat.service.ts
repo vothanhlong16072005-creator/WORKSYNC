@@ -17,6 +17,7 @@ import {
   ConversationsQueryDto,
   ChatActor,
 } from './types/chat.types.js';
+import { SendCultureWishDto } from './dto/send-culture-wish.dto.js';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -947,6 +948,49 @@ export class ChatService {
       })),
       otherUser,
       isOnline,
+    };
+  }
+
+  /**
+   * Tự động gửi tin nhắn mẫu chúc mừng Sinh nhật / Kỷ niệm cống hiến qua Direct Conversation 1-1
+   */
+  async sendCultureWish(sender: ChatActor, dto: SendCultureWishDto) {
+    if (sender.id === dto.targetUserId) {
+      throw new BadRequestException('Không thể gửi thiệp chúc mừng cho chính mình');
+    }
+
+    const targetUser = await this.prisma.user.findUnique({
+      where: { id: dto.targetUserId, deletedAt: null },
+      select: { id: true, name: true },
+    });
+    if (!targetUser) {
+      throw new NotFoundException('Nhân sự nhận lời chúc không tồn tại');
+    }
+
+    // 1. Lấy hoặc tạo cuộc trò chuyện 1-1
+    const conv = await this.getOrCreateDirectConversation(sender.id, dto.targetUserId);
+
+    // 2. Soạn nội dung chúc mừng trang trọng, chuẩn mực văn hóa doanh nghiệp
+    let messageContent = dto.customMessage;
+    if (!messageContent) {
+      const isBirthday = dto.eventType === 'BIRTHDAY';
+      if (isBirthday) {
+        messageContent = `🎉🎂 [CHÚC MỪNG SINH NHẬT] 🎂🎉\nThân gửi ${targetUser.name},\nNhân dịp sinh nhật của bạn, chúc bạn tuổi mới luôn tràn đầy niềm vui, dồi dào sức khỏe, hạnh phúc và gặt hái thật nhiều thành công mới cùng đại gia đình WorkSync & FPT Complex! 🎈✨`;
+      } else {
+        messageContent = `🏆🌟 [CHÚC MỪNG KỶ NIỆM CỐNG HIẾN] 🌟🏆\nThân gửi ${targetUser.name},\nChúc mừng bạn với cột mốc ${dto.eventTitle}! Cảm ơn những cống hiến, tâm huyết và sự đồng hành tuyệt vời của bạn cùng tổ chức trong suốt thời gian qua. Chúc bạn luôn giữ vững ngọn lửa nhiệt huyết và cùng nhau chinh phục nhiều đỉnh cao mới! 💼🎯🔥`;
+      }
+    }
+
+    // 3. Gửi tin nhắn qua hệ thống Chat (tự động phát qua Socket.IO và đẩy push notification)
+    const message = await this.sendMessage(conv.id, sender, {
+      content: messageContent,
+      type: ChatMessageType.TEXT,
+    });
+
+    return {
+      success: true,
+      conversationId: conv.id,
+      message,
     };
   }
 }

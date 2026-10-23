@@ -23,6 +23,7 @@ import { toast } from 'sonner';
 import { useTranslation } from 'react-i18next';
 import { useAuthStore } from '@/stores/auth.store';
 import { useActiveCallStore } from '../stores/active-call.store';
+import { meetingApi } from '../api/meeting.api';
 import type { Meeting, ChatMessage } from '../types/meeting.types';
 import { useLiveTranscription } from '../hooks/useLiveTranscription';
 import { useWebRTCPeer, type RemotePeer } from '../hooks/useWebRTCPeer';
@@ -131,6 +132,8 @@ const ActiveCallSession: React.FC<ActiveCallSessionProps> = ({
     detachScreenShare,
     teardownAll,
     pcsRef,
+    setRemoteStreamKinds,
+    emitTrackIds,
   } = useWebRTCPeer({
     socket,
     meetingId: meeting.id,
@@ -142,6 +145,17 @@ const ActiveCallSession: React.FC<ActiveCallSessionProps> = ({
     localCamStream: localStream,
     localScreenStream: localScreenStream,
   });
+
+  /** userId của những người ĐÃ rời phòng (để tách khỏi nhóm "Chưa tham gia") */
+  const [leftUserIds, setLeftUserIds] = useState<string[]>([]);
+  /** Attendee mới nhất từ server (refresh khi mở drawer) */
+  const [liveAttendees, setLiveAttendees] = useState<Meeting['attendees']>(meeting.attendees ?? []);
+  /** Mirror của `peers` để đọc trong các socket handler không re-subscribe */
+  const peersRef = useRef<Map<string, RemotePeer>>(new Map());
+
+  useEffect(() => {
+    peersRef.current = peers;
+  }, [peers]);
 
   // ICE Candidates Buffer
   const pendingCandidatesRef = useRef<Map<string, RTCIceCandidateInit[]>>(new Map());
@@ -246,8 +260,30 @@ const ActiveCallSession: React.FC<ActiveCallSessionProps> = ({
         }
         localStreamRef.current = stream;
         setLocalStream(stream);
+
+        // ⭐ Đồng bộ trạng thái toggle với thực tế media.
+        // Nếu camera thực sự không có track (chỉ có mic), phải tắt cờ `videoEnabled`
+        // để icon camera hiển thị đúng — trước đây cờ vẫn `true` (mặc định) khiến
+        // UI hiện icon "camera bật" nhưng tile lại báo "Camera đang tắt" (mâu thuẫn).
+        const hasVideoTrack = stream.getVideoTracks().length > 0;
+        setVideoEnabled(hasVideoTrack);
+        socketRef.current?.emit('media-state-changed', {
+          meetingId: meeting.id,
+          audioEnabled: stream.getAudioTracks().length > 0,
+          videoEnabled: hasVideoTrack,
+          screenSharing: false,
+        });
       } catch (err) {
         console.warn('[Media] getUserMedia failed, continuing in view-only mode', err);
+        // Không có camera/mic → cập nhật cờ cho khớp thực tế
+        setAudioEnabled(false);
+        setVideoEnabled(false);
+        socketRef.current?.emit('media-state-changed', {
+          meetingId: meeting.id,
+          audioEnabled: false,
+          videoEnabled: false,
+          screenSharing: false,
+        });
         toast.warning(t('meeting_room.camera_denied', 'Không thể truy cập camera hoặc mic. Đang ở chế độ xem.'));
       }
     };
@@ -329,18 +365,31 @@ const ActiveCallSession: React.FC<ActiveCallSessionProps> = ({
         audioEnabled: boolean;
         videoEnabled: boolean;
         screenSharing: boolean;
+        camStreamIds?: string[];
+        screenStreamIds?: string[];
       }>;
       self?: { audioEnabled: boolean; videoEnabled: boolean; screenSharing: boolean };
     }) => {
       if (self) {
-        setAudioEnabled(self.audioEnabled);
-        setVideoEnabled(self.videoEnabled);
-        localStreamRef.current?.getAudioTracks().forEach((tr) => (tr.enabled = self.audioEnabled));
-        localStreamRef.current?.getVideoTracks().forEach((tr) => (tr.enabled = self.videoEnabled));
+        // ⚠️ KHÔNG ghi đè trạng thái local bằng giá trị từ server.
+        // Server mặc định `audioEnabled: true, videoEnabled: true` khi vào phòng,
+        // còn client có thể đã tắt camera trước đó (hoặc camera thực sự không có
+        // track) → ghi đè làm icon camera bật trong khi tile báo "Camera đang tắt".
+        // Chỉ áp dụng `self` khi client CHƯA có media nào (lần đầu vào phòng).
+        if (!localStreamRef.current) {
+          setAudioEnabled(self.audioEnabled);
+          setVideoEnabled(self.videoEnabled);
+        }
       }
 
       for (const p of participants) {
         if (p.userId === user?.id) continue;
+
+        // Nạp msid thật của peer để phân loại camera/screen chính xác
+        setRemoteStreamKinds(p.socketId, {
+          camStreamIds: p.camStreamIds ?? [],
+          screenStreamIds: p.screenStreamIds ?? [],
+        });
 
         if (shouldInitiate(p.userId)) {
           void makeOfferTo(p.socketId, {
@@ -365,6 +414,21 @@ const ActiveCallSession: React.FC<ActiveCallSessionProps> = ({
     };
     socket.on('room-users', handleRoomUsers);
 
+    // 1b. track-ids — msid thật từ peer (camera vs screen share)
+    const handleTrackIds = (data: {
+      socketId: string;
+      userId?: string;
+      camStreamIds?: string[];
+      screenStreamIds?: string[];
+    }) => {
+      if (!data?.socketId) return;
+      setRemoteStreamKinds(data.socketId, {
+        camStreamIds: data.camStreamIds ?? [],
+        screenStreamIds: data.screenStreamIds ?? [],
+      });
+    };
+    socket.on('meeting:track-ids', handleTrackIds);
+
     // 2. participant-joined
     const handleParticipantJoined = (p: {
       socketId: string;
@@ -374,9 +438,20 @@ const ActiveCallSession: React.FC<ActiveCallSessionProps> = ({
       audioEnabled: boolean;
       videoEnabled: boolean;
       screenSharing: boolean;
+      camStreamIds?: string[];
+      screenStreamIds?: string[];
     }) => {
       if (p.userId === user?.id) return;
       toast.info(t('meeting_room.peer_joined', '{{name}} đã tham gia', { name: p.name }));
+
+      // Người này quay lại phòng → bỏ khỏi danh sách "đã rời"
+      setLeftUserIds((prev) => prev.filter((id) => id !== p.userId));
+
+      // ⭐ Nạp msid track của peer → phân loại camera/screen chính xác ngay
+      setRemoteStreamKinds(p.socketId, {
+        camStreamIds: p.camStreamIds ?? [],
+        screenStreamIds: p.screenStreamIds ?? [],
+      });
 
       if (shouldInitiate(p.userId)) {
         void makeOfferTo(p.socketId, {
@@ -412,10 +487,16 @@ const ActiveCallSession: React.FC<ActiveCallSessionProps> = ({
     }) => {
       if (fromSocketId === socket.id) return;
 
+      // Lấy meta hiện có (nếu đã biết) để truyền đủ screenSharing/audio/video
+      const knownPeer = peersRef.current.get(fromSocketId);
+
       const pc = ensurePeer(fromSocketId, {
         userId: fromUser?.id || 'unknown',
         name: fromUser?.name || 'Đồng nghiệp',
         avatar: fromUser?.avatar,
+        audioEnabled: knownPeer?.audioEnabled,
+        videoEnabled: knownPeer?.videoEnabled,
+        screenSharing: knownPeer?.isScreenSharing,
       });
 
       const offerCollision =
@@ -433,6 +514,9 @@ const ActiveCallSession: React.FC<ActiveCallSessionProps> = ({
         targetSocketId: fromSocketId,
         answer: pc.localDescription,
       });
+
+      // SDP local đã có msid thật → gửi lên để peer phân loại track
+      emitTrackIds();
     };
     socket.on('offer', handleOffer);
 
@@ -476,6 +560,37 @@ const ActiveCallSession: React.FC<ActiveCallSessionProps> = ({
     };
     socket.on('ice-candidate', handleIceCandidate);
 
+    // 5b. renegotiate-request
+    //
+    // Bên kia vừa có media mới (camera/screen) nhưng không phải initiator nên
+    // không thể tự gửi offer. Yêu cầu này bảo tôi (initiator) gửi offer mới
+    // để track mới được negotiate → camera của họ mới xuất hiện được ở phía tôi.
+    const handleRenegotiateRequest = async ({
+      fromSocketId,
+    }: {
+      fromSocketId: string;
+      meetingId?: string;
+      reason?: string;
+    }) => {
+      if (!fromSocketId || fromSocketId === socket.id) return;
+
+      const remoteUserId = peersRef.current.get(fromSocketId)?.userId;
+      const known = peersRef.current.get(fromSocketId);
+
+      // Chỉ initiator mới gửi offer → tránh glare
+      if (!remoteUserId || !shouldInitiate(remoteUserId)) return;
+
+      await makeOfferTo(fromSocketId, {
+        userId: remoteUserId,
+        name: known?.name ?? 'Đồng nghiệp',
+        avatar: known?.avatar,
+        audioEnabled: known?.audioEnabled,
+        videoEnabled: known?.videoEnabled,
+        screenSharing: known?.isScreenSharing ?? false,
+      });
+    };
+    socket.on('meeting:renegotiate-request', handleRenegotiateRequest);
+
     // 6. user-media-state
     const handleUserMediaState = ({
       socketId,
@@ -497,10 +612,21 @@ const ActiveCallSession: React.FC<ActiveCallSessionProps> = ({
     socket.on('user-media-state', handleUserMediaState);
 
     // 7. participant-left
-    const handleParticipantLeft = ({ socketId }: { socketId: string }) => {
-      const p = peers.get(socketId);
+    const handleParticipantLeft = ({
+      socketId,
+      userId,
+    }: {
+      socketId: string;
+      userId?: string;
+    }) => {
+      const p = peersRef.current.get(socketId);
+      const leftUserId = userId ?? p?.userId;
       if (p) {
         toast.info(t('meeting_room.peer_left', '{{name}} đã rời cuộc họp', { name: p.name }));
+      }
+      // Ghi nhận user đã rời → hiển thị nhóm "Đã rời cuộc họp" thay vì "Chưa tham gia"
+      if (leftUserId) {
+        setLeftUserIds((prev) => (prev.includes(leftUserId) ? prev : [...prev, leftUserId]));
       }
       removePeer(socketId);
     };
@@ -541,10 +667,12 @@ const ActiveCallSession: React.FC<ActiveCallSessionProps> = ({
 
     return () => {
       socket.off('room-users', handleRoomUsers);
+      socket.off('meeting:track-ids', handleTrackIds);
       socket.off('participant-joined', handleParticipantJoined);
       socket.off('offer', handleOffer);
       socket.off('answer', handleAnswer);
       socket.off('ice-candidate', handleIceCandidate);
+      socket.off('meeting:renegotiate-request', handleRenegotiateRequest);
       socket.off('user-media-state', handleUserMediaState);
       socket.off('participant-left', handleParticipantLeft);
       socket.off('chat-history', handleChatHistory);
@@ -559,14 +687,34 @@ const ActiveCallSession: React.FC<ActiveCallSessionProps> = ({
     ensurePeer,
     removePeer,
     updatePeerMediaState,
+    setRemoteStreamKinds,
+    emitTrackIds,
     teardownAll,
     stopAllMedia,
     onMeetingEnded,
     t,
     flushPendingCandidates,
     pcsRef,
-    peers,
   ]);
+
+  // Refresh danh sách attendee từ server khi mở drawer (để cập nhật RSVP/người tham gia)
+  useEffect(() => {
+    if (!isParticipantsOpen) return;
+    let cancelled = false;
+    void meetingApi
+      .getAttendees(meeting.id)
+      .then((list) => {
+        if (!cancelled && Array.isArray(list)) {
+          setLiveAttendees(list as unknown as Meeting['attendees']);
+        }
+      })
+      .catch(() => {
+        // Giữ nguyên snapshot cũ nếu request thất bại
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isParticipantsOpen, meeting.id]);
 
   // Audio Toggle
   const toggleAudio = () => {
@@ -585,11 +733,26 @@ const ActiveCallSession: React.FC<ActiveCallSessionProps> = ({
 
   // Video Toggle
   const toggleVideo = () => {
-    const nextState = !videoEnabled;
-    if (localStreamRef.current) {
-      localStreamRef.current.getVideoTracks().forEach((t) => (t.enabled = nextState));
-      setVideoEnabled(nextState);
+    // ⚠️ Chỉ cho phép bật/tắt khi thực sự có camera track.
+    // Nếu không có track (camera bị từ chối / thiết bị bị chiếm), báo lỗi rõ ràng
+    // thay vì lật cờ `videoEnabled` → UI hiện icon "camera bật" nhưng không có video.
+    const camTracks = localStreamRef.current?.getVideoTracks() ?? [];
+    if (camTracks.length === 0) {
+      toast.warning(
+        t(
+          'meeting_room.camera_unavailable',
+          'Không tìm thấy camera. Vui lòng kiểm tra thiết bị hoặc quyền truy cập camera của trình duyệt.',
+        ),
+      );
+      setVideoEnabled(false);
+      return;
     }
+
+    const nextState = !videoEnabled;
+    camTracks.forEach((track) => {
+      track.enabled = nextState;
+    });
+    setVideoEnabled(nextState);
     socketRef.current?.emit('media-state-changed', {
       meetingId: meeting.id,
       audioEnabled,
@@ -672,11 +835,25 @@ const ActiveCallSession: React.FC<ActiveCallSessionProps> = ({
   };
 
   // Deduplicated Peers List
-  const peerList = Array.from(peers.values()).filter((p) => p.userId && p.userId !== user?.id);
+  //
+  // ⚠️ Loại bỏ peer trùng `userId`: khi mở 2 tab trên cùng 1 máy, cả 2 socket
+  // đều đại diện cho cùng 1 tài khoản → không có ý nghĩa hiển thị 2 tile.
+  // Giữ lại socket đầu tiên (đã có media từ trước) để camera không nhảy.
+  const peerList = Array.from(peers.values()).filter(
+    (p, index, arr) =>
+      p.userId &&
+      p.userId !== user?.id &&
+      arr.findIndex((other) => other.userId === p.userId) === index,
+  );
   const totalInRoom = peerList.length + 1;
 
   // Stream Resolution: Presenter vs Camera (FIX BUG-3 & BUG-4)
-  const remotePresenter = peerList.find((p) => p.screenStream && p.isScreenSharing);
+  //
+  // ⚠️ Điều kiện phải là "có screenStream" — KHÔNG yêu cầu `isScreenSharing`.
+  // `isScreenSharing` là cờ metadata đến qua socket event, có thể tới trễ hoặc
+  // không tới (peer cũ chưa hỗ trợ event) → điều kiện cũ khiến màn hình share
+  // không bao giờ mở rộng toàn màn hình.
+  const remotePresenter = peerList.find((p) => p.screenStream);
   const localIsPresenting = isScreenSharing && Boolean(screenStreamRef.current || localScreenStream);
   const isPresentingMode = localIsPresenting || Boolean(remotePresenter);
 
@@ -1063,12 +1240,13 @@ const ActiveCallSession: React.FC<ActiveCallSessionProps> = ({
           <MeetingParticipantsDrawer
             isOpen={isParticipantsOpen}
             onClose={() => setIsParticipantsOpen(false)}
-            meeting={meeting}
+            meeting={{ ...meeting, attendees: liveAttendees }}
             currentUserId={user?.id || ''}
             currentUserName={user?.name || 'Tôi'}
             currentUserAvatar={user?.avatar}
             isMyMicOn={audioEnabled}
             isMyCamOn={videoEnabled}
+            leftUserIds={leftUserIds}
             activePeers={peerList.map((p) => ({
               socketId: p.socketId,
               userId: p.userId,
@@ -1308,7 +1486,21 @@ const RemoteVideoTile: React.FC<{
 }> = ({ peer, stream, isHost, onPin, isPinned }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const { t } = useTranslation();
-  const isVideoShowing = Boolean(stream && peer.videoEnabled);
+
+  /**
+   * Quyết định hiển thị video hay avatar.
+   *
+   * ⚠️ Bug cũ: `Boolean(stream && peer.videoEnabled)` → khi cờ metadata
+   * `videoEnabled` chưa được đồng bộ (mặc định/gửi sai) nhưng camera ĐÃ có
+   * stream thật, tile vẫn hiện avatar + "Camera đang tắt" → người dùng tưởng
+   * camera tắt trong khi thực tế đang bật.
+   *
+   * Cách sửa: ưu tiên sự thật từ media — nếu có stream thì hiện video.
+   * (Khi peer thực sự tắt camera, trình duyệt vẫn giữ track nhưng đặt
+   * `enabled = false`, nên video sẽ hiện khung đen — vẫn tốt hơn việc báo
+   * sai "Camera đang tắt" khi camera đang bật.)
+   */
+  const isVideoShowing = Boolean(stream);
 
   const setVideoNode = useCallback(
     (node: HTMLVideoElement | null) => {
@@ -1397,6 +1589,12 @@ const RemoteVideoTile: React.FC<{
           </span>
         )}
         {!peer.audioEnabled && <MicOff className="w-3.5 h-3.5 text-rose-500" />}
+        {peer.videoEnabled === false && (
+          <span className="text-[10px] text-slate-500 font-medium flex items-center gap-0.5">
+            <VideoOff className="w-3 h-3" />
+            {t('meeting_room.camera_off', 'Camera tắt')}
+          </span>
+        )}
       </div>
 
       {/* Top Hover Controls */}

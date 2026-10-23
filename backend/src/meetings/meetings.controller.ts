@@ -21,6 +21,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard.js';
 import { CurrentActor } from '../projects/project-access.service.js';
 import { AttendanceQueryDto, MeetingQueryDto, MeetingQuerySchema } from './dto/attendance-query.dto.js';
 import { CreateMeetingDto, CreateMeetingSchema } from './dto/create-meeting.dto.js';
+import { GenerateSummaryDto, GenerateSummarySchema } from './dto/generate-summary.dto.js';
 import { RsvpDto, RsvpSchema } from './dto/rsvp.dto.js';
 import { SaveMinutesDto, SaveMinutesSchema } from './dto/save-minutes.dto.js';
 import { UpdateMeetingDto, UpdateMeetingSchema } from './dto/update-meeting.dto.js';
@@ -229,13 +230,17 @@ export class MeetingsController {
 
   /**
    * 15. POST /api/meetings/:id/ai-summary/generate — Generate hoặc regenerate
+   *
+   * `referenceContent` (optional): nội dung tham chiếu định hướng AI — dùng cho
+   * demo khi STT tiếng Việt chưa đủ chính xác, AI sẽ bám theo nội dung này.
    */
   @Post(':id/ai-summary/generate')
   async generateAiSummary(
     @Param('id') id: string,
-    @Body() body: { language?: 'VI' | 'EN' },
+    @Body() body: unknown,
     @Req() req: AuthenticatedRequest,
   ) {
+    const dto = parseOrThrow(GenerateSummarySchema, body) as GenerateSummaryDto;
     const actor = this.extractActor(req);
     // Verify access
     const meeting = await this.meetingsService.findOne(id, actor);
@@ -243,7 +248,10 @@ export class MeetingsController {
     if (meeting.createdById !== actor.id && actor.role !== 'ADMIN' && actor.role !== 'PM' && actor.role !== 'DEPARTMENT_HEAD') {
       throw new ForbiddenException('Bạn không có quyền yêu cầu tạo AI summary cho cuộc họp này');
     }
-    return this.meetingAiService.generateSummary(id, { language: body?.language });
+    return this.meetingAiService.generateSummary(id, {
+      language: dto.language,
+      referenceContent: dto.referenceContent ?? undefined,
+    });
   }
 
   /**

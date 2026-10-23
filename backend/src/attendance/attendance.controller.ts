@@ -407,4 +407,16 @@ export class AttendanceController {
   async updateSettings(@Body() dto: UpdateAttendanceSettingsDto) {
     return this.attendanceService.updateSettings(dto);
   }
+
+  @Get('audit/:userId')
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN', 'HR', 'DEPARTMENT_HEAD', 'EMPLOYEE')
+  async getEmployeeAudit(
+    @Param('userId') userId: string,
+    @CurrentUser() actor: RequestActor,
+    @Query('fromDate') fromDate?: string,
+    @Query('toDate') toDate?: string,
+  ) {
+    return this.attendanceService.getEmployeeAudit(userId, { fromDate, toDate }, actor);
+  }
 }

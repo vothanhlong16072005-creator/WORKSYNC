@@ -31,6 +31,10 @@ interface RoomParticipant {
   audioEnabled: boolean;
   videoEnabled: boolean;
   screenSharing: boolean;
+  /** msid thật của camera track (từ SDP) — dùng phân loại track cho late joiner */
+  camStreamIds: string[];
+  /** msid thật của screen track (từ SDP) — dùng phân loại track cho late joiner */
+  screenStreamIds: string[];
 }
 
 @WebSocketGateway({
@@ -123,16 +127,15 @@ export class MeetingsGateway implements OnGatewayConnection, OnGatewayDisconnect
       }
       const participants = this.roomParticipants.get(meetingId)!;
 
-      // Evict any existing socket for the same userId (prevent duplicate camera tiles on F5 or reconnect)
-      for (const [existingSocketId, p] of participants.entries()) {
-        if (p.userId === user.id && existingSocketId !== client.id) {
-          participants.delete(existingSocketId);
-          client.to(meetingId).emit('participant-left', {
-            socketId: existingSocketId,
-            userId: p.userId,
-          });
-        }
-      }
+      // ⚠️ Multi-tab / cùng 1 máy:
+      // KHÔNG evict socket cũ cùng userId ngay lập tức — khi mở tab thứ 2
+      // trên cùng máy, tab cũ vẫn đang gọi getUserMedia. Nếu evict ngay,
+      // tab cũ bị đẩy khỏi phòng → camera của tab cũ mất → người dùng thấy
+      // "Camera đang tắt" dù camera vẫn bật.
+      //
+      // Thay vào đó: giữ cả 2 socket. `room-users` đã lọc `p.userId !== user.id`
+      // nên socket cùng userId sẽ không tạo peer trùng ở phía người mới.
+      // Socket cũ sẽ tự bị loại khi disconnect (handleDisconnect).
 
       const participantInfo: RoomParticipant = {
         socketId: client.id,
@@ -143,6 +146,8 @@ export class MeetingsGateway implements OnGatewayConnection, OnGatewayDisconnect
         audioEnabled: true,
         videoEnabled: true,
         screenSharing: false,
+        camStreamIds: [],
+        screenStreamIds: [],
       };
       participants.set(client.id, participantInfo);
 
@@ -160,6 +165,8 @@ export class MeetingsGateway implements OnGatewayConnection, OnGatewayDisconnect
           audioEnabled: p.audioEnabled ?? true,
           videoEnabled: p.videoEnabled ?? true,
           screenSharing: p.screenSharing ?? false,
+          camStreamIds: p.camStreamIds ?? [],
+          screenStreamIds: p.screenStreamIds ?? [],
         })),
         self: {
           audioEnabled: participantInfo.audioEnabled,
@@ -204,6 +211,9 @@ export class MeetingsGateway implements OnGatewayConnection, OnGatewayDisconnect
         audioEnabled: participantInfo.audioEnabled,
         videoEnabled: participantInfo.videoEnabled,
         screenSharing: participantInfo.screenSharing,
+        // ⭐ Gửi kèm msid track để peer mới phân loại camera/screen chính xác ngay
+        camStreamIds: participantInfo.camStreamIds,
+        screenStreamIds: participantInfo.screenStreamIds,
       });
     } catch (err: any) {
       client.emit('error', { message: err?.message || 'Lỗi khi tham gia phòng' });
@@ -261,6 +271,72 @@ export class MeetingsGateway implements OnGatewayConnection, OnGatewayDisconnect
     this.server.to(payload.targetSocketId).emit('ice-candidate', {
       candidate: payload.candidate,
       fromSocketId: client.id,
+    });
+  }
+
+  /**
+   * Yêu cầu renegotiate — dùng khi một bên vừa có media (camera/screen) nhưng
+   * không phải là initiator, nên không thể tự gửi offer (tránh glare).
+   *
+   * Bên nhận (initiator) sẽ chủ động tạo offer mới để đưa track mới vào.
+   * Payload KHÔNG chứa SDP → không thể gây xung đột offer.
+   */
+  @SubscribeMessage('meeting:renegotiate-request')
+  handleRenegotiateRequest(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() payload: { meetingId: string; targetSocketId: string; reason?: string },
+  ) {
+    if (!payload?.targetSocketId) return;
+
+    this.server?.to(payload.targetSocketId)?.emit('meeting:renegotiate-request', {
+      fromSocketId: client.id,
+      meetingId: payload.meetingId,
+      reason: payload.reason ?? 'media-ready',
+    });
+  }
+
+  /**
+   * Relay msid (Media Stream ID) thật của camera/screen track giữa các peer.
+   *
+   * Lý do cần: `MediaStream.id` mà client gán đè qua `Object.defineProperty`
+   * KHÔNG khớp với msid ghi trong SDP → phía remote không thể biết track nào
+   * là camera, track nào là màn hình chia sẻ → camera bị gán nhầm thành screen
+   * và ngược lại → màn hình share không mở rộng toàn màn hình.
+   *
+   * Sau khi `setLocalDescription`, client parse `a=msid:` trong SDP cục bộ để
+   * lấy msid thật rồi gửi lên đây; các peer dùng danh sách này để phân loại.
+   */
+  @SubscribeMessage('meeting:track-ids')
+  handleTrackIds(
+    @ConnectedSocket() client: Socket,
+    @MessageBody()
+    payload: {
+      meetingId: string;
+      camStreamIds?: string[];
+      screenStreamIds?: string[];
+    },
+  ) {
+    const { meetingId } = payload;
+    if (!meetingId) return;
+
+    const participants = this.roomParticipants.get(meetingId);
+    const participant = participants?.get(client.id);
+    const userId = participant?.userId;
+
+    const camStreamIds = Array.isArray(payload.camStreamIds) ? payload.camStreamIds : [];
+    const screenStreamIds = Array.isArray(payload.screenStreamIds) ? payload.screenStreamIds : [];
+
+    // Lưu vào participant để late joiner nhận được ngay khi vào phòng
+    if (participant) {
+      participant.camStreamIds = camStreamIds;
+      participant.screenStreamIds = screenStreamIds;
+    }
+
+    client.to(meetingId).emit('meeting:track-ids', {
+      socketId: client.id,
+      userId,
+      camStreamIds,
+      screenStreamIds,
     });
   }
 
