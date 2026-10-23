@@ -3,6 +3,7 @@ import {
   Get,
   Patch,
   Post,
+  Delete,
   Param,
   Body,
   UseGuards,
@@ -96,6 +97,22 @@ export class AdminController {
     return {
       success: true,
       data: await this.adminService.updateDepartment(id, body),
+    };
+  }
+
+  @Delete('departments/:id')
+  async deleteDepartment(@Param('id') id: string) {
+    return {
+      success: true,
+      data: await this.adminService.deleteDepartment(id),
+    };
+  }
+
+  @Post('maintenance/clean-admin-tasks')
+  async cleanAdminTasks() {
+    return {
+      success: true,
+      data: await this.adminService.cleanAdminTasksAndConflicts(),
     };
   }
 

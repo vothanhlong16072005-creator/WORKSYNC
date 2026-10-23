@@ -50,9 +50,15 @@ export function calculateWorkHours(
   const inDate = toDate(checkIn);
   const outDate = toDate(checkOut);
   if (!inDate || !outDate) return 0;
-  if (outDate <= inDate) return 0;
-  const totalMinutes = Math.floor((outDate.getTime() - inDate.getTime()) / 60000);
-  const lunchOverlap = getLunchOverlapMinutes(inDate, outDate, config);
+
+  // ⚠️ Dữ liệu có thể bị sai thứ tự khi check-out bị ghi nhầm sang ngày hôm
+  // trước (ví dụ check-in 24/10 08:18 nhưng check-out lại là 23/10 04:39).
+  // Khi đó `outDate <= inDate` → trả 0 → UI hiện "0.0h" dù đã làm cả ngày.
+  // → Tự động hoán đổi để luôn tính đúng khoảng thời gian làm việc.
+  const [start, end] = outDate < inDate ? [outDate, inDate] : [inDate, outDate];
+
+  const totalMinutes = Math.floor((end.getTime() - start.getTime()) / 60000);
+  const lunchOverlap = getLunchOverlapMinutes(start, end, config);
   const workMinutes = Math.max(0, totalMinutes - lunchOverlap);
   return Math.round((workMinutes / 60) * 100) / 100;
 }
@@ -66,6 +72,25 @@ export function calculateEarlyMinutes(
   if (!out) return 0;
   const workEnd = setTime(out, workEndHour, workEndMinute);
   return Math.floor((workEnd.getTime() - out.getTime()) / 60000);
+}
+
+/**
+ * Tính giờ làm việc thực tế khi CHƯA có check-out (đang trong ca).
+ * Dùng `now` làm mốc → luôn >= checkIn nên không bị lỗi thứ tự thời gian.
+ */
+export function calculateWorkHoursToNow(
+  checkIn: Date | string | null | undefined,
+  now: Date | string | null | undefined = new Date(),
+  config: LunchConfig = DEFAULT_LUNCH_CONFIG,
+): number {
+  const inDate = toDate(checkIn);
+  const nowDate = toDate(now);
+  if (!inDate || !nowDate) return 0;
+  if (nowDate <= inDate) return 0;
+  const totalMinutes = Math.floor((nowDate.getTime() - inDate.getTime()) / 60000);
+  const lunchOverlap = getLunchOverlapMinutes(inDate, nowDate, config);
+  const workMinutes = Math.max(0, totalMinutes - lunchOverlap);
+  return Math.round((workMinutes / 60) * 100) / 100;
 }
 
 export function calculateActualOTHours(

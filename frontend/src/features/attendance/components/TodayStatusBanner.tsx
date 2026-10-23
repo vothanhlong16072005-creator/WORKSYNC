@@ -9,6 +9,7 @@ import {
   FileText,
   RotateCw,
   AlertTriangle,
+  Trash2,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAttendanceStore } from '../stores/attendance.store';
@@ -110,7 +111,10 @@ export function TodayStatusBanner({
     isCheckingOut,
     checkIn,
     checkOut,
+    deleteRecord,
   } = useAttendanceStore();
+
+  const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
     const timer = setInterval(() => setTime(new Date()), 1000);
@@ -166,6 +170,34 @@ export function TodayStatusBanner({
     if (!dateStr) return '--:--';
     const d = new Date(dateStr);
     return d.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  };
+
+  /**
+   * Xóa bản ghi điểm danh hôm nay.
+   *
+   * Dùng khi check-in/check-out bị ghi nhầm (ví dụ check-out lưu nhầm sang ngày
+   * hôm trước) khiến giờ làm hiển thị sai (0.0h). Sau khi xóa, người dùng
+   * check-in lại được ngay.
+   */
+  const handleDeleteRecord = async () => {
+    if (!todayRecord) return;
+
+    const confirmed = window.confirm(
+      isVi
+        ? 'Xóa bản ghi điểm danh hôm nay? Bạn sẽ cần check-in lại nếu muốn ghi nhận thời gian làm việc.'
+        : 'Delete today\'s attendance record? You will need to check in again.',
+    );
+    if (!confirmed) return;
+
+    setIsDeleting(true);
+    try {
+      await deleteRecord(todayRecord.id);
+      toast.success(isVi ? 'Đã xóa bản ghi điểm danh' : 'Attendance record deleted');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, isVi ? 'Lỗi xóa bản ghi' : 'Failed to delete record'));
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   const statusInfo = todayRecord ? STATUS_CONFIG[todayRecord.status] : null;
@@ -231,6 +263,27 @@ export function TodayStatusBanner({
                     {todayRecord.checkInMethod}
                   </span>
                 </>
+              )}
+              {/* Xóa bản ghi sai (check-in/out nhầm) — cho phép check-in lại */}
+              {todayRecord && (
+                <button
+                  type="button"
+                  onClick={handleDeleteRecord}
+                  disabled={isDeleting}
+                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md border border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100 font-bold text-[11px] transition-colors cursor-pointer disabled:opacity-50"
+                  title={
+                    isVi
+                      ? 'Xóa bản ghi điểm danh hôm nay (để check-in lại)'
+                      : 'Delete today\'s attendance record to check in again'
+                  }
+                >
+                  {isDeleting ? (
+                    <RotateCw className="w-3 h-3 animate-spin" />
+                  ) : (
+                    <Trash2 className="w-3 h-3" />
+                  )}
+                  <span>{isVi ? 'Xóa bản ghi' : 'Delete'}</span>
+                </button>
               )}
             </div>
 

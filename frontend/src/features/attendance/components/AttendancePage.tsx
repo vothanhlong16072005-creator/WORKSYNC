@@ -614,12 +614,14 @@ export function AttendancePage() {
           />
 
           {/* 2. Today Timeline (Work Shift Visual Progress & Live Ticking) */}
+          {/* ⚠️ KHÔNG fallback sang `history[0]` (hôm qua) — dữ liệu hôm qua hiển thị
+              trong "Dải thời gian hôm nay" là sai lệch, gây nhầm lẫn khi chưa check-in. */}
           <TodayTimeline
-            checkInTime={todayRecord?.checkInTime ?? history[0]?.checkInTime ?? null}
-            checkOutTime={todayRecord?.checkOutTime ?? history[0]?.checkOutTime ?? null}
+            checkInTime={todayRecord?.checkInTime ?? null}
+            checkOutTime={todayRecord?.checkOutTime ?? null}
             workStartTime={config?.workStartTime ?? '08:00'}
             workEndTime={config?.workEndTime ?? '17:30'}
-            status={todayRecord?.status ?? history[0]?.status}
+            status={todayRecord?.status}
           />
 
           {/* 3. Quick Action Buttons Row (Early Leave + OT + Break + Daily Report) */}
@@ -747,8 +749,8 @@ export function AttendancePage() {
               />
 
               <ShiftPolicyCard
-                checkInTime={todayRecord?.checkInTime ?? history[0]?.checkInTime}
-                checkOutTime={todayRecord?.checkOutTime ?? history[0]?.checkOutTime}
+                checkInTime={todayRecord?.checkInTime ?? null}
+                checkOutTime={todayRecord?.checkOutTime ?? null}
               />
             </div>
 

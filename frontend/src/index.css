@@ -286,12 +286,35 @@
 .kanban-search-input {
   height: 2.55rem !important;
   padding-left: 2.35rem !important;
+  padding-right: 2.75rem !important;
   border: 1px solid hsl(var(--border)) !important;
   border-radius: 5px !important;
   background: hsl(var(--card)) !important;
   font-size: 0.78rem !important;
   font-weight: 500 !important;
   letter-spacing: 0 !important;
+}
+
+/* Badge số kết quả tìm kiếm hiển thị trong ô search Kanban */
+.kanban-toolbar__search-count {
+  position: absolute;
+  top: 50%;
+  right: 0.55rem;
+  transform: translateY(-50%);
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.35rem;
+  height: 1.35rem;
+  padding: 0 0.3rem;
+  border-radius: 9999px;
+  background: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+  font-size: 0.65rem;
+  font-weight: 800;
+  line-height: 1;
+  pointer-events: none;
 }
 
 .kanban-filter-button {

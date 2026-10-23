@@ -13,4 +13,12 @@ export class TaskQueryDto {
   @IsOptional()
   @IsString()
   projectId?: string;
+
+  /**
+   * Từ khóa tìm kiếm (title / mã task / nhãn).
+   * Dùng cho ô tìm kiếm trên Kanban & global search trên Header.
+   */
+  @IsOptional()
+  @IsString()
+  q?: string;
 }

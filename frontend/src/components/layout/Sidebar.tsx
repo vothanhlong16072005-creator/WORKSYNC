@@ -31,7 +31,8 @@ interface SidebarProps {
 }
 
 export default function Sidebar({ open, setOpen }: SidebarProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const isVi = i18n.language.startsWith('vi');
   const location = useLocation();
   const { projects, loadMine } = useProjectStore();
   const { user } = useAuthStore();
@@ -62,7 +63,7 @@ export default function Sidebar({ open, setOpen }: SidebarProps) {
     { icon: FileText, label: t('nav.documents'), path: '/documents' },
     {
       icon: ShieldCheck,
-      label: t('nav.admin_center', 'Trung tâm Quản trị'),
+      label: t('nav.admin_center', isVi ? 'Trung tâm Quản trị' : 'Admin Center'),
       path: '/admin',
       roles: ['ADMIN'],
     },

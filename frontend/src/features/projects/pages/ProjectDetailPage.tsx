@@ -861,6 +861,7 @@ export const ProjectDetailPage: React.FC = () => {
               tasks={tasks}
               members={project.members}
               isEmployeeOnly={isEmployee}
+              currentUserId={user?.id}
               onTaskClick={(task) => setSelectedTaskForModal(task)}
               onTaskMove={handleMoveTaskOnBoard}
               onRefresh={fetchProjectData}

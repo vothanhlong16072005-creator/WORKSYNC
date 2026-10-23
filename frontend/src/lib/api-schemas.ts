@@ -59,6 +59,8 @@ export type BoardTask = z.infer<typeof BoardTaskSchema>;
 export const TaskScopeSchema = z.object({
   scope: z.enum(['mine', 'project']),
   projectId: z.string().optional(),
+  /** Từ khóa tìm kiếm (title / id / labels) */
+  q: z.string().optional(),
 });
 export type TaskScope = z.infer<typeof TaskScopeSchema>;
 

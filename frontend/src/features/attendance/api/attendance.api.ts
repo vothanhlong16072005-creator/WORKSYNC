@@ -50,6 +50,14 @@ export const attendanceApi = {
     return res.data;
   },
 
+  /** Xóa bản ghi điểm danh (dùng để gỡ bản ghi sai) */
+  async deleteRecord(id: string): Promise<{ success: boolean; message: string }> {
+    const res = await apiClient.delete<{ success: boolean; message: string }>(
+      `/attendance/records/${id}`,
+    );
+    return res.data;
+  },
+
   async getLeaveBalance(): Promise<LeaveBalance> {
     const res = await apiClient.get<LeaveBalance>('/attendance/leave-balance');
     return res.data;

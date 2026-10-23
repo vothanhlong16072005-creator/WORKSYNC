@@ -69,8 +69,12 @@ describe('time-calculator', () => {
       expect(calculateWorkHours(at(8, 30), 'invalid')).toBe(0);
     });
 
-    it('returns 0 when checkOut <= checkIn', () => {
-      expect(calculateWorkHours(at(17, 30), at(8, 30))).toBe(0);
+    it('tự hoán đổi khi checkOut TRƯỚC checkIn (dữ liệu sai thứ tự) thay vì trả 0', () => {
+      // Bug gốc: check-out bị ghi nhầm sang ngày hôm trước ⇒ checkOut < checkIn
+      // ⇒ hàm trả 0 ⇒ báo cáo/UI hiện "0.0h" dù đã làm cả ngày.
+      // Sau fix: hoán đổi 2 mốc → vẫn tính đúng số giờ làm việc.
+      const hours = calculateWorkHours(at(17, 30), at(8, 30));
+      expect(hours).toBe(8.0);
     });
 
     it('accepts string ISO dates', () => {
@@ -78,6 +82,14 @@ describe('time-calculator', () => {
       const outIso = at(17, 30).toISOString();
       const hours = calculateWorkHours(inIso, outIso);
       expect(hours).toBe(8.0);
+    });
+
+    it('tính đúng khi check-out bị ghi nhầm sang ngày hôm trước (case thực tế)', () => {
+      // check-in 24/10 08:18 VN, check-out ghi nhầm 23/10 04:39 VN
+      const checkIn = new Date('2026-10-24T01:18:00.000Z');
+      const checkOut = new Date('2026-10-23T21:39:09.235Z');
+      const hours = calculateWorkHours(checkIn, checkOut);
+      expect(hours).toBeGreaterThan(0);
     });
 
     it('uses DEFAULT_LUNCH_CONFIG by default', () => {

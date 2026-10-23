@@ -242,6 +242,17 @@ export class AttendanceService {
       });
     }
 
+    // ⚠️ Chặn check-out trước check-in.
+    // Trường hợp này tạo ra bản ghi "vô lý" (checkOut < checkIn) khiến
+    // frontend tính giờ làm = 0 và hiển thị sai (Working 0.0h, Trễ/OT "—").
+    if (existing.checkInTime && now < existing.checkInTime) {
+      throw new BadRequestException({
+        code: 'CHECKOUT_BEFORE_CHECKIN',
+        message:
+          'Giờ check-out phải sau giờ check-in / Check-out time must be after check-in time',
+      });
+    }
+
     // GD2: Determine if early leave approved/unapproved
     let finalStatus = existing.status;
     const workEnd = new Date(today);
@@ -286,6 +297,45 @@ export class AttendanceService {
         note: dto.note ? (existing.note ? `${existing.note} | ${dto.note}` : dto.note) : existing.note,
       },
     });
+  }
+
+  /**
+   * Xóa bản ghi điểm danh.
+   *
+   * Dùng để gỡ bản ghi sai (ví dụ check-out bị ghi nhầm sang ngày hôm trước,
+   * hoặc check-in nhầm buổi) khiến giờ làm hiển thị sai.
+   *
+   * Quyền: chủ sở hữu bản ghi, hoặc ADMIN/HR/PM (quản lý nhân sự).
+   */
+  async deleteRecord(
+    userId: string,
+    recordId: string,
+    actor: { id: string; role: string },
+  ): Promise<{ success: boolean; message: string }> {
+    const record = await this.prisma.attendanceRecord.findUnique({
+      where: { id: recordId },
+      select: { id: true, userId: true, date: true },
+    });
+
+    if (!record) {
+      throw new NotFoundException('Không tìm thấy bản ghi điểm danh / Attendance record not found');
+    }
+
+    const isOwner = record.userId === userId;
+    const isManager = ['ADMIN', 'HR', 'PM'].includes(actor.role);
+
+    if (!isOwner && !isManager) {
+      throw new ForbiddenException(
+        'Bạn không có quyền xóa bản ghi này / You are not allowed to delete this record',
+      );
+    }
+
+    await this.prisma.attendanceRecord.delete({ where: { id: recordId } });
+
+    return {
+      success: true,
+      message: 'Đã xóa bản ghi điểm danh / Attendance record deleted',
+    };
   }
 
   async getToday(userId: string, now = new Date()) {

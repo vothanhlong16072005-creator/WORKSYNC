@@ -56,10 +56,15 @@ export function calculateWorkHours(
   if (!inDate || !outDate || isNaN(inDate.getTime()) || isNaN(outDate.getTime())) {
     return 0;
   }
-  if (outDate <= inDate) return 0;
 
-  const totalMinutes = differenceInMinutes(outDate, inDate);
-  const lunchOverlap = getLunchOverlapMinutes(inDate, outDate, config);
+  // ⚠️ Dữ liệu có thể bị sai thứ tự khi check-out bị ghi nhầm sang ngày hôm
+  // trước (ví dụ check-in 24/10 08:18 nhưng check-out lại là 23/10 04:39).
+  // Khi đó `outDate <= inDate` → trả 0 → báo cáo hiện "0.0h" dù đã làm cả ngày.
+  // → Tự động hoán đổi để luôn tính đúng khoảng thời gian làm việc.
+  const [start, end] = outDate < inDate ? [outDate, inDate] : [inDate, outDate];
+
+  const totalMinutes = differenceInMinutes(end, start);
+  const lunchOverlap = getLunchOverlapMinutes(start, end, config);
   const workMinutes = Math.max(0, totalMinutes - lunchOverlap);
   return Math.round((workMinutes / 60) * 100) / 100;
 }

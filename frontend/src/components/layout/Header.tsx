@@ -1,13 +1,13 @@
 import { useState, useEffect } from 'react';
-import { Menu, Search, LogOut } from 'lucide-react';
+import { Menu, LogOut } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { useAuthStore } from '@/stores/auth.store';
 import { useTranslation } from 'react-i18next';
 import { changeLanguage } from '@/i18n/i18n';
 import { QuickTaskButton } from '@/features/quick-tasks/components/QuickTaskButton';
 import { NotificationBell } from '@/features/notifications/components/NotificationBell';
 import { UserProfileModal } from './UserProfileModal';
+import { GlobalSearch } from './GlobalSearch';
 
 interface HeaderProps {
   sidebarOpen: boolean;
@@ -37,14 +37,7 @@ export default function Header({ sidebarOpen, setSidebarOpen }: HeaderProps) {
           <Menu className="h-5 w-5 text-slate-900" />
         </Button>
 
-        <div className="hidden md:flex relative w-96 group">
-          <Search className="absolute left-3.5 top-3.5 h-4 w-4 text-slate-400 group-focus-within:text-primary transition-colors" />
-          <Input 
-            type="search" 
-            placeholder={currentLang.startsWith('en') ? "SEARCH TASKS, DOCUMENTS..." : "TÌM KIẾM CÔNG VIỆC, TÀI LIỆU..."} 
-            className="w-full h-11 bg-white border-2 border-slate-200 rounded-none pl-10 text-xs font-bold tracking-widest placeholder:text-slate-400 focus:border-primary focus:ring-0 focus-visible:ring-0"
-          />
-        </div>
+        <GlobalSearch />
       </div>
 
       <div className="flex items-center gap-4 md:gap-6">

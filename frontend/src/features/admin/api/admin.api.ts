@@ -58,6 +58,16 @@ export const adminApi = {
     return res.data;
   },
 
+  async deleteDepartment(id: string): Promise<any> {
+    const res = await apiClient.delete(`/admin/departments/${id}`);
+    return res.data;
+  },
+
+  async cleanAdminTasks(): Promise<any> {
+    const res = await apiClient.post('/admin/maintenance/clean-admin-tasks');
+    return res.data;
+  },
+
   async getAllProjects(): Promise<AdminProjectItem[]> {
     const res = await apiClient.get<{ success?: boolean; data: AdminProjectItem[] }>('/admin/projects');
     return res.data?.data ?? (res.data as unknown as AdminProjectItem[]);

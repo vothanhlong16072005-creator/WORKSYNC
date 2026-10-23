@@ -14,6 +14,7 @@
     "chat": "CHAT",
     "notifications": "NOTIFICATIONS",
     "documents": "DOCUMENTS",
+    "admin_center": "ADMIN CENTER",
     "settings": "SETTINGS"
   },
   "kanban": {
@@ -650,5 +651,56 @@
     "start_share": "Share screen when you join",
     "pip_hint": "Use Picture-in-Picture to multitask while in the meeting",
     "privacy_note": "Only invited participants can join this room"
+  },
+  "admin": {
+    "command_center": "WorkSync Enterprise Command Center",
+    "dashboard_title": "Master Enterprise Administration",
+    "dashboard_subtitle": "Centralized oversight of all 5 organizational roles, departments structure, Scrum/Kanban project lifecycles, attendance compliance, and enterprise knowledge bases.",
+    "syncing": "Syncing...",
+    "refresh_data": "Refresh Data",
+    "clean_admin_tasks": "Clean Admin Tasks & Conflicts",
+    "clean_success": "Admin tasks and schedule conflicts cleaned successfully",
+    "tabs": {
+      "overview": "Overview",
+      "users": "Users & Roles",
+      "departments": "Departments",
+      "projects": "Projects & Sprints",
+      "attendance": "Attendance Oversight",
+      "documents": "Documents & Meetings",
+      "infrastructure": "Infrastructure"
+    },
+    "departments": {
+      "title": "Organization & Departments",
+      "subtitle": "Manage organizational units, department heads, members and projects",
+      "add_btn": "Add Department",
+      "members_count": "members",
+      "projects_count": "projects",
+      "docs_count": "docs",
+      "head": "Department Head",
+      "unassigned": "Unassigned",
+      "manage_btn": "Manage & Edit",
+      "empty": "No departments found",
+      "create_title": "Create New Department",
+      "edit_title": "Department Details & Management",
+      "name_label": "Department Name",
+      "code_label": "Department Code",
+      "desc_label": "Description",
+      "head_label": "Appoint Department Head",
+      "search_head_placeholder": "Search employee to appoint as Head...",
+      "members_label": "Department Members",
+      "search_members_placeholder": "Search employees by name, email...",
+      "add_member": "Add Member",
+      "remove_member": "Remove",
+      "confirm_delete": "Are you sure you want to delete this department? All members and projects will be unassigned safely.",
+      "delete_btn": "Delete Department",
+      "save_changes": "Save Changes"
+    },
+    "roles": {
+      "ADMIN": "Admin",
+      "HR": "HR",
+      "PM": "PM",
+      "DEPARTMENT_HEAD": "Dept Head",
+      "EMPLOYEE": "Employee"
+    }
   }
 }

@@ -35,6 +35,7 @@ interface AttendanceState {
   checkIn: (payload: CheckInPayload) => Promise<AttendanceRecord>;
   checkOut: (payload: CheckOutPayload) => Promise<AttendanceRecord>;
   fetchHistory: (fromDate?: string, toDate?: string) => Promise<void>;
+  deleteRecord: (id: string) => Promise<{ success: boolean; message: string }>;
   fetchLeaveBalance: () => Promise<void>;
   fetchMyRequests: () => Promise<void>;
   createWfh: (payload: CreateWfhPayload) => Promise<void>;
@@ -115,6 +116,24 @@ export const useAttendanceStore = create<AttendanceState>((set, get) => ({
       set({ history, isLoading: false });
     } catch (err: unknown) {
       set({ isLoading: false, error: getErrorMessage(err) });
+    }
+  },
+
+  deleteRecord: async (id: string) => {
+    set({ error: null });
+    try {
+      const result = await attendanceApi.deleteRecord(id);
+      // Đồng bộ lại cả bản ghi hôm nay và lịch sử để UI cập nhật ngay
+      set((state) => ({
+        todayRecord: state.todayRecord?.id === id ? null : state.todayRecord,
+        history: state.history.filter((r) => r.id !== id),
+      }));
+      await Promise.all([get().fetchToday(), get().fetchHistory()]);
+      return result;
+    } catch (err: unknown) {
+      const errorMsg = getErrorMessage(err, 'Lỗi xóa bản ghi điểm danh');
+      set({ error: errorMsg });
+      throw err;
     }
   },
 

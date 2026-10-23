@@ -49,14 +49,25 @@ async function main() {
     where: { name: { in: ['Sprint 24 — M8 Work Calendar & Analytics', 'Sprint 25 — Mobile Responsive & Optimization'] } },
   });
 
-  const u0 = users[0];
-  const u1 = users[1] || u0;
-  const u2 = users[2] || u0;
+  // Find employee and PM users (never assign tasks to Admin!)
+  const devUser = users.find((u) => u.role === 'EMPLOYEE') || users[1] || users[0];
+  const pmUser = users.find((u) => u.role === 'PM') || users[0];
   const p0 = projects[0];
   const p1 = projects[1] || p0;
 
-  // 2. Seed Tasks with due dates
+  // 2. Seed Tasks with due dates (idempotent cleanup)
   console.log('  → Seeding sample tasks...');
+  const taskTitles = [
+    'Tối ưu hóa query database cho Calendar Timeline',
+    'Thiết kế giao diện Timeline canvas chuẩn PaaS',
+    'Xử lý lỗi kéo thả Reschedule RBAC',
+    'Task quá hạn kiểm tra alert conflict',
+    'Task quá hạn thứ hai',
+  ];
+  await prisma.task.deleteMany({
+    where: { title: { in: taskTitles } },
+  });
+
   const tasksData = [
     {
       title: 'Tối ưu hóa query database cho Calendar Timeline',
@@ -65,8 +76,8 @@ async function main() {
       priority: Priority.HIGH,
       dueDate: addDays(1, 17, 0),
       projectId: p0.id,
-      assigneeId: u0.id,
-      createdById: u1.id,
+      assigneeId: devUser.id,
+      createdById: pmUser.id,
     },
     {
       title: 'Thiết kế giao diện Timeline canvas chuẩn PaaS',
@@ -75,8 +86,8 @@ async function main() {
       priority: Priority.URGENT,
       dueDate: addDays(2, 18, 0),
       projectId: p0.id,
-      assigneeId: u1.id,
-      createdById: u0.id,
+      assigneeId: devUser.id,
+      createdById: pmUser.id,
     },
     {
       title: 'Xử lý lỗi kéo thả Reschedule RBAC',
@@ -85,8 +96,8 @@ async function main() {
       priority: Priority.MEDIUM,
       dueDate: addDays(3, 12, 0),
       projectId: p1.id,
-      assigneeId: u0.id,
-      createdById: u1.id,
+      assigneeId: devUser.id,
+      createdById: pmUser.id,
     },
     {
       title: 'Task quá hạn kiểm tra alert conflict',
@@ -95,8 +106,8 @@ async function main() {
       priority: Priority.URGENT,
       dueDate: addDays(-2, 17, 0),
       projectId: p0.id,
-      assigneeId: u0.id,
-      createdById: u1.id,
+      assigneeId: devUser.id,
+      createdById: pmUser.id,
     },
     {
       title: 'Task quá hạn thứ hai',
@@ -105,8 +116,8 @@ async function main() {
       priority: Priority.HIGH,
       dueDate: addDays(-1, 15, 0),
       projectId: p0.id,
-      assigneeId: u0.id,
-      createdById: u1.id,
+      assigneeId: devUser.id,
+      createdById: pmUser.id,
     },
   ];
 

@@ -489,13 +489,23 @@ export default function KanbanPage() {
         return false;
       }
 
-      // 2. Text Search Query
+      // 2. Text Search Query — title / mã task / nhãn / mô tả / người phụ trách
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
-        const matchesTitle = task.title.toLowerCase().includes(q);
-        const matchesId = task.id.toLowerCase().includes(q);
-        const matchesLabel = task.labels && task.labels.some((l) => l.toLowerCase().includes(q));
-        if (!matchesTitle && !matchesId && !matchesLabel) return false;
+        const matchesTitle = task.title?.toLowerCase().includes(q);
+        const matchesId = task.id?.toLowerCase().includes(q);
+        const matchesLabel = task.labels && task.labels.some((l) => l?.toLowerCase().includes(q));
+        const matchesDescription = task.description?.toLowerCase().includes(q);
+        const matchesAssignee = task.assignee?.name?.toLowerCase().includes(q);
+        if (
+          !matchesTitle &&
+          !matchesId &&
+          !matchesLabel &&
+          !matchesDescription &&
+          !matchesAssignee
+        ) {
+          return false;
+        }
       }
 
       // 3. Priority Filter
@@ -675,6 +685,11 @@ export default function KanbanPage() {
             aria-label="Tìm công việc"
             className="kanban-search-input"
           />
+          {searchQuery.trim() && (
+            <span className="kanban-toolbar__search-count" aria-live="polite">
+              {filteredTasks.length}
+            </span>
+          )}
         </label>
 
         {/* View Mode Switcher: Board vs List */}

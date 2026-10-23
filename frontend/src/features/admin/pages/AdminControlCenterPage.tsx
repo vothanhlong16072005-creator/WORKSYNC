@@ -20,6 +20,8 @@ import {
   ExternalLink,
   ChevronRight,
   MapPin,
+  Sparkles,
+  Settings2,
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -45,6 +47,8 @@ import type {
   AdminMeetingItem,
 } from '../types/admin.types';
 import { ExportButton } from '@/features/attendance/components/ExportButton';
+import { CreateDepartmentModal } from '../components/CreateDepartmentModal';
+import { DepartmentDetailModal } from '../components/DepartmentDetailModal';
 
 const ROLE_COLORS: Record<string, { label: string; bg: string; text: string; border: string }> = {
   ADMIN: { label: 'Admin', bg: 'bg-rose-50', text: 'text-rose-700', border: 'border-rose-200' },
@@ -90,12 +94,26 @@ export default function AdminControlCenterPage() {
   const [updatingRole, setUpdatingRole] = useState(false);
 
   const [createDeptModal, setCreateDeptModal] = useState(false);
-  const [newDeptName, setNewDeptName] = useState('');
-  const [newDeptCode, setNewDeptCode] = useState('');
-  const [newDeptDesc, setNewDeptDesc] = useState('');
-  const [newDeptManagerId, setNewDeptManagerId] = useState('');
-  const [newDeptMemberIds, setNewDeptMemberIds] = useState<string[]>([]);
-  const [creatingDept, setCreatingDept] = useState(false);
+  const [selectedDeptForDetail, setSelectedDeptForDetail] = useState<AdminDepartmentItem | null>(null);
+  const [cleaningAdminTasks, setCleaningAdminTasks] = useState(false);
+
+  // Clean all tasks and calendar conflicts for Admin
+  const handleCleanAdminTasks = async () => {
+    setCleaningAdminTasks(true);
+    try {
+      await adminApi.cleanAdminTasks();
+      toast.success(
+        isVi
+          ? 'Đã dọn dẹp sạch toàn bộ task và xung đột lịch của tài khoản Admin!'
+          : 'Successfully cleaned all admin tasks and calendar conflicts!',
+      );
+      loadOverview();
+    } catch {
+      toast.error(isVi ? 'Không thể dọn dẹp task Admin' : 'Failed to clean admin tasks');
+    } finally {
+      setCleaningAdminTasks(false);
+    }
+  };
 
   // Load Overview Data
   const loadOverview = async () => {
@@ -129,6 +147,10 @@ export default function AdminControlCenterPage() {
     try {
       const data = await adminApi.getAllDepartments();
       setDepartments(data);
+      if (selectedDeptForDetail) {
+        const refreshed = data.find((d) => d.id === selectedDeptForDetail.id);
+        if (refreshed) setSelectedDeptForDetail(refreshed);
+      }
     } catch {
       toast.error(isVi ? 'Không thể tải danh sách phòng ban' : 'Failed to load departments');
     } finally {
@@ -168,6 +190,7 @@ export default function AdminControlCenterPage() {
 
   useEffect(() => {
     loadOverview();
+    loadUsers();
   }, []);
 
   useEffect(() => {
@@ -207,39 +230,21 @@ export default function AdminControlCenterPage() {
     }
   };
 
-  // Handle Create Department
-  const handleCreateDepartment = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newDeptName || !newDeptCode) {
-      toast.error(isVi ? 'Vui lòng nhập tên và mã phòng ban' : 'Name and code are required');
-      return;
-    }
-    setCreatingDept(true);
-    try {
-      await adminApi.createDepartment({
-        name: newDeptName,
-        code: newDeptCode.toUpperCase(),
-        description: newDeptDesc || undefined,
-        managerId: newDeptManagerId || undefined,
-        memberIds: newDeptMemberIds.length > 0 ? newDeptMemberIds : undefined,
-      });
-      toast.success(isVi ? 'Tạo phòng ban mới thành công' : 'Department created');
-      setCreateDeptModal(false);
-      setNewDeptName('');
-      setNewDeptCode('');
-      setNewDeptDesc('');
-      setNewDeptManagerId('');
-      setNewDeptMemberIds([]);
-      loadDepartments();
-      loadUsers();
-      loadOverview();
-    } catch (err: any) {
-      const msg = err?.response?.data?.message || (isVi ? 'Lỗi tạo phòng ban' : 'Failed to create department');
-      toast.error(msg);
-    } finally {
-      setCreatingDept(false);
-    }
-  };
+  // Localized Role Distribution for Pie Chart
+  const localizedRoleDistribution = useMemo(() => {
+    if (!overview?.roleDistribution) return [];
+    const roleLabelsEn: Record<string, string> = {
+      ADMIN: 'Admin',
+      HR: 'HR',
+      PM: 'Project Manager (PM)',
+      DEPARTMENT_HEAD: 'Department Head',
+      EMPLOYEE: 'Employee',
+    };
+    return overview.roleDistribution.map((entry) => ({
+      ...entry,
+      label: isVi ? entry.label : (roleLabelsEn[entry.role] || entry.label),
+    }));
+  }, [overview, isVi]);
 
   // Filtered Users
   const filteredUsers = useMemo(() => {
@@ -295,6 +300,16 @@ export default function AdminControlCenterPage() {
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
+            <button
+              onClick={handleCleanAdminTasks}
+              disabled={cleaningAdminTasks}
+              className="inline-flex items-center gap-2 px-3.5 h-10 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 text-rose-200 border border-rose-400/30 font-bold text-xs backdrop-blur-xs transition-all disabled:opacity-50"
+              title={isVi ? 'Xóa sạch toàn bộ task và giải quyết xung đột lịch của tài khoản Admin' : 'Clean all admin tasks and calendar conflicts'}
+            >
+              <Sparkles className={`w-3.5 h-3.5 text-rose-300 ${cleaningAdminTasks ? 'animate-spin' : ''}`} />
+              <span>{cleaningAdminTasks ? (isVi ? 'Đang dọn...' : 'Cleaning...') : (isVi ? 'Dọn lịch Admin' : 'Clean Admin Schedule')}</span>
+            </button>
+
             <button
               onClick={() => {
                 loadOverview();
@@ -508,11 +523,11 @@ export default function AdminControlCenterPage() {
           </div>
 
           <div className="h-64 w-full flex items-center justify-center">
-            {overview?.roleDistribution && overview.roleDistribution.length > 0 ? (
+            {localizedRoleDistribution.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie
-                    data={overview.roleDistribution}
+                    data={localizedRoleDistribution}
                     dataKey="count"
                     nameKey="label"
                     cx="50%"
@@ -521,7 +536,7 @@ export default function AdminControlCenterPage() {
                     outerRadius={80}
                     paddingAngle={4}
                   >
-                    {overview.roleDistribution.map((entry, idx) => (
+                    {localizedRoleDistribution.map((entry, idx) => (
                       <Cell key={`cell-${idx}`} fill={entry.color} />
                     ))}
                   </Pie>
@@ -998,7 +1013,8 @@ export default function AdminControlCenterPage() {
               departments.map((dept) => (
                 <div
                   key={dept.id}
-                  className="bg-white rounded-2xl border border-slate-200/90 shadow-sm p-5 hover:shadow-md transition-all flex flex-col justify-between"
+                  onClick={() => setSelectedDeptForDetail(dept)}
+                  className="bg-white rounded-2xl border border-slate-200/90 shadow-sm p-5 hover:shadow-lg hover:border-indigo-400/60 transition-all flex flex-col justify-between cursor-pointer group"
                 >
                   <div>
                     <div className="flex items-start justify-between gap-3 mb-2">
@@ -1006,10 +1022,12 @@ export default function AdminControlCenterPage() {
                         <span className="px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-700 font-black text-[10px] border border-indigo-200">
                           {dept.code}
                         </span>
-                        <h4 className="text-base font-black text-slate-900 mt-1">{dept.name}</h4>
+                        <h4 className="text-base font-black text-slate-900 mt-1 group-hover:text-indigo-600 transition-colors">
+                          {dept.name}
+                        </h4>
                       </div>
-                      <span className="w-8 h-8 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-center text-slate-600 shrink-0">
-                        <Building2 className="w-4 h-4" />
+                      <span className="w-8 h-8 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-center text-slate-600 group-hover:bg-indigo-50 group-hover:text-indigo-600 group-hover:border-indigo-200 transition-colors shrink-0">
+                        <Settings2 className="w-4 h-4" />
                       </span>
                     </div>
 
@@ -1017,7 +1035,7 @@ export default function AdminControlCenterPage() {
                       {dept.description || (isVi ? 'Chưa có mô tả phòng ban' : 'No description')}
                     </p>
 
-                    <div className="p-3 rounded-xl bg-slate-50 border border-slate-100 mb-4">
+                    <div className="p-3 rounded-xl bg-slate-50 border border-slate-100 mb-4 group-hover:bg-indigo-50/40 transition-colors">
                       <div className="text-[10px] uppercase font-bold text-slate-400 tracking-wider mb-1">
                         {isVi ? 'Trưởng phòng (Department Head)' : 'Department Head'}
                       </div>
@@ -1034,10 +1052,24 @@ export default function AdminControlCenterPage() {
                     </div>
                   </div>
 
-                  <div className="pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-600 font-bold">
-                    <span>{dept._count.users} {isVi ? 'nhân sự' : 'members'}</span>
-                    <span>{dept._count.projects} {isVi ? 'dự án' : 'projects'}</span>
-                    <span>{dept._count.documents} {isVi ? 'tài liệu' : 'docs'}</span>
+                  <div>
+                    <div className="pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-600 font-bold mb-3">
+                      <span>{dept._count.users} {isVi ? 'nhân sự' : 'members'}</span>
+                      <span>{dept._count.projects} {isVi ? 'dự án' : 'projects'}</span>
+                      <span>{dept._count.documents} {isVi ? 'tài liệu' : 'docs'}</span>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedDeptForDetail(dept);
+                      }}
+                      className="w-full py-2 rounded-xl bg-slate-50 hover:bg-indigo-600 text-slate-700 hover:text-white font-bold text-xs transition-colors flex items-center justify-center gap-1.5 border border-slate-200/80 group-hover:border-indigo-400"
+                    >
+                      <Settings2 className="w-3.5 h-3.5" />
+                      <span>{isVi ? 'Quản lý & Sửa phòng ban' : 'Manage & Edit Department'}</span>
+                    </button>
                   </div>
                 </div>
               ))
@@ -1448,151 +1480,30 @@ export default function AdminControlCenterPage() {
         </div>
       )}
 
-      {/* MODAL 2: CREATE DEPARTMENT MODAL */}
-      {createDeptModal && (
-        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
-          <form
-            onSubmit={handleCreateDepartment}
-            className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-md w-full p-6 animate-in fade-in zoom-in-95 duration-150"
-          >
-            <div className="flex items-center gap-2 pb-3 mb-4 border-b border-slate-100">
-              <span className="p-1.5 rounded-lg bg-indigo-50 text-indigo-600">
-                <Building2 className="w-4 h-4" />
-              </span>
-              <h3 className="text-base font-bold text-slate-900">
-                {isVi ? 'Tạo Phòng Ban Mới' : 'Create New Department'}
-              </h3>
-            </div>
+      {/* MODAL 2: CREATE DEPARTMENT MODAL (SEARCHABLE & SPACIOUS) */}
+      <CreateDepartmentModal
+        isOpen={createDeptModal}
+        onClose={() => setCreateDeptModal(false)}
+        onSuccess={() => {
+          loadDepartments();
+          loadUsers();
+          loadOverview();
+        }}
+        users={users}
+      />
 
-            <div className="space-y-4 mb-6">
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  {isVi ? 'Tên phòng ban' : 'Department Name'} *
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder={isVi ? 'VD: Ban Công Nghệ & AI' : 'e.g. AI & Cloud Engineering'}
-                  value={newDeptName}
-                  onChange={(e) => setNewDeptName(e.target.value)}
-                  className="w-full h-9 px-3 text-xs rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  {isVi ? 'Mã phòng ban (Code)' : 'Department Code'} *
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="VD: TECH_AI, FIN, HR_CORE"
-                  value={newDeptCode}
-                  onChange={(e) => setNewDeptCode(e.target.value)}
-                  className="w-full h-9 px-3 text-xs uppercase font-mono rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  {isVi ? 'Mô tả nhiệm vụ' : 'Description'}
-                </label>
-                <textarea
-                  rows={2}
-                  placeholder={isVi ? 'Mô tả chức năng nhiệm vụ...' : 'Department scope and goals...'}
-                  value={newDeptDesc}
-                  onChange={(e) => setNewDeptDesc(e.target.value)}
-                  className="w-full p-2.5 text-xs rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 resize-none"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  {isVi ? 'Chỉ định Trưởng phòng (Manager)' : 'Appoint Department Head'}
-                </label>
-                <select
-                  value={newDeptManagerId}
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    setNewDeptManagerId(val);
-                    // Remove from members if chosen as manager
-                    setNewDeptMemberIds((prev) => prev.filter((id) => id !== val));
-                  }}
-                  className="w-full h-9 px-3 text-xs rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 bg-white"
-                >
-                  <option value="">{isVi ? '-- Chưa chỉ định (Chọn sau) --' : '-- Not assigned (Select later) --'}</option>
-                  {users.map((u) => (
-                    <option key={u.id} value={u.id}>
-                      {u.name} ({u.email}) — [{u.role}]
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  {isVi ? 'Gán nhân viên ban đầu vào phòng ban' : 'Assign Initial Members'}
-                  {newDeptMemberIds.length > 0 && (
-                    <span className="ml-2 font-normal text-indigo-600">
-                      ({newDeptMemberIds.length} {isVi ? 'đã chọn' : 'selected'})
-                    </span>
-                  )}
-                </label>
-                <div className="max-h-36 overflow-y-auto border border-slate-200 rounded-xl p-2 space-y-1.5 bg-slate-50/50">
-                  {users
-                    .filter((u) => u.id !== newDeptManagerId)
-                    .map((u) => {
-                      const isSelected = newDeptMemberIds.includes(u.id);
-                      return (
-                        <label
-                          key={u.id}
-                          className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-white text-xs cursor-pointer select-none transition-colors"
-                        >
-                          <input
-                            type="checkbox"
-                            checked={isSelected}
-                            onChange={(e) => {
-                              if (e.target.checked) {
-                                setNewDeptMemberIds((prev) => [...prev, u.id]);
-                              } else {
-                                setNewDeptMemberIds((prev) => prev.filter((id) => id !== u.id));
-                              }
-                            }}
-                            className="w-3.5 h-3.5 text-indigo-600 rounded-sm border-slate-300"
-                          />
-                          <span className="font-semibold text-slate-800">{u.name}</span>
-                          <span className="text-[11px] text-slate-400">({u.email})</span>
-                          {u.department && (
-                            <span className="ml-auto text-[10px] px-1.5 py-0.5 rounded-md bg-slate-200/80 text-slate-600">
-                              {u.department.name}
-                            </span>
-                          )}
-                        </label>
-                      );
-                    })}
-                </div>
-              </div>
-            </div>
-
-            <div className="flex items-center justify-end gap-2.5">
-              <button
-                type="button"
-                onClick={() => setCreateDeptModal(false)}
-                className="px-4 h-9 rounded-xl border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-50"
-              >
-                {isVi ? 'Hủy' : 'Cancel'}
-              </button>
-              <button
-                type="submit"
-                disabled={creatingDept}
-                className="px-4 h-9 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-sm disabled:opacity-50"
-              >
-                {creatingDept ? (isVi ? 'Đang tạo...' : 'Creating...') : (isVi ? 'Tạo phòng ban' : 'Create')}
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
+      {/* MODAL 3: DEPARTMENT DETAIL & EDIT MODAL */}
+      <DepartmentDetailModal
+        isOpen={Boolean(selectedDeptForDetail)}
+        onClose={() => setSelectedDeptForDetail(null)}
+        department={selectedDeptForDetail}
+        allUsers={users}
+        onDepartmentUpdated={() => {
+          loadDepartments();
+          loadUsers();
+          loadOverview();
+        }}
+      />
     </div>
   );
 }

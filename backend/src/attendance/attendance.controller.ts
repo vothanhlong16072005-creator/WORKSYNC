@@ -3,6 +3,7 @@ import {
   Get,
   Post,
   Patch,
+  Delete,
   Body,
   Param,
   Query,
@@ -96,6 +97,21 @@ export class AttendanceController {
     @Query('toDate') toDate?: string,
   ) {
     return this.attendanceService.getHistory(user.id, fromDate, toDate);
+  }
+
+  /**
+   * Xóa bản ghi điểm danh (dùng để gỡ bản ghi sai).
+   * Chủ sở hữu bản ghi hoặc ADMIN/HR/PM đều được xóa.
+   */
+  @Delete('records/:id')
+  async deleteRecord(
+    @CurrentUser() user: RequestActor,
+    @Param('id') id: string,
+  ) {
+    return this.attendanceService.deleteRecord(user.id, id, {
+      id: user.id,
+      role: user.role,
+    });
   }
 
   @Get('leave-balance')

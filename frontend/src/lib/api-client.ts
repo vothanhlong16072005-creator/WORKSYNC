@@ -40,6 +40,9 @@ export const api = {
     if (scopeConfig.projectId) {
       params.projectId = scopeConfig.projectId;
     }
+    if (scopeConfig.q) {
+      params.q = scopeConfig.q;
+    }
     const res = await apiClient.get('/tasks', { params });
     return z.array(BoardTaskSchema).parse(res.data);
   },

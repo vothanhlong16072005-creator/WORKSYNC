@@ -18,6 +18,29 @@ function parseTime(timeStr: string, baseDate: Date = new Date()): Date {
   return d;
 }
 
+/**
+ * Số phút kể từ 00:00 theo giờ Việt Nam (UTC+7) của một Date.
+ *
+ * ⚠️ `checkInTime`/`checkOutTime` từ API là chuỗi ISO **UTC** (ví dụ
+ * "2026-10-24T01:18:00.000Z" = 08:18 giờ VN). Còn `workStartTime` ("08:30")
+ * là giờ **địa phương**. Nếu so sánh trực tiếp 2 Date ở 2 mốc thời gian
+ * khác nhau thì "Trễ"/"OT" tính sai (lệch 7 tiếng) → hiển thị sai.
+ *
+ * → Mọi so sánh giờ đều quy về cùng mốc "phút kể từ 00:00 giờ VN".
+ */
+const VN_OFFSET_MINUTES = 7 * 60;
+
+function vnMinutesOfDay(d: Date): number {
+  const shifted = new Date(d.getTime() + VN_OFFSET_MINUTES * 60 * 1000);
+  return shifted.getUTCHours() * 60 + shifted.getUTCMinutes() + shifted.getUTCSeconds() / 60;
+}
+
+/** "08:30" → số phút kể từ 00:00 */
+function parseClockMinutes(timeStr: string): number {
+  const [h, m] = timeStr.split(':').map(Number);
+  return (h ?? 0) * 60 + (m ?? 0);
+}
+
 export function TodayTimeline({
   checkInTime,
   checkOutTime,
@@ -54,24 +77,46 @@ export function TodayTimeline({
     : null;
 
   // Calculate work hours
+  // ⚠️ `calculateWorkHours` đã tự hoán đổi khi check-out < check-in (dữ liệu sai
+  // thứ tự) → không còn trả 0 sai lệch.
   const workHours = checkIn && checkOut
     ? calculateWorkHours(checkIn, checkOut)
     : checkIn
     ? calculateWorkHours(checkIn, now)
     : 0;
 
-  // Late by minutes
+  // Late by minutes — so sánh theo GIỜ ĐỊA PHƯƠNG (VN, UTC+7).
+  // `checkInTime` từ DB là UTC → cần quy đổi sang giờ VN mới so sánh với
+  // `workStartTime` (08:30 theo giờ VN). Nếu so trực tiếp giờ UTC thì check-in
+  // 08:18 VN (= 01:18 UTC) sẽ bị coi là "trễ" ~7 tiếng.
   const lateMinutes = checkIn
-    ? Math.max(0, Math.floor((checkIn.getTime() - workStart.getTime()) / 60000))
+    ? Math.max(0, Math.round(vnMinutesOfDay(checkIn) - parseClockMinutes(workStartTime)))
     : 0;
 
-  // Early leave minutes
-  const earlyMinutes = checkOut
+  // Early leave minutes (reserved for badge display)
+  const _earlyMinutes = checkOut
     ? calculateEarlyMinutes(checkOut, workEnd.getHours(), workEnd.getMinutes())
     : 0;
+  void _earlyMinutes;
 
-  // Overtime (negative early = overtime)
-  const overtimeMinutes = checkOut && earlyMinutes < 0 ? Math.abs(earlyMinutes) : 0;
+  // Overtime (check-out sau giờ làm việc) — cũng quy đổi sang giờ VN
+  const overtimeMinutes = checkOut
+    ? Math.max(0, Math.round(vnMinutesOfDay(checkOut) - parseClockMinutes(workEndTime)))
+    : 0;
+
+  // Số phút nghỉ trưa THỰC SỰ bị trừ (chỉ tính phần nằm trong ca làm việc).
+  const lunchDeductedMinutes = useMemo(() => {
+    if (!checkIn) return 0;
+    const end = checkOut ?? now;
+    const startMin = vnMinutesOfDay(checkIn);
+    const endMin = vnMinutesOfDay(end);
+    const lunchStartMin = DEFAULT_LUNCH_CONFIG.lunchStartHour * 60;
+    const lunchEndMin = DEFAULT_LUNCH_CONFIG.lunchEndHour * 60;
+    const overlapStart = Math.max(startMin, lunchStartMin);
+    const overlapEnd = Math.min(endMin, lunchEndMin);
+    return Math.max(0, Math.round(overlapEnd - overlapStart));
+  }, [checkIn, checkOut, now]);
+
 
   const formatDuration = (mins: number): string => {
     const h = Math.floor(mins / 60);
@@ -243,7 +288,9 @@ export function TodayTimeline({
             <p className="text-[10px] font-bold text-slate-600 uppercase tracking-wider">
               {isVi ? 'Nghỉ trưa' : 'Lunch'}
             </p>
-            <p className="text-sm font-black text-slate-900 tabular-nums">1h</p>
+            <p className="text-sm font-black text-slate-900 tabular-nums">
+              {lunchDeductedMinutes > 0 ? formatDuration(lunchDeductedMinutes) : '—'}
+            </p>
           </div>
         </div>
 
@@ -253,7 +300,7 @@ export function TodayTimeline({
           </div>
           <div className="min-w-0">
             <p className="text-[10px] font-bold text-blue-700 uppercase tracking-wider">
-              {isVi ? 'OT/OT' : 'OT'}
+              {isVi ? 'OT' : 'OT'}
             </p>
             <p className="text-sm font-black text-blue-900 tabular-nums">
               {overtimeMinutes > 0 ? `+${formatDuration(overtimeMinutes)}` : '—'}
@@ -267,8 +314,16 @@ export function TodayTimeline({
         <MapPin className="w-3 h-3" />
         <span>
           {isVi
-            ? 'Giờ làm việc: 08:00 - 17:30 • Nghỉ trưa 12:00-13:00 tự động trừ'
-            : 'Work hours: 08:00 - 17:30 • Lunch break 12:00-13:00 auto-subtracted'}
+            ? `Giờ làm việc: ${workStartTime} - ${workEndTime} • Nghỉ trưa ${String(
+                DEFAULT_LUNCH_CONFIG.lunchStartHour,
+              ).padStart(2, '0')}:00-${String(
+                DEFAULT_LUNCH_CONFIG.lunchEndHour,
+              ).padStart(2, '0')}:00 tự động trừ`
+            : `Work hours: ${workStartTime} - ${workEndTime} • Lunch break ${String(
+                DEFAULT_LUNCH_CONFIG.lunchStartHour,
+              ).padStart(2, '0')}:00-${String(
+                DEFAULT_LUNCH_CONFIG.lunchEndHour,
+              ).padStart(2, '0')}:00 auto-subtracted`}
         </span>
       </div>
     </div>

@@ -14,6 +14,7 @@
     "chat": "TIN NHẮN",
     "notifications": "THÔNG BÁO",
     "documents": "TÀI LIỆU",
+    "admin_center": "TRUNG TÂM QUẢN TRỊ",
     "settings": "CÀI ĐẶT"
   },
   "kanban": {
@@ -650,5 +651,56 @@
     "start_share": "Chia sẻ màn hình khi vào phòng",
     "pip_hint": "Bạn có thể dùng Picture-in-Picture để vừa họp vừa làm việc",
     "privacy_note": "Chỉ người được mời mới có thể vào phòng này"
+  },
+  "admin": {
+    "command_center": "Trung tâm Quản trị Toàn năng WorkSync",
+    "dashboard_title": "Bảng Điều Khiển Quản Trị Hệ Thống",
+    "dashboard_subtitle": "Giám sát tập trung toàn bộ nhân sự 5 phân quyền, cơ cấu phòng ban, dự án Scrum/Kanban, tiến độ sprints, kỷ luật chấm công và kho tài liệu tri thức doanh nghiệp.",
+    "syncing": "Đang đồng bộ...",
+    "refresh_data": "Làm mới dữ liệu",
+    "clean_admin_tasks": "Dọn dẹp task & xung đột lịch Admin",
+    "clean_success": "Đã dọn dẹp sạch task và xung đột lịch của tài khoản Admin",
+    "tabs": {
+      "overview": "Tổng quan",
+      "users": "Nhân sự & Phân quyền",
+      "departments": "Cơ cấu Phòng ban",
+      "projects": "Dự án & Sprints",
+      "attendance": "Giám sát Chấm công",
+      "documents": "Tài liệu & Cuộc họp",
+      "infrastructure": "Hạ tầng & Hệ thống"
+    },
+    "departments": {
+      "title": "Cơ cấu Khối & Phòng ban",
+      "subtitle": "Quản lý các khối chuyên môn, phân bổ trưởng phòng, thành viên và dự án",
+      "add_btn": "Tạo phòng ban",
+      "members_count": "nhân sự",
+      "projects_count": "dự án",
+      "docs_count": "tài liệu",
+      "head": "Trưởng phòng (Department Head)",
+      "unassigned": "Chưa bổ nhiệm",
+      "manage_btn": "Quản lý & Chỉnh sửa",
+      "empty": "Chưa có phòng ban nào",
+      "create_title": "Tạo Phòng Ban Mới",
+      "edit_title": "Chi Tiết & Quản Lý Phòng Ban",
+      "name_label": "Tên phòng ban",
+      "code_label": "Mã phòng ban (Code)",
+      "desc_label": "Mô tả chức năng nhiệm vụ",
+      "head_label": "Chỉ định Trưởng phòng (Manager)",
+      "search_head_placeholder": "Tìm kiếm nhân viên để bổ nhiệm làm Trưởng phòng...",
+      "members_label": "Thành viên phòng ban",
+      "search_members_placeholder": "Tìm nhân viên theo tên, email...",
+      "add_member": "Thêm thành viên",
+      "remove_member": "Xóa khỏi phòng",
+      "confirm_delete": "Bạn có chắc chắn muốn xóa phòng ban này? Tất cả thành viên và dự án liên quan sẽ được gỡ an toàn.",
+      "delete_btn": "Xóa phòng ban",
+      "save_changes": "Lưu thay đổi"
+    },
+    "roles": {
+      "ADMIN": "Quản trị viên (Admin)",
+      "HR": "Nhân sự (HR)",
+      "PM": "Quản lý dự án (PM)",
+      "DEPARTMENT_HEAD": "Trưởng phòng (Dept Head)",
+      "EMPLOYEE": "Nhân viên (Employee)"
+    }
   }
 }

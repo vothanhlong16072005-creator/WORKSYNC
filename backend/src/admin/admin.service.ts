@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, OnModuleInit } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { Role, UserStatus } from '@prisma/client';
 
@@ -53,8 +53,16 @@ export interface AdminOverviewStats {
 }
 
 @Injectable()
-export class AdminService {
+export class AdminService implements OnModuleInit {
   constructor(private readonly prisma: PrismaService) {}
+
+  async onModuleInit() {
+    try {
+      await this.cleanAdminTasksAndConflicts();
+    } catch (e: any) {
+      console.warn('⚠️ [AdminService] Could not auto-clean admin tasks:', e?.message || e);
+    }
+  }
 
   async getOverview(): Promise<AdminOverviewStats> {
     const today = new Date();
@@ -395,6 +403,7 @@ export class AdminService {
       data: updateData,
     });
 
+    // Update manager role and department assignment
     if (data.managerId) {
       const mgr = await this.prisma.user.findUnique({ where: { id: data.managerId } });
       if (mgr) {
@@ -408,14 +417,126 @@ export class AdminService {
       }
     }
 
-    if (data.memberIds && data.memberIds.length > 0) {
+    // Sync department members if memberIds array provided
+    if (data.memberIds && Array.isArray(data.memberIds)) {
+      // 1. Remove departmentId for users that are no longer in this department
+      // (keep manager if manager is assigned)
+      const excludeIds = data.managerId ? [...data.memberIds, data.managerId] : data.memberIds;
       await this.prisma.user.updateMany({
-        where: { id: { in: data.memberIds } },
-        data: { departmentId: dept.id },
+        where: {
+          departmentId: id,
+          id: { notIn: excludeIds },
+        },
+        data: { departmentId: null },
       });
+
+      // 2. Assign selected memberIds to this department
+      if (data.memberIds.length > 0) {
+        await this.prisma.user.updateMany({
+          where: { id: { in: data.memberIds } },
+          data: { departmentId: dept.id },
+        });
+      }
     }
 
     return updated;
+  }
+
+  async deleteDepartment(id: string) {
+    const dept = await this.prisma.department.findUnique({ where: { id } });
+    if (!dept) throw new NotFoundException('Phòng ban không tồn tại');
+
+    // 1. Unassign all users from this department
+    await this.prisma.user.updateMany({
+      where: { departmentId: id },
+      data: { departmentId: null },
+    });
+
+    // 2. Unassign projects from this department
+    await this.prisma.project.updateMany({
+      where: { departmentId: id },
+      data: { departmentId: null },
+    });
+
+    // 3. Soft delete department
+    await this.prisma.department.update({
+      where: { id },
+      data: { deletedAt: new Date() },
+    });
+
+    return { success: true, message: `Đã xóa phòng ban ${dept.name}` };
+  }
+
+  async cleanAdminTasksAndConflicts() {
+    const admin = await this.prisma.user.findFirst({
+      where: {
+        OR: [{ role: Role.ADMIN }, { email: 'admin@worksync.com' }],
+      },
+    });
+
+    if (!admin) return { count: 0 };
+
+    // 1. Clean tasks assigned to Admin
+    const adminTasks = await this.prisma.task.findMany({
+      where: { assigneeId: admin.id },
+      select: { id: true },
+    });
+    const taskIds = adminTasks.map((t) => t.id);
+
+    if (taskIds.length > 0) {
+      await this.prisma.taskDependency.deleteMany({
+        where: {
+          OR: [{ taskId: { in: taskIds } }, { dependsOnId: { in: taskIds } }],
+        },
+      });
+      await this.prisma.comment.deleteMany({
+        where: { taskId: { in: taskIds } },
+      });
+      await this.prisma.workLog.deleteMany({
+        where: { taskId: { in: taskIds } },
+      });
+      await this.prisma.task.deleteMany({
+        where: { id: { in: taskIds } },
+      });
+    }
+
+    // 2. Clean quickTasks assigned to Admin
+    await this.prisma.quickTask.deleteMany({
+      where: { assigneeId: admin.id },
+    });
+
+    // 3. Clean duplicate meetings (redundant copies with same title & startTime)
+    const allMeetings = await this.prisma.meeting.findMany({
+      select: { id: true, title: true, startTime: true },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    const seen = new Set<string>();
+    const duplicateIds: string[] = [];
+
+    for (const m of allMeetings) {
+      const key = `${m.title.trim().toLowerCase()}_${new Date(m.startTime).getTime()}`;
+      if (seen.has(key)) {
+        duplicateIds.push(m.id);
+      } else {
+        seen.add(key);
+      }
+    }
+
+    if (duplicateIds.length > 0) {
+      await this.prisma.meetingAttendee.deleteMany({
+        where: { meetingId: { in: duplicateIds } },
+      });
+      await this.prisma.meeting.deleteMany({
+        where: { id: { in: duplicateIds } },
+      });
+    }
+
+    return {
+      success: true,
+      deletedAdminTasks: taskIds.length,
+      deletedDuplicateMeetings: duplicateIds.length,
+    };
   }
 
   async getAllProjects() {

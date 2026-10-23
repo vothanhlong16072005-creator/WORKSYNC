@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { toast } from 'sonner';
 import type { TaskDetailModalTask } from '@/features/tasks/components/TaskDetailModal';
 import type { ProjectMemberItem } from '../types/project.types';
 
@@ -25,6 +26,8 @@ interface ProjectKanbanBoardProps {
   tasks: TaskDetailModalTask[];
   members?: ProjectMemberItem[];
   isEmployeeOnly: boolean;
+  /** ID user hiện tại — dùng để cho phép nhân viên kéo thả task ĐƯỢC GIAO cho mình */
+  currentUserId?: string;
   onTaskClick: (task: TaskDetailModalTask) => void;
   onTaskMove?: (taskId: string, newStatus: string, destinationIndex: number) => Promise<void>;
   onRefresh?: () => void;
@@ -56,11 +59,22 @@ export const ProjectKanbanBoard: React.FC<ProjectKanbanBoardProps> = ({
   tasks,
   members = [],
   isEmployeeOnly,
+  currentUserId,
   onTaskClick,
   onTaskMove,
 }) => {
   const { i18n } = useTranslation();
   const isEn = i18n.language.startsWith('en');
+
+  /**
+   * Nhân viên ĐƯỢC kéo thả task được giao cho mình (đúng như yêu cầu nghiệp vụ).
+   * Backend `requireTaskMovePermission` cũng cho phép assignee tự move task của
+   * mình → an toàn về mặt phân quyền.
+   */
+  const canDragTask = (task: TaskDetailModalTask): boolean => {
+    if (!isEmployeeOnly) return true;
+    return Boolean(currentUserId) && task.assignee?.id === currentUserId;
+  };
 
   // Filters state
   const [searchTerm, setSearchTerm] = useState('');
@@ -70,13 +84,23 @@ export const ProjectKanbanBoard: React.FC<ProjectKanbanBoardProps> = ({
   // Filter tasks
   const filteredTasks = useMemo(() => {
     return tasks.filter((task) => {
-      // Search keyword
+      // Search keyword — title / mã task / nhãn / mô tả / tên người phụ trách
       if (searchTerm.trim()) {
         const q = searchTerm.toLowerCase();
-        const matchesTitle = task.title.toLowerCase().includes(q);
-        const matchesId = task.id.toLowerCase().includes(q);
-        const matchesLabel = task.labels?.some((l) => l.toLowerCase().includes(q));
-        if (!matchesTitle && !matchesId && !matchesLabel) return false;
+        const matchesTitle = task.title?.toLowerCase().includes(q);
+        const matchesId = task.id?.toLowerCase().includes(q);
+        const matchesLabel = task.labels?.some((l) => l?.toLowerCase().includes(q));
+        const matchesDescription = task.description?.toLowerCase().includes(q);
+        const matchesAssignee = task.assignee?.name?.toLowerCase().includes(q);
+        if (
+          !matchesTitle &&
+          !matchesId &&
+          !matchesLabel &&
+          !matchesDescription &&
+          !matchesAssignee
+        ) {
+          return false;
+        }
       }
       // Priority filter
       if (priorityFilter !== 'ALL' && task.priority !== priorityFilter) {
@@ -115,10 +139,20 @@ export const ProjectKanbanBoard: React.FC<ProjectKanbanBoardProps> = ({
 
   // Drag End handler
   const handleDragEnd = async (result: DropResult) => {
-    if (isEmployeeOnly) return;
     const { destination, source, draggableId } = result;
     if (!destination) return;
     if (destination.droppableId === source.droppableId && destination.index === source.index) {
+      return;
+    }
+
+    // Chặn kéo task không phải của mình (chỉ áp dụng cho nhân viên)
+    const draggedTask = tasks.find((t) => t.id === draggableId);
+    if (draggedTask && !canDragTask(draggedTask)) {
+      toast.warning(
+        isEn
+          ? 'You can only move tasks assigned to you.'
+          : 'Bạn chỉ có thể kéo thả công việc được giao cho bạn.',
+      );
       return;
     }
 
@@ -157,8 +191,8 @@ export const ProjectKanbanBoard: React.FC<ProjectKanbanBoardProps> = ({
               </h4>
               <p className="text-xs text-amber-800/90 mt-0.5 leading-relaxed">
                 {isEn
-                  ? 'Employees cannot drag-and-drop tasks directly on the shared project board. To update your personal progress and drag-and-drop your assigned tasks, please open My Tasks.'
-                  : 'Nhân viên không thể kéo thả cập nhật bảng dự án chung trực tiếp. Để cập nhật tiến độ công việc được giao của bạn bằng kéo thả, hãy vào trang Việc Của Tôi.'}
+                  ? 'You can drag-and-drop the tasks assigned to you to update their status. Tasks assigned to others are read-only.'
+                  : 'Bạn có thể kéo thả các công việc được giao cho bạn để cập nhật trạng thái. Công việc được giao cho người khác chỉ để xem.'}
               </p>
             </div>
           </div>
@@ -269,8 +303,8 @@ export const ProjectKanbanBoard: React.FC<ProjectKanbanBoardProps> = ({
                   </div>
                 </div>
 
-                {/* Droppable Area */}
-                <Droppable droppableId={col.id} isDropDisabled={isEmployeeOnly}>
+                {/* Droppable Area — nhân viên vẫn thả được task của mình */}
+                <Droppable droppableId={col.id}>
                   {(provided, snapshot) => (
                     <div
                       ref={provided.innerRef}
@@ -289,13 +323,14 @@ export const ProjectKanbanBoard: React.FC<ProjectKanbanBoardProps> = ({
                         list.map((task, index) => {
                           const prioBadge = PRIORITY_BADGE[task.priority] || PRIORITY_BADGE.MEDIUM;
                           const borderClass = PRIORITY_BORDER[task.priority] || PRIORITY_BORDER.MEDIUM;
+                          const isDraggable = canDragTask(task);
 
                           return (
                             <Draggable
                               key={task.id}
                               draggableId={task.id}
                               index={index}
-                              isDragDisabled={isEmployeeOnly}
+                              isDragDisabled={!isDraggable}
                             >
                               {(dragProvided, dragSnapshot) => (
                                 <div
@@ -303,9 +338,18 @@ export const ProjectKanbanBoard: React.FC<ProjectKanbanBoardProps> = ({
                                   {...dragProvided.draggableProps}
                                   {...dragProvided.dragHandleProps}
                                   onClick={() => onTaskClick(task)}
-                                  className={`bg-white rounded-xl border border-slate-200/80 p-3.5 shadow-2xs hover:shadow-md transition-all cursor-pointer select-none space-y-2.5 ${borderClass} ${
+                                  title={
+                                    isDraggable
+                                      ? isEn
+                                        ? 'Drag to update status'
+                                        : 'Kéo thả để cập nhật trạng thái'
+                                      : isEn
+                                        ? 'This task is assigned to someone else (read-only)'
+                                        : 'Công việc này được giao cho người khác (chỉ xem)'
+                                  }
+                                  className={`bg-white rounded-xl border border-slate-200/80 p-3.5 shadow-2xs hover:shadow-md transition-all select-none space-y-2.5 ${borderClass} ${
                                     dragSnapshot.isDragging ? 'shadow-xl scale-102 ring-2 ring-blue-500' : ''
-                                  }`}
+                                  } ${isDraggable ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer opacity-80'}`}
                                 >
                                   {/* Task Key & Priority Badge */}
                                   <div className="flex items-center justify-between gap-2">

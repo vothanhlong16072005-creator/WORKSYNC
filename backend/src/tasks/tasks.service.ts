@@ -1,5 +1,5 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
-import { Priority, ProjectKind, Role, TaskStatus } from '@prisma/client';
+import { Priority, ProjectKind, Role, TaskStatus, Prisma } from '@prisma/client';
 import { CreateTaskDto } from './dto/create-task.dto.js';
 import { UpdateTaskDto } from './dto/update-task.dto.js';
 import { TaskQueryDto, TaskScope } from './dto/task-query.dto.js';
@@ -154,6 +154,7 @@ export class TasksService {
   async findAll(query: TaskQueryDto, actor: CurrentActor) {
     const scope = query.scope || TaskScope.MINE;
     const { projectId } = query;
+    const searchFilter = this.buildSearchFilter(query.q);
 
     if (scope === TaskScope.PROJECT) {
       if (!projectId) {
@@ -169,6 +170,7 @@ export class TasksService {
         where: {
           projectId,
           deletedAt: null,
+          ...searchFilter,
         },
         orderBy: [{ position: 'asc' }, { createdAt: 'asc' }],
         include: TASK_INCLUDE,
@@ -183,6 +185,7 @@ export class TasksService {
           projectId,
           assigneeId: actor.id,
           deletedAt: null,
+          ...searchFilter,
         },
         orderBy: [{ position: 'asc' }, { createdAt: 'asc' }],
         include: TASK_INCLUDE,
@@ -194,6 +197,7 @@ export class TasksService {
       where: {
         assigneeId: actor.id,
         deletedAt: null,
+        ...searchFilter,
         project:
           actor.role === Role.ADMIN
             ? {
@@ -217,6 +221,23 @@ export class TasksService {
       orderBy: [{ position: 'asc' }, { createdAt: 'asc' }],
       include: TASK_INCLUDE,
     });
+  }
+
+  /**
+   * Xây dựng điều kiện lọc theo từ khóa tìm kiếm.
+   * → title (không phân biệt hoa thường), mã task (id), nhãn (labels).
+   */
+  private buildSearchFilter(q?: string): Prisma.TaskWhereInput {
+    const keyword = q?.trim();
+    if (!keyword) return {};
+
+    return {
+      OR: [
+        { title: { contains: keyword, mode: 'insensitive' } },
+        { id: { contains: keyword, mode: 'insensitive' } },
+        { labels: { has: keyword } },
+      ],
+    };
   }
 
   async moveOnBoard(taskId: string, actor: CurrentActor, dto: MoveTaskOnBoardDto) {
