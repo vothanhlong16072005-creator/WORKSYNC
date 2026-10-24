@@ -423,7 +423,8 @@
     "meeting_ended_by_host": "Người chủ trì đã kết thúc cuộc họp.",
     "chat_title": "Trò chuyện trong cuộc họp",
     "no_messages": "Chưa có tin nhắn nào. Hãy gửi lời chào đầu tiên!",
-    "type_message": "Nhập tin nhắn..."
+    "type_message": "Nhập tin nhắn...",
+    "camera_busy_audio_ok": "Camera đang bận hoặc bị tab/ứng dụng khác chiếm dụng. Micro đã sẵn sàng hoạt động."
   },
   "meetings": {
     "page_title": "Cuộc họp trực tuyến & Biên bản",

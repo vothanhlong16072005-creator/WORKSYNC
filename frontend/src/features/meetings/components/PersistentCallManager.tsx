@@ -249,33 +249,55 @@ const ActiveCallSession: React.FC<ActiveCallSessionProps> = ({
     let mounted = true;
 
     const initMedia = async () => {
+      let stream: MediaStream | null = null;
+      let hasCamera = false;
+      let hasMic = false;
+
+      // 1. Thử lấy cả Video và Audio
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({
+        stream = await navigator.mediaDevices.getUserMedia({
           video: { width: { ideal: 1280 }, height: { ideal: 720 } },
           audio: { echoCancellation: true, noiseSuppression: true },
         });
-        if (!mounted) {
-          stream.getTracks().forEach((t) => t.stop());
-          return;
+        hasCamera = stream.getVideoTracks().length > 0;
+        hasMic = stream.getAudioTracks().length > 0;
+      } catch (err: any) {
+        console.warn('[Media] Combined getUserMedia failed (e.g. camera in use by another tab/app), attempting audio fallback...', err);
+
+        // 2. Dự phòng: Nếu video bị lỗi (do camera bị app/tab khác chiếm độc quyền), thử lấy Audio độc lập
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({
+            audio: { echoCancellation: true, noiseSuppression: true },
+          });
+          hasMic = stream.getAudioTracks().length > 0;
+          hasCamera = false;
+          toast.info(
+            t('meeting_room.camera_busy_audio_ok', 'Camera đang bận hoặc bị tab/ứng dụng khác chiếm dụng. Micro đã sẵn sàng hoạt động.')
+          );
+        } catch (audioErr) {
+          console.warn('[Media] Audio fallback also failed:', audioErr);
         }
+      }
+
+      if (!mounted) {
+        stream?.getTracks().forEach((t) => t.stop());
+        return;
+      }
+
+      if (stream && (hasCamera || hasMic)) {
         localStreamRef.current = stream;
         setLocalStream(stream);
 
-        // ⭐ Đồng bộ trạng thái toggle với thực tế media.
-        // Nếu camera thực sự không có track (chỉ có mic), phải tắt cờ `videoEnabled`
-        // để icon camera hiển thị đúng — trước đây cờ vẫn `true` (mặc định) khiến
-        // UI hiện icon "camera bật" nhưng tile lại báo "Camera đang tắt" (mâu thuẫn).
-        const hasVideoTrack = stream.getVideoTracks().length > 0;
-        setVideoEnabled(hasVideoTrack);
+        setVideoEnabled(hasCamera);
+        setAudioEnabled(hasMic);
         socketRef.current?.emit('media-state-changed', {
           meetingId: meeting.id,
-          audioEnabled: stream.getAudioTracks().length > 0,
-          videoEnabled: hasVideoTrack,
+          audioEnabled: hasMic,
+          videoEnabled: hasCamera,
           screenSharing: false,
         });
-      } catch (err) {
-        console.warn('[Media] getUserMedia failed, continuing in view-only mode', err);
-        // Không có camera/mic → cập nhật cờ cho khớp thực tế
+      } else {
+        // Hoàn toàn không có cả camera lẫn mic
         setAudioEnabled(false);
         setVideoEnabled(false);
         socketRef.current?.emit('media-state-changed', {
@@ -1485,21 +1507,9 @@ const RemoteVideoTile: React.FC<{
   isPinned?: boolean;
 }> = ({ peer, stream, isHost, onPin, isPinned }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
+  const audioRef = useRef<HTMLAudioElement>(null);
   const { t } = useTranslation();
 
-  /**
-   * Quyết định hiển thị video hay avatar.
-   *
-   * ⚠️ Bug cũ: `Boolean(stream && peer.videoEnabled)` → khi cờ metadata
-   * `videoEnabled` chưa được đồng bộ (mặc định/gửi sai) nhưng camera ĐÃ có
-   * stream thật, tile vẫn hiện avatar + "Camera đang tắt" → người dùng tưởng
-   * camera tắt trong khi thực tế đang bật.
-   *
-   * Cách sửa: ưu tiên sự thật từ media — nếu có stream thì hiện video.
-   * (Khi peer thực sự tắt camera, trình duyệt vẫn giữ track nhưng đặt
-   * `enabled = false`, nên video sẽ hiện khung đen — vẫn tốt hơn việc báo
-   * sai "Camera đang tắt" khi camera đang bật.)
-   */
   const isVideoShowing = Boolean(stream);
 
   const setVideoNode = useCallback(
@@ -1515,6 +1525,21 @@ const RemoteVideoTile: React.FC<{
     [stream],
   );
 
+  const effectiveAudioStream = peer.audioStream || (stream && stream.getAudioTracks().length > 0 ? stream : null);
+
+  const setAudioNode = useCallback(
+    (node: HTMLAudioElement | null) => {
+      audioRef.current = node;
+      if (node && effectiveAudioStream) {
+        if (node.srcObject !== effectiveAudioStream) {
+          node.srcObject = effectiveAudioStream;
+        }
+        node.play().catch(() => {});
+      }
+    },
+    [effectiveAudioStream],
+  );
+
   useEffect(() => {
     if (videoRef.current && stream) {
       if (videoRef.current.srcObject !== stream) {
@@ -1525,6 +1550,15 @@ const RemoteVideoTile: React.FC<{
   }, [stream]);
 
   useEffect(() => {
+    if (audioRef.current && effectiveAudioStream) {
+      if (audioRef.current.srcObject !== effectiveAudioStream) {
+        audioRef.current.srcObject = effectiveAudioStream;
+      }
+      audioRef.current.play().catch(() => {});
+    }
+  }, [effectiveAudioStream]);
+
+  useEffect(() => {
     if (!stream) return;
     const handleTrackUpdate = () => {
       if (videoRef.current && stream) {
@@ -1533,6 +1567,12 @@ const RemoteVideoTile: React.FC<{
         }
         videoRef.current.play().catch(() => {});
       }
+      if (audioRef.current && effectiveAudioStream) {
+        if (audioRef.current.srcObject !== effectiveAudioStream) {
+          audioRef.current.srcObject = effectiveAudioStream;
+        }
+        audioRef.current.play().catch(() => {});
+      }
     };
     stream.addEventListener('addtrack', handleTrackUpdate);
     stream.addEventListener('removetrack', handleTrackUpdate);
@@ -1540,7 +1580,7 @@ const RemoteVideoTile: React.FC<{
       stream.removeEventListener('addtrack', handleTrackUpdate);
       stream.removeEventListener('removetrack', handleTrackUpdate);
     };
-  }, [stream]);
+  }, [stream, effectiveAudioStream]);
 
   return (
     <div
@@ -1552,10 +1592,18 @@ const RemoteVideoTile: React.FC<{
           : 'border-slate-200'
       } shadow-sm flex items-center justify-center group`}
     >
+      {/* Thẻ audio độc lập đảm bảo âm thanh của peer luôn được phát ra loa bất kể trạng thái camera */}
+      <audio
+        ref={setAudioNode}
+        autoPlay
+        playsInline
+      />
+
       <video
         ref={setVideoNode}
         autoPlay
         playsInline
+        muted
         className={`w-full h-full object-contain bg-slate-900 ${
           isVideoShowing ? 'block' : 'hidden'
         }`}

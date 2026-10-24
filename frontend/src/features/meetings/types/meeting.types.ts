@@ -216,6 +216,8 @@ export interface RemotePeer {
   camStream: MediaStream | null;
   /** Screen share stream (transceiver 1) — null if not sharing */
   screenStream: MediaStream | null;
+  /** Dedicated audio stream for remote peer */
+  audioStream?: MediaStream | null;
   audioEnabled: boolean;
   videoEnabled: boolean;
   isScreenSharing: boolean;

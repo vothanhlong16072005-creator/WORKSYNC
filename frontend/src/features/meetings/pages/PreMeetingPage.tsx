@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -245,6 +245,29 @@ export const PreMeetingPage: React.FC = () => {
     };
   }, []);
 
+  // Callback ref & reactive effect for camera preview element
+  const setVideoNode = useCallback(
+    (node: HTMLVideoElement | null) => {
+      videoRef.current = node;
+      if (node && videoStream) {
+        if (node.srcObject !== videoStream) {
+          node.srcObject = videoStream;
+        }
+        node.play().catch(() => {});
+      }
+    },
+    [videoStream],
+  );
+
+  useEffect(() => {
+    if (videoRef.current && videoStream) {
+      if (videoRef.current.srcObject !== videoStream) {
+        videoRef.current.srcObject = videoStream;
+      }
+      videoRef.current.play().catch(() => {});
+    }
+  }, [videoStream, cameraEnabled]);
+
   // Update track enabled state
   useEffect(() => {
     if (videoStream) {
@@ -385,7 +408,7 @@ export const PreMeetingPage: React.FC = () => {
           <div className="relative w-full aspect-video bg-slate-900 rounded-2xl border border-slate-300/80 overflow-hidden shadow-lg flex items-center justify-center">
             {cameraEnabled && hasCam ? (
               <video
-                ref={videoRef}
+                ref={setVideoNode}
                 autoPlay
                 playsInline
                 muted

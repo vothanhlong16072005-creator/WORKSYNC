@@ -260,8 +260,16 @@ export function useWebRTCPeer({
       const stillPending = new Map<string, PendingRemoteTrack>();
       let camEntry: PendingRemoteTrack | null = null;
       let screenEntry: PendingRemoteTrack | null = null;
+      const audioEntries: PendingRemoteTrack[] = [];
 
       for (const [trackId, entry] of pending.entries()) {
+        if (entry.track.kind === 'audio') {
+          if (entry.track.readyState !== 'ended') {
+            audioEntries.push(entry);
+          }
+          continue;
+        }
+
         const explicit = classifyByKnownKinds(remoteSocketId, entry.stream.id);
         if (explicit === 'screen') {
           screenEntry = entry;
@@ -289,10 +297,27 @@ export function useWebRTCPeer({
         const screenStream =
           screenEntry && screenEntry.track.readyState !== 'ended' ? screenEntry.stream : null;
 
+        // Xây dựng audioStream độc lập chứa các audio track hợp lệ của peer
+        let audioStream: MediaStream | null = null;
+        if (audioEntries.length > 0) {
+          audioStream = audioEntries[0].stream;
+          // Đồng thời gộp audio track vào camStream nếu camStream chưa có audio
+          if (camStream) {
+            audioEntries.forEach((ae) => {
+              if (!camStream.getAudioTracks().some((t) => t.id === ae.track.id)) {
+                try {
+                  camStream.addTrack(ae.track);
+                } catch {}
+              }
+            });
+          }
+        }
+
         next.set(remoteSocketId, {
           ...existing,
           camStream,
           screenStream,
+          audioStream: audioStream ?? existing.audioStream ?? null,
           isScreenSharing: Boolean(screenStream) || existing.isScreenSharing,
         });
         return next;
@@ -481,12 +506,19 @@ export function useWebRTCPeer({
             const next = new Map(prev);
             const existing = next.get(remoteSocketId);
             if (existing) {
-              const isScreen = existing.screenStream === stream;
-              next.set(remoteSocketId, {
-                ...existing,
-                [isScreen ? 'screenStream' : 'camStream']: null,
-                isScreenSharing: isScreen ? false : existing.isScreenSharing,
-              });
+              if (track.kind === 'audio') {
+                next.set(remoteSocketId, {
+                  ...existing,
+                  audioStream: null,
+                });
+              } else {
+                const isScreen = existing.screenStream === stream;
+                next.set(remoteSocketId, {
+                  ...existing,
+                  [isScreen ? 'screenStream' : 'camStream']: null,
+                  isScreenSharing: isScreen ? false : existing.isScreenSharing,
+                });
+              }
             }
             return next;
           });

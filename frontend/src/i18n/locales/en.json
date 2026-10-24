@@ -423,7 +423,8 @@
     "meeting_ended_by_host": "The host has ended the meeting for all participants.",
     "chat_title": "In-call messages",
     "no_messages": "No messages yet. Send the first message!",
-    "type_message": "Type a message..."
+    "type_message": "Type a message...",
+    "camera_busy_audio_ok": "Camera is busy or in use by another tab/app. Microphone is ready to use."
   },
   "meetings": {
     "page_title": "Online Meetings & Minutes",
